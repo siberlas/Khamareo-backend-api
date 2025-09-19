@@ -1,0 +1,20 @@
+api_platform:
+    title: Hello API Platform
+    version: 1.0.0
+    defaults:
+        stateless: true
+        cache_headers:
+            vary: ['Content-Type', 'Authorization', 'Origin']
+
+        pagination_enabled: true
+
+        # Le client (ton front React) peut gérer la pagination
+        pagination_client_enabled: true
+        pagination_client_items_per_page: true
+        pagination_client_partial: true
+
+        # Valeur par défaut si aucun paramètre n'est passé
+        pagination_items_per_page: 12
+
+        # Limite maximale pour éviter d’exploser la requête
+        pagination_maximum_items_per_page: 50
