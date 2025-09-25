@@ -14,8 +14,8 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: CategoryRepository::class)]
 #[ApiResource(
-    normalizationContext: ['groups' => ['catrgory:read']],
-    denormalizationContext: ['groups' => ['catrgory:write']]
+    normalizationContext: ['groups' => ['category:read']],
+    denormalizationContext: ['groups' => ['category:write']]
 )]
 class Category
 {
@@ -23,11 +23,11 @@ class Category
     #[ORM\Column(type: 'uuid', unique: true)]
     private ?Uuid $id = null;
 
-    #[Groups(['catrgory:read', 'catrgory:write'])]
+    #[Groups(['category:read', 'category:write'])]
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
-    #[Groups(['catrgory:read', 'catrgory:write'])]
+    #[Groups(['category:read', 'category:write'])]
     #[ORM\Column(length: 255)]
     private ?string $slug = null;
 
@@ -46,9 +46,19 @@ class Category
     #[ORM\OneToMany(targetEntity: Product::class, mappedBy: 'category')]
     private Collection $products;
 
+    #[Groups(['category:read', 'category:write'])]
+    #[ORM\ManyToOne(targetEntity: self::class, inversedBy: 'children')]
+    #[ORM\JoinColumn(onDelete: 'CASCADE', nullable: true)]
+    private ?Category $parent = null;
+
+    #[Groups(['category:read'])]
+    #[ORM\OneToMany(mappedBy: 'parent', targetEntity: self::class, cascade: ['persist', 'remove'])]
+    private Collection $children;
+
     public function __construct()
     {
         $this->products = new ArrayCollection();
+        $this->children = new ArrayCollection();
         $this->id = Uuid::v7();
     }
 
@@ -144,6 +154,45 @@ class Category
             }
         }
 
+        return $this;
+    }
+
+     public function getParent(): ?self
+    {
+        return $this->parent;
+    }
+
+    public function setParent(?self $parent): static
+    {
+        $this->parent = $parent;
+        return $this;
+    }
+
+    // --- children ---
+    /**
+     * @return Collection<int, Category>
+     */
+    public function getChildren(): Collection
+    {
+        return $this->children;
+    }
+
+    public function addChild(Category $child): static
+    {
+        if (!$this->children->contains($child)) {
+            $this->children->add($child);
+            $child->setParent($this);
+        }
+        return $this;
+    }
+
+    public function removeChild(Category $child): static
+    {
+        if ($this->children->removeElement($child)) {
+            if ($child->getParent() === $this) {
+                $child->setParent(null);
+            }
+        }
         return $this;
     }
 }
