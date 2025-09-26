@@ -2,16 +2,15 @@
 
 namespace App\Entity;
 
-use ApiPlatform\Metadata\ApiResource;
 use App\Repository\CategoryRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
+use ApiPlatform\Metadata\ApiProperty;
 use Symfony\Component\Uid\Uuid;
 
-#[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: CategoryRepository::class)]
 #[ApiResource(
     normalizationContext: ['groups' => ['category:read']],
@@ -20,46 +19,38 @@ use Symfony\Component\Uid\Uuid;
 class Category
 {
     #[ORM\Id]
+    #[ORM\GeneratedValue]
     #[ORM\Column(type: 'uuid', unique: true)]
+    #[Groups(['category:read', 'product:read'])]
+    #[ApiProperty(identifier: false)]
     private ?Uuid $id = null;
 
-    #[Groups(['category:read', 'category:write'])]
-    #[ORM\Column(length: 255)]
-    private ?string $name = null;
-
-    #[Groups(['category:read', 'category:write'])]
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, unique: true)]
+    #[Groups(['category:read', 'category:write', 'product:read'])]
+    #[ApiProperty(identifier: true)]
     private ?string $slug = null;
 
-    #[ORM\Column(type: Types::TEXT, nullable: true)]
-    private ?string $description = null;
+    #[ORM\Column(length: 255)]
+    #[Groups(['category:read', 'category:write', 'product:read'])]
+    private ?string $name = null;
 
-    #[ORM\Column]
-    private ?\DateTimeImmutable $createdAt = null;
-
-    #[ORM\Column]
-    private ?\DateTimeImmutable $updatedAt = null;
-
-    /**
-     * @var Collection<int, Product>
-     */
-    #[ORM\OneToMany(targetEntity: Product::class, mappedBy: 'category')]
-    private Collection $products;
-
-    #[Groups(['category:read', 'category:write'])]
     #[ORM\ManyToOne(targetEntity: self::class, inversedBy: 'children')]
-    #[ORM\JoinColumn(onDelete: 'CASCADE', nullable: true)]
-    private ?Category $parent = null;
+    #[Groups(['category:read', 'category:write'])]
+    private ?self $parent = null;
 
-    #[Groups(['category:read'])]
     #[ORM\OneToMany(mappedBy: 'parent', targetEntity: self::class, cascade: ['persist', 'remove'])]
+    #[Groups(['category:read'])]
     private Collection $children;
+
+    #[ORM\OneToMany(mappedBy: 'category', targetEntity: Product::class, cascade: ['persist', 'remove'])]
+    #[Groups(['category:read'])]
+    private Collection $products;
 
     public function __construct()
     {
-        $this->products = new ArrayCollection();
-        $this->children = new ArrayCollection();
         $this->id = Uuid::v7();
+        $this->children = new ArrayCollection();
+        $this->products = new ArrayCollection();
     }
 
     public function getId(): ?Uuid
@@ -67,64 +58,64 @@ class Category
         return $this->id;
     }
 
-    public function getName(): ?string
-    {
-        return $this->name;
-    }
-
-    public function setName(string $name): static
-    {
-        $this->name = $name;
-
-        return $this;
-    }
-
     public function getSlug(): ?string
     {
         return $this->slug;
     }
 
-    public function setSlug(string $slug): static
+    public function setSlug(string $slug): self
     {
         $this->slug = $slug;
-
         return $this;
     }
 
-    public function getDescription(): ?string
+    public function getName(): ?string
     {
-        return $this->description;
+        return $this->name;
     }
 
-    public function setDescription(?string $description): static
+    public function setName(string $name): self
     {
-        $this->description = $description;
-
+        $this->name = $name;
         return $this;
     }
 
-    public function getCreatedAt(): ?\DateTimeImmutable
+    public function getParent(): ?self
     {
-        return $this->createdAt;
+        return $this->parent;
     }
 
-     #[ORM\PrePersist]
-    public function setCreatedAt(): void
+    public function setParent(?self $parent): self
     {
-        $this->createdAt =  new \DateTimeImmutable();
-        $this->updatedAt = new \DateTimeImmutable();
+        $this->parent = $parent;
+        return $this;
     }
 
-    public function getUpdatedAt(): ?\DateTimeImmutable
+    /**
+     * @return Collection<int, Category>
+     */
+    public function getChildren(): Collection
     {
-        return $this->updatedAt;
+        return $this->children;
     }
 
-     #[ORM\PreUpdate]
-    public function setUpdatedAt(): void
+    public function addChild(Category $child): self
     {
-        $this->updatedAt = new \DateTimeImmutable();
-    
+        if (!$this->children->contains($child)) {
+            $this->children->add($child);
+            $child->setParent($this);
+        }
+        return $this;
+    }
+
+    public function removeChild(Category $child): self
+    {
+        if ($this->children->removeElement($child)) {
+            if ($child->getParent() === $this) {
+                $child->setParent(null);
+            }
+        }
+        return $this;
     }
 
     /**
@@ -135,62 +126,20 @@ class Category
         return $this->products;
     }
 
-    public function addProduct(Product $product): static
+    public function addProduct(Product $product): self
     {
         if (!$this->products->contains($product)) {
             $this->products->add($product);
             $product->setCategory($this);
         }
-
         return $this;
     }
 
-    public function removeProduct(Product $product): static
+    public function removeProduct(Product $product): self
     {
         if ($this->products->removeElement($product)) {
-            // set the owning side to null (unless already changed)
             if ($product->getCategory() === $this) {
                 $product->setCategory(null);
-            }
-        }
-
-        return $this;
-    }
-
-     public function getParent(): ?self
-    {
-        return $this->parent;
-    }
-
-    public function setParent(?self $parent): static
-    {
-        $this->parent = $parent;
-        return $this;
-    }
-
-    // --- children ---
-    /**
-     * @return Collection<int, Category>
-     */
-    public function getChildren(): Collection
-    {
-        return $this->children;
-    }
-
-    public function addChild(Category $child): static
-    {
-        if (!$this->children->contains($child)) {
-            $this->children->add($child);
-            $child->setParent($this);
-        }
-        return $this;
-    }
-
-    public function removeChild(Category $child): static
-    {
-        if ($this->children->removeElement($child)) {
-            if ($child->getParent() === $this) {
-                $child->setParent(null);
             }
         }
         return $this;
