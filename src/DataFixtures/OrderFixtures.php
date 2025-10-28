@@ -4,8 +4,11 @@ namespace App\DataFixtures;
 
 use App\Entity\Order;
 use App\Entity\OrderItem;
-use App\Entity\User;
 use App\Entity\Product;
+use App\Entity\User;
+use App\Entity\ShippingMethod;
+use App\Entity\ShippingAddress;
+use App\Enum\OrderStatus;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
 use Doctrine\Common\DataFixtures\DependentFixtureInterface;
@@ -15,40 +18,52 @@ class OrderFixtures extends Fixture implements DependentFixtureInterface
 {
     public function load(ObjectManager $manager): void
     {
-        $faker = Factory::create();
+        $faker = Factory::create('fr_FR');
 
         $users = $manager->getRepository(User::class)->findAll();
         $products = $manager->getRepository(Product::class)->findAll();
+        $shippingMethods = $manager->getRepository(ShippingMethod::class)->findAll();
+        $shippingAddresses = $manager->getRepository(ShippingAddress::class)->findAll();
 
         foreach ($users as $user) {
-            // Chaque user fait entre 1 et 2 commandes
-            for ($o = 0; $o < $faker->numberBetween(1, 2); $o++) {
+            for ($i = 0; $i < $faker->numberBetween(1, 2); $i++) {
                 $order = new Order();
-                $order->setOwner($user) // propriété "customer" au lieu de "user"
-                      ->setStatus($faker->randomElement(['pending', 'paid', 'shipped']))
-                      ->setTotalAmount(0) // sera recalculé
-                      ->setPaymentId($faker->uuid())
-                      ->setDeliveryAddress($faker->address);
+                $order->setOwner($user)
+                      ->setStatus($faker->randomElement([
+                          OrderStatus::PENDING,
+                          OrderStatus::PAID,
+                          OrderStatus::SHIPPED,
+                          OrderStatus::DELIVERED
+                      ]))
+                      ->setShippingMethod($faker->randomElement($shippingMethods))
+                      ->setShippingAddress($faker->randomElement($shippingAddresses))
+                      ->setPaymentMethod('card')
+                      ->setPaymentStatus('paid')
+                      ->setIsLocked(true)
+                      ->setDeliveryAddress($faker->address)
+                      ->setBillingAddress($faker->address)
+                      ->setCurrency('EUR');
 
                 $manager->persist($order);
 
                 $total = 0;
 
-                // Chaque commande a 2 à 4 produits
-                for ($i = 0; $i < $faker->numberBetween(2, 4); $i++) {
+                // Chaque commande contient 2 à 4 produits
+                for ($j = 0; $j < $faker->numberBetween(2, 4); $j++) {
                     $product = $faker->randomElement($products);
                     $quantity = $faker->numberBetween(1, 3);
-                    $price = $product->getPrice();
+                    $unitPrice = $product->getPrice();
 
                     $orderItem = new OrderItem();
                     $orderItem->setCustomerOrder($order)
                               ->setProduct($product)
                               ->setQuantity($quantity)
-                              ->setPrice($price);
+                              ->setUnitPrice($unitPrice);
 
                     $manager->persist($orderItem);
+                    $order->addItem($orderItem);
 
-                    $total += $price * $quantity;
+                    $total += $unitPrice * $quantity;
                 }
 
                 $order->setTotalAmount($total);
@@ -63,6 +78,8 @@ class OrderFixtures extends Fixture implements DependentFixtureInterface
         return [
             UserFixtures::class,
             ProductFixtures::class,
+            ShippingMethodFixtures::class,
+            ShippingAddressFixtures::class,
         ];
     }
 }

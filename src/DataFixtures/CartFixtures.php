@@ -15,27 +15,35 @@ class CartFixtures extends Fixture implements DependentFixtureInterface
 {
     public function load(ObjectManager $manager): void
     {
-        $faker = Factory::create();
+        $faker = Factory::create('fr_FR');
 
-        // Récupération des users créés dans UserFixtures
         $users = $manager->getRepository(User::class)->findAll();
         $products = $manager->getRepository(Product::class)->findAll();
 
         foreach ($users as $user) {
             $cart = new Cart();
-            $cart->setOwner($user); // propriété "owner" au lieu de "user"
+            $cart->setOwner($user);
+            $cart->setIsActive(true);
+
+            // Simule 30 % de paniers invités
+            if ($faker->boolean(30)) {
+                $cart->setGuestToken(bin2hex(random_bytes(8)));
+            }
 
             $manager->persist($cart);
 
-            // Ajouter 2-3 produits dans le panier
-            for ($i = 0; $i < $faker->numberBetween(2, 3); $i++) {
+            // Ajoute 2 à 4 produits par panier
+            for ($i = 0; $i < $faker->numberBetween(2, 4); $i++) {
                 $product = $faker->randomElement($products);
+                $quantity = $faker->numberBetween(1, 5);
 
                 $item = new CartItem();
                 $item->setCart($cart)
                      ->setProduct($product)
-                     ->setQuantity($faker->numberBetween(1, 5));
+                     ->setQuantity($quantity)
+                     ->setUnitPrice($product->getPrice());
 
+                $cart->addItem($item);
                 $manager->persist($item);
             }
         }

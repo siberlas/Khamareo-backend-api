@@ -18,3 +18,13 @@ api_platform:
 
         # Limite maximale pour éviter d’exploser la requête
         pagination_maximum_items_per_page: 50
+    eager_loading:
+        force_eager: false
+    swagger:
+        api_keys:
+            JWT:
+                name: Authorization
+                type: header
+
+    use_symfony_listeners: true
+    

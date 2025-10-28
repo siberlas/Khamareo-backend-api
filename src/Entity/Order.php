@@ -6,123 +6,325 @@ use App\Repository\OrderRepository;
 use Doctrine\ORM\Mapping as ORM;
 use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Uid\Uuid;
+use Symfony\Component\Serializer\Annotation\Groups;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
+use ApiPlatform\Metadata\Post; 
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\Patch;
+use App\Controller\CheckoutController;
+use App\State\OrderProvider;
+use App\Entity\ShippingMethod;
+use App\Entity\ShippingAddress;
+use App\Enum\OrderStatus;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: OrderRepository::class)]
 #[ORM\Table(name: '`order`')]
-#[ApiResource]
+#[ApiResource(
+    normalizationContext: ['groups' => ['order:read']],
+    denormalizationContext: ['groups' => ['order:write']],
+    operations: [
+        new GetCollection(
+            security: "is_granted('ROLE_ADMIN') or is_granted('ROLE_USER')",
+            provider: OrderProvider::class,
+            normalizationContext: ['groups' => ['order:read']]
+        ),
+        new Get(
+            security: "is_granted('ROLE_ADMIN') or object.getOwner() == user",
+            normalizationContext: ['groups' => ['order:read']]
+        ),
+        new Post(
+            uriTemplate: '/cart/checkout',
+            controller: CheckoutController::class,
+            security: "is_granted('IS_AUTHENTICATED_FULLY')"
+        ),
+        new Patch(
+            security: "is_granted('ROLE_ADMIN') or object.getOwner() == user",
+            denormalizationContext: ['groups' => ['order:write']]
+        ),
+    ]
+)]
 class Order
 {
     #[ORM\Id]
     #[ORM\Column(type: 'uuid', unique: true)]
+    #[Groups(['order:read'])]
     private ?Uuid $id = null;
 
+    #[ORM\Column(length: 30, unique: true)]
+    #[Groups(['order:read'])]
+    private ?string $reference = null;
+
     #[ORM\Column]
+    #[Groups(['order:read', 'order:write'])]
     private ?float $totalAmount = null;
 
-    #[ORM\Column(length: 50)]
-    private ?string $status = null;
-
-    #[ORM\Column]
-    private ?\DateTimeImmutable $createdAt = null;
-
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $paymentId = null;
+    #[Assert\NotBlank]
+    #[ORM\Column(type: 'string', enumType: OrderStatus::class)]
+    #[Groups(['order:read', 'order:write'])]
+    private OrderStatus $status = OrderStatus::PENDING;
 
     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['order:read','order:write'])]
     private ?string $deliveryAddress = null;
 
-    #[ORM\ManyToOne]
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['order:read','order:write'])]
+    private ?string $billingAddress = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $paymentId = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['order:read','order:write'])]
+    private ?string $paymentMethod = null;
+
+    #[ORM\Column(length: 30, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $paymentStatus = 'unpaid';
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\DateTimeImmutable $paidAt = null;
+
+    #[ORM\Column(length: 100, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $trackingNumber = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\DateTimeImmutable $shippedAt = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\DateTimeImmutable $deliveredAt = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\DateTimeImmutable $updatedAt = null;
+
+    #[ORM\Column(type: 'boolean')]
+    #[Groups(['order:read'])]
+    private bool $isLocked = false;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['order:read','order:write'])]
+    private ?string $customerNote = null;
+
+    #[ORM\Column]
+    #[Groups(['order:read'])]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['order:read'])]
     private ?User $owner = null;
+
+    #[ORM\ManyToOne(targetEntity: ShippingMethod::class)]
+    #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?ShippingMethod $shippingMethod = null;
+
+    #[ORM\ManyToOne(targetEntity: ShippingAddress::class)]
+    #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['order:read', 'order:write'])]
+    private ?ShippingAddress $shippingAddress = null;
+
+    #[ORM\OneToMany(mappedBy: 'customerOrder', targetEntity: OrderItem::class, cascade: ['persist'], orphanRemoval: true)]
+    #[Groups(['order:read','order:write'])]
+    private Collection $items;
+
+    #[ORM\Column(length: 20, unique: true)]
+    #[Groups(['order:read'])]
+    private ?string $orderNumber = null;
+
+    #[ORM\OneToOne(mappedBy: 'order', targetEntity: Payment::class, cascade: ['persist', 'remove'])]
+    #[Groups(['order:read'])]
+    private ?Payment $payment = null;
+
+    #[ORM\Column(length: 3)]
+    #[Groups(['order:read', 'order:write'])]
+    private string $currency = 'EUR'; // Valeur par défaut
+
+
 
     public function __construct()
     {
         $this->id = Uuid::v7();
-    }
-
-    public function getId(): ?Uuid
-    {
-        return $this->id;
-    }
-
-    public function getTotalAmount(): ?float
-    {
-        return $this->totalAmount;
-    }
-
-    public function setTotalAmount(float $totalAmount): static
-    {
-        $this->totalAmount = $totalAmount;
-
-        return $this;
-    }
-
-    public function getStatus(): ?string
-    {
-        return $this->status;
-    }
-
-    public function setStatus(string $status): static
-    {
-        $this->status = $status;
-
-        return $this;
-    }
-
-    public function getCreatedAt(): ?\DateTimeImmutable
-    {
-        return $this->createdAt;
-    }
-
-    public function setCreatedAt(\DateTimeImmutable $createdAt): static
-    {
-        $this->createdAt = $createdAt;
-
-        return $this;
-    }
-
-    public function getPaymentId(): ?string
-    {
-        return $this->paymentId;
-    }
-
-    public function setPaymentId(?string $paymentId): static
-    {
-        $this->paymentId = $paymentId;
-
-        return $this;
-    }
-
-    public function getDeliveryAddress(): ?string
-    {
-        return $this->deliveryAddress;
-    }
-
-    public function setDeliveryAddress(?string $deliveryAddress): static
-    {
-        $this->deliveryAddress = $deliveryAddress;
-
-        return $this;
-    }
-
-    public function getOwner(): ?User
-    {
-        return $this->owner;
-    }
-
-    public function setOwner(?User $owner): static
-    {
-        $this->owner = $owner;
-
-        return $this;
+        $this->reference = 'ORD-' . strtoupper(bin2hex(random_bytes(4)));
+        $this->items = new ArrayCollection();
+        $this->createdAt = new \DateTimeImmutable();
     }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
-        $now = new \DateTimeImmutable();
-        $this->createdAt = $now;
+          $now = new \DateTimeImmutable();
+          $this->createdAt = $now;
+
+          // Génération d’un numéro de commande lisible
+          if (!$this->orderNumber) {
+                $this->orderNumber = 'CMD-' . $now->format('Ymd') . '-' . random_int(1000, 9999);
+          }
     }
 
+    #[ORM\PreUpdate]
+    public function onPreUpdate(): void
+    {
+        $this->updatedAt = new \DateTimeImmutable();
+    }
+
+    // --- Getters / Setters ---
+
+    public function getId(): ?Uuid { return $this->id; }
+
+    public function getReference(): ?string { return $this->reference; }
+
+    public function getTotalAmount(): ?float { return $this->totalAmount; }
+
+    public function setTotalAmount(float $totalAmount): static
+    {
+        $this->totalAmount = $totalAmount;
+        return $this;
+    }
+
+    public function getStatus(): OrderStatus { return $this->status; }
+
+    public function setStatus(OrderStatus $status): static
+    {
+        $this->status = $status;
+        return $this;
+    }
+
+    #[Groups(['order:read'])]
+    public function getStatusLabel(): string
+    {
+        return $this->status->label();
+}
+
+    public function getDeliveryAddress(): ?string { return $this->deliveryAddress; }
+    public function setDeliveryAddress(?string $deliveryAddress): static { $this->deliveryAddress = $deliveryAddress; return $this; }
+
+    public function getBillingAddress(): ?string { return $this->billingAddress; }
+    public function setBillingAddress(?string $billingAddress): static { $this->billingAddress = $billingAddress; return $this; }
+
+    public function getPaymentId(): ?string { return $this->paymentId; }
+    public function setPaymentId(?string $paymentId): static { $this->paymentId = $paymentId; return $this; }
+
+    public function getPaymentMethod(): ?string { return $this->paymentMethod; }
+    public function setPaymentMethod(?string $paymentMethod): static { $this->paymentMethod = $paymentMethod; return $this; }
+
+    public function getPaymentStatus(): ?string { return $this->paymentStatus; }
+    public function setPaymentStatus(?string $paymentStatus): static { $this->paymentStatus = $paymentStatus; return $this; }
+
+    public function getPaidAt(): ?\DateTimeImmutable { return $this->paidAt; }
+    public function setPaidAt(?\DateTimeImmutable $paidAt): static { $this->paidAt = $paidAt; return $this; }
+
+    public function getShippingMethod(): ?ShippingMethod
+    {
+        return $this->shippingMethod;
+    }
+
+    public function setShippingMethod(?ShippingMethod $shippingMethod): static
+    {
+        $this->shippingMethod = $shippingMethod;
+        return $this;
+    }
+
+    public function getShippingAddress(): ?ShippingAddress
+    {
+        return $this->shippingAddress;
+    }
+
+    public function setShippingAddress(?ShippingAddress $shippingAddress): static
+    {
+        $this->shippingAddress = $shippingAddress;
+        return $this;
+    }
+
+    public function getTrackingNumber(): ?string { return $this->trackingNumber; }
+    public function setTrackingNumber(?string $trackingNumber): static { $this->trackingNumber = $trackingNumber; return $this; }
+
+    public function getShippedAt(): ?\DateTimeImmutable { return $this->shippedAt; }
+    public function setShippedAt(?\DateTimeImmutable $shippedAt): static { $this->shippedAt = $shippedAt; return $this; }
+
+    public function getDeliveredAt(): ?\DateTimeImmutable { return $this->deliveredAt; }
+    public function setDeliveredAt(?\DateTimeImmutable $deliveredAt): static { $this->deliveredAt = $deliveredAt; return $this; }
+
+    public function getCustomerNote(): ?string { return $this->customerNote; }
+    public function setCustomerNote(?string $customerNote): static { $this->customerNote = $customerNote; return $this; }
+
+    public function isLocked(): bool { return $this->isLocked; }
+    public function setIsLocked(bool $isLocked): static { $this->isLocked = $isLocked; return $this; }
+
+    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
+    public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+
+    public function getOwner(): ?User { return $this->owner; }
+    public function setOwner(?User $owner): static { $this->owner = $owner; return $this; }
+
+    /** @return Collection<int, OrderItem> */
+    public function getItems(): Collection { return $this->items; }
+
+    public function addItem(OrderItem $item): static
+    {
+        if (!$this->items->contains($item)) {
+            $this->items->add($item);
+            $item->setCustomerOrder($this);
+        }
+        return $this;
+    }
+
+    public function removeItem(OrderItem $item): static
+    {
+        if ($this->items->removeElement($item)) {
+            if ($item->getCustomerOrder() === $this) {
+                $item->setCustomerOrder(null);
+            }
+        }
+        return $this;
+    }
+
+    public function getPayment(): ?Payment
+    {
+         return $this->payment;
+    }
+
+    public function setPayment(?Payment $payment): static
+    {
+        $this->payment = $payment;
+        return $this;
+    }
+
+    public function getOrderNumber(): ?String
+    {
+         return $this->orderNumber;
+    }
+
+    public function setOrderNumber(?String $orderNumber): static
+    {
+        $this->orderNumber = $orderNumber;
+        return $this;
+    }
+
+    #[Groups(['order:read'])]
+    public function getOwnerIri(): ?string
+    {
+        return $this->owner ? '/api/users/' . $this->owner->getId() : null;
+    }
+
+    public function getCurrency(): string
+    {
+        return $this->currency;
+    }
+
+    public function setCurrency(string $currency): static
+    {
+        $this->currency = strtoupper($currency);
+        return $this;
+    }
 }
