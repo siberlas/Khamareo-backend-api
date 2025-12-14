@@ -4,12 +4,19 @@
 # Put parameters here that don't need to change on each machine where the app is deployed
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
+    app.frontend_url: '%env(string:FRONTEND_BASE_URL)%'
+    app.mailer_from: '%env(string:MAILER_FROM_EMAIL)%'
+
 
 services:
     # default configuration for services in *this* file
     _defaults:
         autowire: true      # Automatically injects dependencies in your services.
         autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+        bind:
+            # Injection automatique pour tous les services
+            $frontBaseUrl: '%app.frontend_url%'
+            $fromEmail: '%app.mailer_from%'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
@@ -19,6 +26,55 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
+    App\EventSubscriber\PaymentStatusSubscriber:
+        tags:
+            - { name: doctrine.event_subscriber }
+    App\State\UserPasswordHasher:
+        bind:
+            $processor: '@api_platform.doctrine.orm.state.persist_processor'
+        arguments:
+            $logger: '@monolog.logger.registration'
+    
+    App\Payment\StripePaymentProvider:
+        arguments:
+            $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'
+            $logger: '@monolog.logger.payment'
+       
+    App\Payment\PaymentProviderFactory:
+        arguments:
+            $providers: !tagged_iterator { tag: 'app.payment_provider', index_by: 'alias' }
+    
+    App\Controller\StripeWebhookController:
+        arguments:
+            $webhookSecret: '%env(STRIPE_WEBHOOK_SECRET)%'
+            $logger: '@monolog.logger.payment'
+    
+    App\Service\MailerService:
+        arguments:
+            $fromEmail: '%env(MAILER_FROM_EMAIL)%'
+            $frontBaseUrl: '%env(FRONTEND_BASE_URL)%'
+            $logger: '@monolog.logger.mailer'
+            $backendUrl: '%env(BACKEND_BASE_URL)%'
 
-    # add more service definitions when explicit configuration is needed
-    # please note that last definitions always *replace* previous ones
+     # Logger personnalisé pour les codes promo
+    App\Service\PromoCodeService:
+        arguments:
+            $logger: '@monolog.logger.promo_code'
+    
+    App\Service\PromoCodeApplicationService:
+        arguments:
+            $logger: '@monolog.logger.promo_code'
+
+    # Logger personnalisé pour les commandes
+    App\Controller\CheckoutController:
+        arguments:
+            $logger: '@monolog.logger.order'
+
+       
+    
+    Twig\Extra\Intl\IntlExtension: ~
+
+    
+
+
+   

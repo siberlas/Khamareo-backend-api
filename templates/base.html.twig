@@ -1,16 +1,252 @@
 <!DOCTYPE html>
-<html>
-    <head>
-        <meta charset="UTF-8">
-        <title>{% block title %}Welcome!{% endblock %}</title>
-        <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 128 128%22><text y=%221.2em%22 font-size=%2296%22>⚫️</text><text y=%221.3em%22 x=%220.2em%22 font-size=%2276%22 fill=%22%23fff%22>sf</text></svg>">
-        {% block stylesheets %}
-        {% endblock %}
-
-        {% block javascripts %}
-        {% endblock %}
-    </head>
-    <body>
-        {% block body %}{% endblock %}
-    </body>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Open Sans', Arial, sans-serif;
+            line-height: 1.6;
+            color: #4A2E20;
+            background-color: #FDFDFD;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .email-wrapper {
+            background-color: #FDFDFD;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(74, 46, 32, 0.08);
+        }
+        
+        .header {
+            background-color: #F9F5F0;
+            padding: 32px 30px;
+            text-align: center;
+            border-bottom: 2px solid #E8DFD3;
+        }
+        
+        .header h1 {
+            font-family: 'Libre Baskerville', Georgia, serif;
+            color: #4A2E20;
+            font-size: 28px;
+            margin: 0 0 8px 0;
+            font-weight: 700;
+        }
+        
+        .header p {
+            color: #7A5C47;
+            font-size: 15px;
+            margin: 0;
+        }
+        
+        .logo {
+            margin-bottom: 16px;
+        }
+        
+        .content {
+            padding: 32px 30px;
+        }
+        
+        h2 {
+            font-family: 'Libre Baskerville', Georgia, serif;
+            color: #4A2E20;
+            font-size: 22px;
+            margin: 0 0 16px 0;
+            font-weight: 700;
+        }
+        
+        h3 {
+            font-family: 'Libre Baskerville', Georgia, serif;
+            color: #4A2E20;
+            font-size: 18px;
+            margin: 24px 0 12px 0;
+            font-weight: 700;
+        }
+        
+        p {
+            margin: 0 0 16px 0;
+            color: #4A2E20;
+            font-size: 15px;
+        }
+        
+        a {
+            color: #D8A35D;
+            text-decoration: underline;
+        }
+        
+        .button {
+            display: inline-block;
+            background-color: #D8A35D;
+            color: #FFFFFF !important;
+            text-decoration: none;
+            border-radius: 12px;
+            padding: 14px 28px;
+            font-family: 'Open Sans', Arial, sans-serif;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            margin: 24px 0;
+            min-height: 48px;
+            line-height: 20px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .button:hover {
+            background-color: #C89247;
+        }
+        
+        .card {
+            background-color: #F9F5F0;
+            border: 1px solid #E8DFD3;
+            border-radius: 12px;
+            padding: 24px;
+            margin: 24px 0;
+        }
+        
+        .highlight {
+            background-color: #F2C879;
+            border-left: 4px solid #D8A35D;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        
+        .highlight p {
+            margin: 0;
+            color: #4A2E20;
+        }
+        
+        .alert {
+            background-color: #FFF5F5;
+            border-left: 4px solid #B94444;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin: 24px 0;
+        }
+        
+        .alert p {
+            margin: 0;
+            color: #B94444;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .muted {
+            color: #7A5C47;
+            font-size: 14px;
+        }
+        
+        .divider {
+            height: 1px;
+            background-color: #E8DFD3;
+            margin: 24px 0;
+        }
+        
+        .footer {
+            background-color: #273B3A;
+            color: #FFFFFF;
+            padding: 32px 30px;
+            text-align: center;
+        }
+        
+        .footer p {
+            color: #FFFFFF;
+            margin: 8px 0;
+        }
+        
+        .footer a {
+            color: #F2C879;
+        }
+        
+        .footer .brand {
+            font-family: 'Libre Baskerville', Georgia, serif;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+        
+        .footer .small {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 16px;
+        }
+        
+        .price {
+            color: #D8A35D;
+            font-weight: 700;
+        }
+        
+        @media only screen and (max-width: 600px) {
+            .email-wrapper {
+                padding: 10px;
+            }
+            
+            .content, .header, .footer {
+                padding: 24px 20px !important;
+            }
+            
+            h1 {
+                font-size: 24px !important;
+            }
+            
+            h2 {
+                font-size: 20px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-wrapper">
+        <div class="container">
+            <div class="header">
+                {% block logo %}
+                    {# <img src="{{ logo_url }}" alt="Khamareo" style="max-width: 150px; height: auto;" class="logo"> #}
+                {% endblock %}
+                {% block header %}
+                    <h1>Khamaréo</h1>
+                {% endblock %}
+            </div>
+            
+            <div class="content">
+                {% block content %}{% endblock %}
+            </div>
+            
+            <div class="footer">
+                {% block footer %}
+                    <p class="brand">Khamaréo</p>
+                    <p>Bien-être africain, produits naturels</p>
+                    <p style="margin-top: 20px;">
+                        <a href="mailto:support@khamareo.com" style="color: #F2C879; text-decoration: none;">support@khamareo.com</a>
+                    </p>
+                    <p class="small" style="margin-top: 24px;">
+                        Cet email a été envoyé automatiquement, merci de ne pas y répondre directement.<br>
+                        Pour toute question, contactez notre service client.
+                    </p>
+                    <p class="small">
+                        © {{ "now"|date("Y") }} Khamaréo. Tous droits réservés.
+                    </p>
+                {% endblock %}
+            </div>
+        </div>
+    </div>
+</body>
 </html>

@@ -1,4 +1,6 @@
-<?
+<?php
+// src/State/OrderProvider.php
+
 namespace App\State;
 
 use ApiPlatform\Metadata\Operation;
@@ -7,27 +9,37 @@ use App\Entity\Order;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 
-/**
- * @implements ProviderInterface<Order>
- */
 final class OrderProvider implements ProviderInterface
 {
     public function __construct(
-        private EntityManagerInterface $entityManager,
-        private Security $security
+        private readonly EntityManagerInterface $em,
+        private readonly Security $security,
     ) {}
 
-    public function provide(Operation $operation, array $uriVariables = [], array $context = []): iterable
+    public function provide(Operation $operation, array $uriVariables = [], array $context = []): iterable|object|null
     {
         $user = $this->security->getUser();
+        $repo = $this->em->getRepository(Order::class);
 
-        // Admin → toutes les commandes
-        if ($this->security->isGranted('ROLE_ADMIN')) {
-            return $this->entityManager->getRepository(Order::class)->findAll();
+        $qb = $repo->createQueryBuilder('o');
+
+        // 🔒 Filtre propriétaire pour un user non admin
+        if ($user && !$this->security->isGranted('ROLE_ADMIN')) {
+            $qb
+                ->andWhere('o.owner = :owner')
+                ->setParameter('owner', $user);
         }
 
-        // Utilisateur connecté → uniquement ses commandes
-        return $this->entityManager->getRepository(Order::class)
-            ->findBy(['owner' => $user], ['createdAt' => 'DESC']);
+        // 🔎 Filtre par numéro de commande si présent
+        $filters = $context['filters'] ?? [];
+        if (!empty($filters['orderNumber'])) {
+            $qb
+                ->andWhere('o.orderNumber = :orderNumber')
+                ->setParameter('orderNumber', $filters['orderNumber']);
+        }
+
+        $qb->orderBy('o.createdAt', 'DESC');
+
+        return $qb->getQuery()->getResult();
     }
 }

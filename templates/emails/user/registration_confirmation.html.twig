@@ -1,0 +1,44 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>🌿 Bienvenue chez Khamaréo !</h1>
+    <p>Merci de rejoindre notre communauté</p>
+{% endblock %}
+
+{% block content %}
+    <p>Bonjour {{ user.firstName }},</p>
+    
+    <p>Bienvenue dans l'univers du bien-être africain ! Nous sommes ravis de vous compter parmi nous.</p>
+    
+    <div class="card">
+        <h3 style="margin-top: 0; text-align: center;">✨ Pour commencer votre aventure</h3>
+        <p style="text-align: center; margin-bottom: 0;">
+            Veuillez confirmer votre adresse email en cliquant sur le bouton ci-dessous :
+        </p>
+    </div>
+    
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{{ confirmationUrl }}" class="button">Confirmer mon compte</a>
+    </div>
+    
+    <p class="muted" style="font-size: 13px; text-align: center;">
+        Si le bouton ne fonctionne pas, copiez et collez ce lien dans votre navigateur :<br>
+        <a href="{{ confirmationUrl }}" style="color: #D8A35D; word-break: break-all;">{{ confirmationUrl }}</a>
+    </p>
+    
+    <div class="divider"></div>
+    
+    <div style="background-color: #F9F5F0; padding: 24px; border-radius: 12px; border: 2px dashed #D8A35D; margin: 32px 0; text-align: center;">
+        <h3 style="margin: 0 0 12px 0; color: #A25D3C;">🎁 Cadeau de bienvenue</h3>
+        <p style="margin: 0;">
+            Une fois votre compte confirmé, vous recevrez un <strong style="color: #D8A35D;">code promo de -10%</strong> pour votre première commande !
+        </p>
+    </div>
+    
+    <div class="highlight">
+        <p>
+            <strong>💡 Le saviez-vous ?</strong><br>
+            En créant votre compte, vous bénéficiez de nos offres exclusives, de la livraison suivie et d'un accès prioritaire à nos nouveautés.
+        </p>
+    </div>
+{% endblock %}

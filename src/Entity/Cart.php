@@ -17,7 +17,14 @@ use App\State\CartProcessor;
 use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
 use ApiPlatform\Metadata\ApiFilter;
 use ApiPlatform\Metadata\GetCollection;
-
+use App\Controller\MergeGuestCartController;
+use App\Dto\GuestCartAddressInput;
+use App\State\GuestCartAddressProcessor;
+use ApiPlatform\Metadata\Patch;
+use App\Dto\GuestShippingAddressPatchInput;
+use App\State\GuestShippingAddressPatchProcessor;
+use App\State\GuestCheckoutProvider;
+use App\Dto\GuestCheckoutView;
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: CartRepository::class)]
 #[ApiFilter(BooleanFilter::class, properties: ['isActive'])]
@@ -33,14 +40,38 @@ use ApiPlatform\Metadata\GetCollection;
             read: false,
             output: Cart::class,
             normalizationContext: ['groups' => ['cart:read']],
-            security: "is_granted('PUBLIC_ACCESS') or (object and object.getOwner() and object.getOwner() == user)"
+            security: "is_granted('PUBLIC_ACCESS')" 
         ),
         new Get(
             security: "is_granted('ROLE_ADMIN') or (object and object.getOwner() and object.getOwner() == user)"
         ),
+         new Get(
+            uriTemplate: '/guest/{guestToken}',
+            output: GuestCheckoutView::class,
+            provider: GuestCheckoutProvider::class,
+            normalizationContext: ['groups' => ['guest-user']],
+            security: "is_granted('PUBLIC_ACCESS')" 
+         ),
         new Post(
-            security: "is_granted('ROLE_USER')",
+            security: "is_granted('PUBLIC_ACCESS')",
             processor: CartProcessor::class
+        ),
+        new Post(
+           name: 'merge_guest_cart',
+           uriTemplate: '/cart/merge',
+           controller: MergeGuestCartController::class,
+           deserialize: false,
+           input: false,
+           security: "is_granted('ROLE_USER')",
+        ),
+        new Post(
+            uriTemplate: '/guest/cart/address',
+            input: GuestCartAddressInput::class,
+            processor: GuestCartAddressProcessor::class,
+            name: 'post_guest_cart_address',
+            denormalizationContext: ['groups' => ['guest-user']],
+            security: "is_granted('PUBLIC_ACCESS')"
+
         ),
         new Delete(
             security: "is_granted('ROLE_ADMIN') or (object and object.getOwner() and object.getOwner() == user)"
@@ -80,7 +111,25 @@ class Cart
     #[Groups(['cart:read', 'cart:write'])]
     private ?string $guestToken = null;
 
-    
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['cart:read'])]
+    private ?string $paymentIntentId = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['cart:read'])]
+    private ?string $paymentClientSecret = null;
+
+    #[ORM\Column(type: 'float', nullable: true)]
+    #[Groups(['cart:read', 'cart:write'])]
+    private ?float $shippingCost = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['cart:read', 'cart:write'])]
+    private ?string $promoCode = null;
+
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    #[Groups(['cart:read'])]
+    private ?string $discountAmount = null;
 
     public function __construct()
     {
@@ -118,7 +167,7 @@ class Cart
         return $this->owner;
     }
 
-    public function setOwner(User $owner): static
+    public function setOwner(?User $owner): static
     {
         $this->owner = $owner;
 
@@ -186,13 +235,105 @@ class Cart
         $this->updatedAt = new \DateTimeImmutable();
     }
 
+    /**
+     * Retourne le sous-total des items SANS shipping
+     */
     #[Groups(['cart:read'])]
-    public function getTotalAmount(): float
+    public function getSubtotal(): float
     {
         $total = 0;
-        foreach ($this->items as $item) {
+        foreach ($this->getItems() as $item) {
             $total += $item->getQuantity() * $item->getUnitPrice();
         }
         return $total;
     }
+
+    /**
+     * Retourne le sous-total APRÈS réduction promo (mais SANS shipping)
+     */
+    #[Groups(['cart:read'])]
+    public function getSubtotalAfterDiscount(): float
+    {
+        $subtotal = $this->getSubtotal();
+        
+        if ($this->discountAmount) {
+            $subtotal -= (float) $this->discountAmount;
+        }
+        
+        return max(0, $subtotal);
+    }
+
+    /**
+     * Retourne le TOTAL final (items - promo + shipping)
+     */
+    #[Groups(['cart:read'])]
+    public function getTotalAmount(): float
+    {
+        $total = $this->getSubtotalAfterDiscount();
+        
+        // Ajouter les frais de livraison (calculés après choix méthode)
+        if ($this->shippingCost) {
+            $total += $this->shippingCost;
+        }
+        
+        return max(0, $total);
+    }
+
+    // Getters/Setters
+    public function getPromoCode(): ?string
+    {
+        return $this->promoCode;
+    }
+
+    public function setPromoCode(?string $promoCode): static
+    {
+        $this->promoCode = $promoCode;
+        return $this;
+    }
+
+    public function getDiscountAmount(): ?string
+    {
+        return $this->discountAmount;
+    }
+
+    public function setDiscountAmount(?string $discountAmount): static
+    {
+        $this->discountAmount = $discountAmount;
+        return $this;
+    }
+
+    public function getPaymentIntentId(): ?string
+    {
+        return $this->paymentIntentId;
+    }
+
+    public function setPaymentIntentId(?string $paymentIntentId): self
+    {
+        $this->paymentIntentId = $paymentIntentId;
+        return $this;
+    }
+
+    public function getPaymentClientSecret(): ?string
+    {
+        return $this->paymentClientSecret;
+    }
+
+    public function setPaymentClientSecret(?string $paymentClientSecret): self
+    {
+        $this->paymentClientSecret = $paymentClientSecret;
+        return $this;
+    }
+
+    public function getShippingCost(): ?float
+    {
+        return $this->shippingCost;
+    }
+
+    public function setShippingCost(?float $shippingCost): self
+    {
+        $this->shippingCost = $shippingCost;
+        return $this;
+    }
+
+
 }

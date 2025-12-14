@@ -10,42 +10,30 @@ class ShippingMethodFixtures extends Fixture
 {
     public function load(ObjectManager $manager): void
     {
-        $methods = [
-            [
-                'name' => 'Livraison standard',
-                'description' => 'Livraison à domicile sous 3 à 5 jours ouvrés.',
-                'price' => 5.90,
-                'carrierCode' => 'LA_POSTE',
-            ],
-            [
-                'name' => 'Livraison express',
-                'description' => 'Livraison à domicile sous 24 à 48 heures.',
-                'price' => 9.90,
-                'carrierCode' => 'CHRONOPOST',
-            ],
-            [
-                'name' => 'Click & Collect',
-                'description' => 'Retrait gratuit en boutique partenaire.',
-                'price' => 0.00,
-                'carrierCode' => 'CLICK_COLLECT',
-            ],
-            [
-                'name' => 'Mondial Relay',
-                'description' => 'Livraison en point relais sous 3 à 6 jours.',
-                'price' => 4.50,
-                'carrierCode' => 'MONDIAL_RELAY',
-            ],
-        ];
+        // ✅ LA POSTE
+        $laPoste = (new ShippingMethod())
+            ->setName('Livraison standard - La Poste')
+            ->setDescription('Livraison à domicile sous 3 à 5 jours ouvrés.')
+            ->setPrice(0) // Prix indicatif, le vrai prix vient de ShippingRate
+            ->setCarrierCode('LA_POSTE');
 
-        foreach ($methods as $data) {
-            $method = new ShippingMethod();
-            $method->setName($data['name'])
-                   ->setDescription($data['description'])
-                   ->setPrice($data['price'])
-                   ->setCarrierCode($data['carrierCode']);
+        // ✅ MONDIAL RELAY
+        $mondialRelay = (new ShippingMethod())
+            ->setName('Livraison en point relais - Mondial Relay')
+            ->setDescription('Retrait en point relais sous 3 à 5 jours ouvrés.')
+            ->setPrice(0)
+            ->setCarrierCode('MONDIAL_RELAY');
 
-            $manager->persist($method);
-        }
+        // ✅ COLISSIMO
+        $colissimo = (new ShippingMethod())
+            ->setName('Livraison express - Colissimo')
+            ->setDescription('Livraison rapide à domicile sous 24 à 48h.')
+            ->setPrice(0)
+            ->setCarrierCode('COLISSIMO');
+
+        $manager->persist($laPoste);
+        $manager->persist($mondialRelay);
+        $manager->persist($colissimo);
 
         $manager->flush();
     }

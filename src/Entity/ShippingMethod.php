@@ -11,6 +11,7 @@ use ApiPlatform\Metadata\Delete;
 use App\Repository\ShippingMethodRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
+use App\Controller\ShippingCostController;
 
 #[ORM\Entity(repositoryClass: ShippingMethodRepository::class)]
 #[ApiResource(
@@ -23,6 +24,15 @@ use Symfony\Component\Serializer\Annotation\Groups;
 
         // Admin management
         new Post(security: "is_granted('ROLE_ADMIN')"),
+        new Post(
+            name: 'calculate_shipping',
+            uriTemplate: '/shipping_methods/{id}/calculate',
+            controller: ShippingCostController::class,
+            security: "is_granted('PUBLIC_ACCESS')",
+            read: false,
+            write: false,
+            
+        ),
         new Patch(security: "is_granted('ROLE_ADMIN')"),
         new Delete(security: "is_granted('ROLE_ADMIN')")
     ]
@@ -50,6 +60,9 @@ class ShippingMethod
     #[ORM\Column(length: 100, nullable: true)]
     #[Groups(['shippingMethod:read', 'shippingMethod:write'])]
     private ?string $carrierCode = null; // Ex: "LA_POSTE", "MONDIAL_RELAY"
+
+
+
 
     public function getId(): ?int
     {
@@ -99,4 +112,5 @@ class ShippingMethod
         $this->carrierCode = $carrierCode;
         return $this;
     }
+
 }

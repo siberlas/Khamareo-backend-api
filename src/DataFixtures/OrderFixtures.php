@@ -7,7 +7,7 @@ use App\Entity\OrderItem;
 use App\Entity\Product;
 use App\Entity\User;
 use App\Entity\ShippingMethod;
-use App\Entity\ShippingAddress;
+use App\Entity\Address;
 use App\Enum\OrderStatus;
 use Doctrine\Bundle\FixturesBundle\Fixture;
 use Doctrine\Persistence\ObjectManager;
@@ -20,48 +20,97 @@ class OrderFixtures extends Fixture implements DependentFixtureInterface
     {
         $faker = Factory::create('fr_FR');
 
-        $users = $manager->getRepository(User::class)->findAll();
-        $products = $manager->getRepository(Product::class)->findAll();
+        $users           = $manager->getRepository(User::class)->findAll();
+        $products        = $manager->getRepository(Product::class)->findAll();
         $shippingMethods = $manager->getRepository(ShippingMethod::class)->findAll();
-        $shippingAddresses = $manager->getRepository(ShippingAddress::class)->findAll();
+        $addresses       = $manager->getRepository(Address::class)->findAll();
 
         foreach ($users as $user) {
-            for ($i = 0; $i < $faker->numberBetween(1, 2); $i++) {
-                $order = new Order();
-                $order->setOwner($user)
-                      ->setStatus($faker->randomElement([
-                          OrderStatus::PENDING,
-                          OrderStatus::PAID,
-                          OrderStatus::SHIPPED,
-                          OrderStatus::DELIVERED
-                      ]))
-                      ->setShippingMethod($faker->randomElement($shippingMethods))
-                      ->setShippingAddress($faker->randomElement($shippingAddresses))
-                      ->setPaymentMethod('card')
-                      ->setPaymentStatus('paid')
-                      ->setIsLocked(true)
-                      ->setDeliveryAddress($faker->address)
-                      ->setBillingAddress($faker->address)
-                      ->setCurrency('EUR');
+
+            for ($i = 0; $i < 2; $i++) {
+
+                // ===========================================================
+                // 🟦 1) Adresse source (addressKind = personal/business)
+                // ===========================================================
+                $source = $faker->randomElement($addresses);
+
+                // ===========================================================
+                // 🟦 2) Création du snapshot SHIPPING
+                // ===========================================================
+                $shippingSnapshot = (new Address())
+                    ->setAddressKind($source->getAddressKind())
+                    ->setIsBusiness($source->isBusiness())
+                    ->setCivility($source->getCivility())
+                    ->setFirstName($source->getFirstName())
+                    ->setLastName($source->getLastName())
+                    ->setCompanyName($source->getCompanyName())
+                    ->setStreetAddress($source->getStreetAddress())
+                    ->setCity($source->getCity())
+                    ->setPostalCode($source->getPostalCode())
+                    ->setCountry($source->getCountry())
+                    ->setPhone($source->getPhone())
+                    ->setLabel('Snapshot shipping '.$i)
+                    ->setIsDefault(false)
+                    ->setOwner(null); // un snapshot n’appartient à aucun user
+
+                $manager->persist($shippingSnapshot);
+
+                // ===========================================================
+                // 🟦 3) Création du snapshot BILLING
+                // ===========================================================
+                $billingSnapshot = (new Address())
+                    ->setAddressKind($source->getAddressKind())
+                    ->setIsBusiness($source->isBusiness())
+                    ->setCivility($source->getCivility())
+                    ->setFirstName($source->getFirstName())
+                    ->setLastName($source->getLastName())
+                    ->setCompanyName($source->getCompanyName())
+                    ->setStreetAddress($source->getStreetAddress())
+                    ->setCity($source->getCity())
+                    ->setPostalCode($source->getPostalCode())
+                    ->setCountry($source->getCountry())
+                    ->setPhone($source->getPhone())
+                    ->setLabel('Snapshot billing '.$i)
+                    ->setIsDefault(false)
+                    ->setOwner(null);
+
+                $manager->persist($billingSnapshot);
+
+                // ===========================================================
+                // 🟦 4) Création de la commande
+                // ===========================================================
+                $shippingMethod = $faker->randomElement($shippingMethods);
+
+                $order = (new Order())
+                    ->setOwner($user)
+                    ->setStatus(OrderStatus::PENDING)
+                    ->setShippingMethod($shippingMethod)
+                    ->setShippingAddress($shippingSnapshot)
+                    ->setBillingAddress($billingSnapshot)
+                    ->setPaymentStatus('unpaid')
+                    ->setPaymentMethod('card')
+                    ->setCurrency('EUR')
+                    ->setShippingCost(null);
 
                 $manager->persist($order);
 
+                // ===========================================================
+                // 🟦 5) Ajout des OrderItem
+                // ===========================================================
                 $total = 0;
 
-                // Chaque commande contient 2 à 4 produits
                 for ($j = 0; $j < $faker->numberBetween(2, 4); $j++) {
-                    $product = $faker->randomElement($products);
-                    $quantity = $faker->numberBetween(1, 3);
+                    $product   = $faker->randomElement($products);
+                    $quantity  = $faker->numberBetween(1, 3);
                     $unitPrice = $product->getPrice();
 
-                    $orderItem = new OrderItem();
-                    $orderItem->setCustomerOrder($order)
-                              ->setProduct($product)
-                              ->setQuantity($quantity)
-                              ->setUnitPrice($unitPrice);
+                    $item = (new OrderItem())
+                        ->setCustomerOrder($order)
+                        ->setProduct($product)
+                        ->setQuantity($quantity)
+                        ->setUnitPrice($unitPrice);
 
-                    $manager->persist($orderItem);
-                    $order->addItem($orderItem);
+                    $manager->persist($item);
 
                     $total += $unitPrice * $quantity;
                 }
@@ -79,7 +128,7 @@ class OrderFixtures extends Fixture implements DependentFixtureInterface
             UserFixtures::class,
             ProductFixtures::class,
             ShippingMethodFixtures::class,
-            ShippingAddressFixtures::class,
+            AddressFixtures::class,
         ];
     }
 }

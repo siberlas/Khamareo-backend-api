@@ -36,7 +36,7 @@ class PaymentStatusController extends AbstractController
         $order = $payment->getOrder();
 
         match ($newStatus) {
-            PaymentStatus::SUCCEEDED => $order->setStatus(OrderStatus::PAID),
+            PaymentStatus::PAID => $order->setStatus(OrderStatus::PAID),
             PaymentStatus::FAILED => $order->setStatus(OrderStatus::CANCELLED),
             PaymentStatus::REFUNDED => $order->setStatus(OrderStatus::REFUNDED),
             default => null,

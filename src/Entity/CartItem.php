@@ -19,11 +19,15 @@ use App\State\CartItemProcessor;
     denormalizationContext: ['groups' => ['cartitem:write']],
     operations: [
         new Post(
-            security: "is_granted('IS_AUTHENTICATED_FULLY')",
+            security: "is_granted('PUBLIC_ACCESS')",
             processor: CartItemProcessor::class
         ),
-        new Patch(security: "is_granted('IS_AUTHENTICATED_FULLY')"),
-        new Delete(security: "is_granted('IS_AUTHENTICATED_FULLY')")
+        new Patch(
+            security: "is_granted('PUBLIC_ACCESS')"
+        ),
+        new Delete(
+            security: "is_granted('PUBLIC_ACCESS')"
+        )
     ]
 )]
 class CartItem
@@ -34,11 +38,11 @@ class CartItem
     private ?Uuid $id = null;
 
     #[ORM\Column]
-    #[Groups(['cart:read','cart:write','cartitem:read','cartitem:write'])]
+    #[Groups(['cart:read','cart:write','cartitem:read','cartitem:write','cart:read'])]
     private ?int $quantity = null;
 
     #[ORM\Column]
-    #[Groups(['cart:read','cart:write','cartitem:read','cartitem:write'])]
+    #[Groups(['cart:read','cart:write','cartitem:read','cartitem:write','cart:read'])]
     private ?float $unitPrice = null;
 
     #[ORM\ManyToOne(inversedBy: 'items')]
@@ -48,7 +52,7 @@ class CartItem
 
     #[ORM\ManyToOne]
     #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['cart:read','cart:write','cartitem:read','cartitem:write'])]
+    #[Groups(['cart:read','cart:write','cartitem:read','cartitem:write','cart:read'])]
     private ?Product $product = null;
 
     public function __construct()

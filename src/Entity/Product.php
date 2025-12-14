@@ -50,7 +50,7 @@ class Product
     #[ApiProperty(identifier: false)]
     private ?Uuid $id = null;
 
-    #[Groups(['product:read', 'product:write'])]
+    #[Groups(['product:read', 'product:write','order:read','cart:read'])]
     #[ORM\Column(length: 255)]
     private ?string $name = null;
 
@@ -58,11 +58,11 @@ class Product
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $description = null;
 
-    #[Groups(['product:read', 'product:write'])]
+    #[Groups(['product:read', 'product:write','order:read'])]
     #[ORM\Column]
     private ?float $price = null;
 
-    #[Groups(['product:read', 'product:write'])]
+    #[Groups(['product:read', 'product:write','cart:read'])]
     #[ORM\Column(nullable: true)]
     private ?float $weight = null;
 
@@ -70,11 +70,11 @@ class Product
     #[ORM\Column(type: 'datetime_immutable')]
     private ?\DateTimeImmutable $createdAt = null;
 
-    #[Groups(['product:read', 'product:write'])]
+    #[Groups(['product:read', 'product:write','cart:read'])]
     #[ORM\Column]
     private ?int $stock = 0;
 
-    #[Groups(['product:read', 'product:write'])]
+    #[Groups(['product:read', 'product:write','cart:read'])]
     #[ORM\Column(length: 255)]
     private ?string $imageUrl = null;
 

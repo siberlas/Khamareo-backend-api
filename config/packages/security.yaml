@@ -26,18 +26,86 @@ security:
                 password_path: password
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
-        
+                
+
         api:
             pattern: ^/api
             stateless: true
             provider: app_user_provider
             jwt: ~
-
+            lazy: true
        
     access_control:
-        # Autoriser l'accès public à /api/login
-        - { path: ^/api/auth, roles: PUBLIC_ACCESS }
+
+         # Stripe – statut de paiement (public)
+        - { path: ^/api/stripe/payment-status, roles: PUBLIC_ACCESS }
+
+        # Stripe – webhook (déjà OK mais on sécurise)
+        - { path: ^/api/payment/webhook/stripe, roles: PUBLIC_ACCESS }
+
+        # ✅ Routes publiques (authentification)
+        - { path: ^/api/auth$, roles: PUBLIC_ACCESS }
+        - { path: ^/api/users$, roles: PUBLIC_ACCESS, methods: [POST] }  # Inscription
+        - { path: ^/api/confirm, roles: PUBLIC_ACCESS }  # Confirmation email
+        - { path: ^/api/reset-password, roles: PUBLIC_ACCESS }  # Reset password
+        - { path: ^/api/forgot-password, roles: PUBLIC_ACCESS }  # Demande reset
+        
+        # ✅ Routes publiques (catalogue)
         - { path: ^/api/categories, roles: PUBLIC_ACCESS }
         - { path: ^/api/products, roles: PUBLIC_ACCESS }
+        - { path: ^/api/shipping_methods, roles: PUBLIC_ACCESS }
+        - { path: ^/api/shipping_rates, roles: PUBLIC_ACCESS }
+
+        # ============================================================
+        # PANIER INVITÉ (PUBLIC) ✅ AJOUTÉ
+        # ============================================================
+        - { path: ^/api/cart$, roles: PUBLIC_ACCESS }  # ✅ Route principale du panier
+        - { path: ^/api/carts, roles: PUBLIC_ACCESS }
+        - { path: ^/api/cart_items, roles: PUBLIC_ACCESS }
+        - { path: ^/api/guest, roles: PUBLIC_ACCESS }  # ✅ CRITICAL - Routes guest
+
+      
+        
+        # ✅ Routes publiques (checkout invité)
+        - { path: ^/api/checkout, roles: PUBLIC_ACCESS }
+        - { path: ^/api/cart/checkout, roles: PUBLIC_ACCESS }  # ✅ AJOUTER CETTE LIGNE
+        - { path: ^/api/payment, roles: PUBLIC_ACCESS }
+        - { path: ^/api/promo_codes/validate, roles: PUBLIC_ACCESS }
+        - { path: ^/api/promo_codes/validate, roles: PUBLIC_ACCESS }
+        - { path: ^/api/newsletter_subscribers, roles: PUBLIC_ACCESS }
+        - { path: ^/api/cart/apply-promo, roles: PUBLIC_ACCESS }
+
+        # ============================================================
+        # ADRESSES (POST public pour checkout invité)
+        # ============================================================
+        - { path: ^/api/addresses$, roles: PUBLIC_ACCESS, methods: [POST] }
+
+         # API root / API Platform entrypoint
+        - { path: ^/api$, roles: PUBLIC_ACCESS }
+
+        
+        # ✅ API Platform (doc, contextes, etc.)
+        - { path: ^/api/docs, roles: PUBLIC_ACCESS }
+        - { path: ^/api/contexts, roles: PUBLIC_ACCESS }
+        - { path: ^/api\.json, roles: PUBLIC_ACCESS }
+        - { path: ^/api\.jsonld, roles: PUBLIC_ACCESS }
+
+         # ============================================================
+        # COMMANDES PUBLIQUES (invité / post-paiement)
+        # ============================================================
+        - { path: ^/api/orders/public, roles: PUBLIC_ACCESS }
+
+        # ============================================================
+        # COMMANDES (AUTHENTIFIÉ sauf création via checkout)
+        # ============================================================
+        - { path: ^/api/orders$, roles: PUBLIC_ACCESS, methods: [POST] }  # Création via checkout
+        - { path: ^/api/orders, roles: IS_AUTHENTICATED_FULLY }  # Consultation
+
+        # ============================================================
+        # ADMIN
+        # ============================================================
+        - { path: ^/api/admin, roles: ROLE_ADMIN }
+
+        
+        # ✅ Protéger tout le reste
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
-        # Protéger toutes les autres routes /api

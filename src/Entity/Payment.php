@@ -11,6 +11,8 @@ use App\Repository\PaymentRepository;
 use Symfony\Component\Validator\Constraints as Assert;
 use ApiPlatform\Metadata\Post;
 use App\Controller\PaymentStatusController;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
 
 #[ORM\Entity(repositoryClass: PaymentRepository::class)]
 #[ApiResource(
@@ -25,6 +27,9 @@ use App\Controller\PaymentStatusController;
             name: 'payment_confirm',
             security: "is_granted('ROLE_USER')"
         ),
+        new Get(security: "is_granted('PUBLIC_ACCESS')"),
+         new GetCollection(security: "is_granted('PUBLIC_ACCESS')"),
+
     ]
 )]
 class Payment
@@ -52,6 +57,22 @@ class Payment
     #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['payment:read', 'order:read'])]
     private ?string $transactionId = null;
+
+     #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['payment:read', 'order:read'])]
+    private ?string $providerPaymentId = null; // ex: Stripe PaymentIntent ID
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['payment:read', 'order:read'])]
+    private ?string $clientSecret = null; // pour le front Stripe
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['payment:read', 'payment:write', 'order:read'])]
+    private ?string $method = null; // card, paypal, etc.
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $providerResponse = null;
+
 
     #[ORM\Column(nullable: true)]
     #[Groups(['payment:read'])]
@@ -137,4 +158,49 @@ class Payment
         $this->order = $order;
         return $this;
     }
+
+    public function getProviderPaymentId(): ?string
+    {
+        return $this->providerPaymentId;
+    }
+
+    public function setProviderPaymentId(?string $providerPaymentId): static
+    {
+        $this->providerPaymentId = $providerPaymentId;
+        return $this;
+    }
+
+    public function getClientSecret(): ?string
+    {
+        return $this->clientSecret;
+    }
+
+    public function setClientSecret(?string $clientSecret): static
+    {
+        $this->clientSecret = $clientSecret;
+        return $this;
+    }
+
+    public function getMethod(): ?string
+    {
+        return $this->method;
+    }
+
+    public function setMethod(?string $method): static
+    {
+        $this->method = $method;
+        return $this;
+    }
+
+    public function getProviderResponse(): ?array
+    {
+        return $this->providerResponse;
+    }
+
+    public function setProviderResponse(?array $providerResponse): static
+    {
+        $this->providerResponse = $providerResponse;
+        return $this;
+    }
+
 }
