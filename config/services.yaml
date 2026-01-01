@@ -26,10 +26,10 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
-    App\EventSubscriber\PaymentStatusSubscriber:
+    App\Payment\EventSubscriber\PaymentStatusSubscriber:
         tags:
             - { name: doctrine.event_subscriber }
-    App\State\UserPasswordHasher:
+    App\User\State\UserPasswordHasher:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
         arguments:
@@ -44,12 +44,12 @@ services:
         arguments:
             $providers: !tagged_iterator { tag: 'app.payment_provider', index_by: 'alias' }
     
-    App\Controller\StripeWebhookController:
+    App\Payment\Controller\StripeWebhookController:
         arguments:
             $webhookSecret: '%env(STRIPE_WEBHOOK_SECRET)%'
             $logger: '@monolog.logger.payment'
     
-    App\Service\MailerService:
+    App\Shared\Service\MailerService:
         arguments:
             $fromEmail: '%env(MAILER_FROM_EMAIL)%'
             $frontBaseUrl: '%env(FRONTEND_BASE_URL)%'
@@ -57,24 +57,96 @@ services:
             $backendUrl: '%env(BACKEND_BASE_URL)%'
 
      # Logger personnalisé pour les codes promo
-    App\Service\PromoCodeService:
+    App\Marketing\Service\PromoCodeService:
         arguments:
             $logger: '@monolog.logger.promo_code'
     
-    App\Service\PromoCodeApplicationService:
+    App\Marketing\Service\PromoCodeApplicationService:
         arguments:
             $logger: '@monolog.logger.promo_code'
 
     # Logger personnalisé pour les commandes
-    App\Controller\CheckoutController:
+    App\Payment\Controller\CheckoutController:
         arguments:
             $logger: '@monolog.logger.order'
 
-       
+        
     
     Twig\Extra\Intl\IntlExtension: ~
 
+    App\Media\Service\CloudinaryService:
+        arguments:
+            $cloudName: '%cloudinary.cloud_name%'
+            $apiKey: '%cloudinary.api_key%'
+            $apiSecret: '%cloudinary.api_secret%'
     
+    App\Command\TestCloudinaryConnectionCommand:
+        arguments:
+            $cloudName: '%cloudinary.cloud_name%'
+            $apiKey: '%cloudinary.api_key%'
 
+    App\Blog\State\BlogPostProcessor:
+        arguments:
+            $persistProcessor: '@api_platform.doctrine.orm.state.persist_processor'
+            $entityManager: '@doctrine.orm.entity_manager'
+            $security: '@security.helper'
+            $slugger: '@slugger'
+    
+    App\Shared\EventListener\LocaleListener:
+        arguments:
+            $defaultLocale: '%kernel.default_locale%'
+            $logger: '@monolog.logger.mailer'
+        tags:
+            - { name: kernel.event_subscriber }
+    
+    App\Catalog\State\ManualTranslationProvider:
+        decorates: 'api_platform.doctrine.orm.state.item_provider'
+        arguments:
+            $decorated: '@.inner'
+            $requestStack: '@request_stack'
+            $entityManager: '@doctrine.orm.entity_manager'
 
-   
+    # Provider pour les collections
+    App\Catalog\State\ManualTranslationCollectionProvider:
+        decorates: 'api_platform.doctrine.orm.state.collection_provider'
+        arguments:
+            $decorated: '@.inner'
+            $requestStack: '@request_stack'
+            $entityManager: '@doctrine.orm.entity_manager'
+    
+    App\Contact\State\ContactMessageProcessor:
+        arguments:
+         $logger: '@monolog.logger.contact'
+
+    App\Catalog\State\ProductPriceProvider:
+        decorates: 'api_platform.doctrine.orm.state.item_provider'
+        arguments:
+            $decorated: '@.inner'
+            $requestStack: '@request_stack'
+
+    # Provider pour collections (GET /api/products)
+    product_price_collection_provider:
+        class: App\Catalog\State\ProductPriceProvider
+        decorates: 'api_platform.doctrine.orm.state.collection_provider'
+        arguments:
+            $decorated: '@.inner'
+            $requestStack: '@request_stack'
+
+    App\Media\Service\MediaService:
+        arguments:
+            $logger: '@monolog.logger.media'
+
+    App\Shipping\Service\ColissimoApiService:
+        arguments:
+            $apiUrl: '%env(COLISSIMO_API_URL)%'
+            $apiKey: '%env(default::COLISSIMO_API_KEY)%'
+            $senderInfo:
+                company: '%env(COLISSIMO_SENDER_COMPANY)%'
+                firstname: '%env(COLISSIMO_SENDER_FIRSTNAME)%'
+                lastname: '%env(COLISSIMO_SENDER_LASTNAME)%'
+                address: '%env(COLISSIMO_SENDER_ADDRESS)%'
+                zipcode: '%env(COLISSIMO_SENDER_ZIPCODE)%'
+                city: '%env(COLISSIMO_SENDER_CITY)%'
+                country: '%env(COLISSIMO_SENDER_COUNTRY)%'
+                email: '%env(COLISSIMO_SENDER_EMAIL)%'
+                phone: '%env(COLISSIMO_SENDER_PHONE)%'

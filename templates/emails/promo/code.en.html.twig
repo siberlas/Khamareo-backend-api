@@ -1,0 +1,44 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>🎁 {{ message }}</h1>
+{% endblock %}
+
+{% block content %}
+    <p>Hello,</p>
+    
+    <p>We're delighted to offer you this exclusive promo code for your next order at Khamareo.</p>
+    
+    <div style="background: linear-gradient(135deg, #F9F5F0 0%, #F2C879 100%); padding: 40px 30px; border-radius: 12px; text-align: center; margin: 32px 0; border: 2px solid #E8DFD3;">
+        <p style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #7A5C47; margin-bottom: 12px; font-weight: 600;">
+            Your Promo Code
+        </p>
+        <p style="font-size: 36px; font-family: 'Libre Baskerville', Georgia, serif; font-weight: 700; color: #4A2E20; letter-spacing: 4px; margin: 16px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            {{ promoCode.code }}
+        </p>
+        <p style="font-size: 24px; font-weight: 700; color: #A25D3C; margin-top: 12px;">
+            {{ discount }} discount
+        </p>
+    </div>
+    
+    <div class="card">
+        <p style="text-align: center; margin: 0;">
+            <span class="muted">Valid until</span><br>
+            <strong style="font-size: 18px; color: #D8A35D;">{{ promoCode.expiresAt|date('m/d/Y') }}</strong>
+        </p>
+    </div>
+    
+    <p style="margin-top: 24px;">
+        Use this code on your next order to enjoy your discount on our selection of natural African products.
+    </p>
+    
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{{ shopUrl }}" class="button">Discover Our Products</a>
+    </div>
+    
+    <div class="highlight">
+        <p>
+            <strong>💡 Tip:</strong> The promo code is automatically applied to eligible products at checkout.
+        </p>
+    </div>
+{% endblock %}

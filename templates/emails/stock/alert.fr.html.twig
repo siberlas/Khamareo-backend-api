@@ -1,0 +1,78 @@
+{% extends 'emails/base.html.twig' %}
+
+{% block content %}
+    <div style="text-align: center; margin-bottom: 30px;">
+        <div style="background: linear-gradient(135deg, #d4a574 0%, #c89968 100%); width: 80px; height: 80px; border-radius: 50%; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+            <span style="font-size: 40px;">🎉</span>
+        </div>
+        <h1 style="color: #2c3e50; margin: 0; font-size: 28px; font-weight: 600;">
+            Bonne nouvelle {{ user.firstName }} !
+        </h1>
+    </div>
+
+    <p style="font-size: 18px; color: #34495e; margin: 20px 0;">
+        Le produit <strong>{{ product.name }}</strong> est de nouveau en stock !
+    </p>
+
+    {# Détails produit #}
+    <div style="background: #f8f9fa; padding: 25px; border-radius: 10px; margin: 30px 0;">
+        <h3 style="margin: 0 0 15px 0; color: #2c3e50; font-size: 20px;">
+            {{ product.name }}
+        </h3>
+        
+        {% if product.description %}
+        <p style="color: #7f8c8d; margin: 0 0 20px 0; font-size: 14px; line-height: 1.6;">
+            {{ product.description|slice(0, 150) }}{% if product.description|length > 150 %}...{% endif %}
+        </p>
+        {% endif %}
+
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span style="font-size: 32px; font-weight: 700; color: #d4a574;">
+                    {{ product.price|number_format(2, ',', ' ') }} €
+                </span>
+            </div>
+            
+            <div style="background: #d4edda; color: #155724; padding: 8px 16px; border-radius: 20px; font-size: 14px; font-weight: 600;">
+                ✓ En stock
+            </div>
+        </div>
+    </div>
+
+    {# Call to action #}
+    <div style="text-align: center; margin: 40px 0;">
+        <a 
+            href="{{ productUrl }}" 
+            style="background: linear-gradient(135deg, #d4a574 0%, #c89968 100%); 
+                   color: white; 
+                   padding: 16px 40px; 
+                   text-decoration: none; 
+                   border-radius: 30px; 
+                   font-weight: 600; 
+                   font-size: 16px;
+                   display: inline-block;
+                   box-shadow: 0 4px 15px rgba(212, 165, 116, 0.3);"
+        >
+            Voir le produit →
+        </a>
+    </div>
+
+    {# Message d'urgence #}
+    <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 30px 0; border-radius: 5px;">
+        <p style="margin: 0; color: #856404; font-size: 14px;">
+            ⚡ <strong>Stock limité !</strong> Ne tardez pas à commander pour ne pas manquer cette opportunité.
+        </p>
+    </div>
+
+    {# Gestion des alertes #}
+    <div style="border-top: 1px solid #e9ecef; margin-top: 40px; padding-top: 20px;">
+        <p style="color: #95a5a6; font-size: 13px; margin: 0 0 10px 0;">
+            Vous recevez cet email car vous avez activé une alerte pour ce produit.
+        </p>
+        <p style="color: #95a5a6; font-size: 13px; margin: 0;">
+            <a href="{{ manageAlertsUrl }}" style="color: #d4a574; text-decoration: underline; font-weight: 600;">
+                Gérer mes alertes stock →
+            </a>
+        </p>
+    </div>
+{% endblock %}

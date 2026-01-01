@@ -13,7 +13,8 @@ RUN apt-get update && apt-get install -y \
         pdo_pgsql \
         intl \
         zip \
-        opcache
+        opcache \
+    soap
 
 # Installer Composer
 COPY --from=composer:2.7 /usr/bin/composer /usr/bin/composer

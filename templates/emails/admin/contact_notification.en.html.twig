@@ -1,0 +1,39 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block content %}
+    <h2>New Contact Message</h2>
+    
+    <table style="width: 100%; margin: 20px 0;">
+        <tr>
+            <td><strong>From:</strong></td>
+            <td>{{ message.name }} ({{ message.email }})</td>
+        </tr>
+        {% if message.phone %}
+        <tr>
+            <td><strong>Phone:</strong></td>
+            <td>{{ message.phone }}</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td><strong>Subject:</strong></td>
+            <td>{{ message.subject }}</td>
+        </tr>
+        {% if message.orderNumber %}
+        <tr>
+            <td><strong>Order:</strong></td>
+            <td>#{{ message.orderNumber }}</td>
+        </tr>
+        {% endif %}
+    </table>
+
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px;">
+        <strong>Message:</strong><br>
+        {{ message.message|nl2br }}
+    </div>
+
+    <p style="margin-top: 20px;">
+        <a href="mailto:{{ message.email }}" style="background: #d4a574; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+            Reply
+        </a>
+    </p>
+{% endblock %}

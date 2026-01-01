@@ -1,0 +1,17 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block content %}
+    <h2>Your Message Has Been Received</h2>
+    
+    <p>Hello {{ message.name }},</p>
+    
+    <p>We have received your message regarding:</p>
+    
+    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+        <strong>{{ message.subject }}</strong>
+    </div>
+    
+    <p>Our team will respond to you as soon as possible (typically within 24-48 hours).</p>
+    
+    <p>Best regards,<br>The Khamareo Team</p>
+{% endblock %}

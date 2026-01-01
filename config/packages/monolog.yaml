@@ -7,6 +7,9 @@ monolog:
         - mailer
         - cart
         - registration
+        - contact
+        - media
+    
 
 when@dev:
     monolog:
@@ -49,11 +52,25 @@ when@dev:
                 level: debug
                 channels: [registration]
             
+            contact:
+                type: stream
+                path: "%kernel.logs_dir%/contact.log"
+                level: debug
+                channels: [contact]
+
+
+            media:
+                type: stream
+                path: "%kernel.logs_dir%/media.log"
+                level: info
+                channels: ["media"]
+            
             # Console output (affiche dans le terminal)
             console:
                 type: console
                 process_psr_3_messages: false
                 channels: ["!event", "!doctrine", "!console"]
+            
             
 
 when@test:

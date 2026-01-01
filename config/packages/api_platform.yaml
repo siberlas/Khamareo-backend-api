@@ -1,6 +1,19 @@
 api_platform:
     title: Hello API Platform
     version: 1.0.0
+    mapping:
+        paths:
+            - '%kernel.project_dir%/src/Blog/Entity'
+            - '%kernel.project_dir%/src/Cart/Entity'
+            - '%kernel.project_dir%/src/Catalog/Entity'
+            - '%kernel.project_dir%/src/Contact/Entity'
+            - '%kernel.project_dir%/src/Marketing/Entity'
+            - '%kernel.project_dir%/src/Media/Entity'
+            - '%kernel.project_dir%/src/Order/Entity'
+            - '%kernel.project_dir%/src/Payment/Entity'
+            - '%kernel.project_dir%/src/Shipping/Entity'
+            - '%kernel.project_dir%/src/Shared/Entity'
+            - '%kernel.project_dir%/src/User/Entity'
     defaults:
         stateless: true
         cache_headers:

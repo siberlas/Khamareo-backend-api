@@ -1,12 +1,12 @@
 security:
     password_hashers:
-        App\Entity\User:
+        App\User\Entity\User:
             algorithm: auto
 
     providers:
         app_user_provider:
             entity:
-                class: App\Entity\User
+                class: App\User\Entity\User
                 property: email   # champ utilisé pour identifier l’utilisateur
 
     firewalls:
@@ -106,6 +106,30 @@ security:
         # ============================================================
         - { path: ^/api/admin, roles: ROLE_ADMIN }
 
+        - { path: ^/api/contact_messages, roles: PUBLIC_ACCESS, methods: [POST] }
+
+        - { path: ^/api/stock_alerts, roles: ROLE_USER }
+
+        - { path: ^/api/favorites, roles: ROLE_USER }
+
+         # Routes Cloudinary - Admin uniquement
+        - { path: ^/api/cloudinary, roles: ROLE_ADMIN }
         
+        # Blog posts - Public en lecture, Admin en écriture (déjà configuré)
+        - { path: ^/api/blog_posts, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/blog_posts, roles: ROLE_ADMIN, methods: [POST, PUT, PATCH, DELETE] }
+        
+        # Blog categories - Public en lecture, Admin en écriture
+        - { path: ^/api/blog_categories, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/blog_categories, roles: ROLE_ADMIN, methods: [POST, PUT, PATCH, DELETE] }
+
+        - { path: ^/api/test/media/stats, roles: PUBLIC_ACCESS }
+
+        - { path: ^/api/media,  roles: ROLE_ADMIN, methods: [POST, PUT, PATCH, DELETE] } 
+
+        - { path: ^/test-colissimo/orders,  roles: ROLE_ADMIN, methods: [POST, PUT, PATCH, DELETE] } 
+
         # ✅ Protéger tout le reste
         - { path: ^/api, roles: IS_AUTHENTICATED_FULLY }
+        
+        

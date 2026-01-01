@@ -1,0 +1,60 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>📬 Subscription Confirmed!</h1>
+    <p>Welcome to the Khamareo family</p>
+{% endblock %}
+
+{% block content %}
+    <p>Hello,</p>
+    
+    <p>Thank you for subscribing to our newsletter! You're now part of our community and will receive exclusive access to:</p>
+    
+    <div class="card">
+        <ul style="list-style: none; padding: 0; margin: 0;">
+            <li style="padding: 12px 0; border-bottom: 1px solid #E8DFD3;">
+                ✨ <strong>New products</strong> before anyone else
+            </li>
+            <li style="padding: 12px 0; border-bottom: 1px solid #E8DFD3;">
+                🎁 <strong>Exclusive offers</strong> for subscribers only
+            </li>
+            <li style="padding: 12px 0; border-bottom: 1px solid #E8DFD3;">
+                🌿 <strong>Wellness tips</strong> and natural recipes
+            </li>
+            <li style="padding: 12px 0;">
+                📦 <strong>Private sales</strong> and special promotions
+            </li>
+        </ul>
+    </div>
+    
+    {% if promoCode %}
+    <div style="background: linear-gradient(135deg, #F9F5F0 0%, #F2C879 100%); padding: 32px; border-radius: 12px; text-align: center; margin: 32px 0; border: 2px solid #D8A35D;">
+        <p style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #7A5C47; margin-bottom: 12px; font-weight: 600;">
+            🎁 Your Welcome Gift
+        </p>
+        <p style="font-size: 32px; font-family: 'Libre Baskerville', Georgia, serif; font-weight: 700; color: #4A2E20; letter-spacing: 4px; margin: 12px 0;">
+            {{ promoCode }}
+        </p>
+        <p style="font-size: 20px; font-weight: 700; color: #A25D3C; margin: 12px 0;">
+            10% off your first order
+        </p>
+        <p class="muted" style="font-size: 13px; margin-top: 16px;">
+            Valid until {{ expirationDate|date('m/d/Y') }}
+        </p>
+    </div>
+    {% endif %}
+    
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{{ shopUrl }}" class="button">Discover Our Products</a>
+    </div>
+    
+    <div class="highlight">
+        <p style="text-align: center; margin: 0;">
+            <strong>🌍 Our Mission:</strong> Making authentic, natural African wellness accessible to all
+        </p>
+    </div>
+    
+    <p class="muted" style="text-align: center; margin-top: 32px; font-size: 12px;">
+        You can unsubscribe at any time by clicking the link at the bottom of our emails.
+    </p>
+{% endblock %}
