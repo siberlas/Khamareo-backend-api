@@ -4,7 +4,7 @@ namespace App\Payment\Controller;
 
 use App\Payment\Repository\PaymentRepository;
 use App\Order\Repository\OrderRepository;
-use App\Payment\StripePaymentProvider;
+use App\Payment\Provider\StripePaymentProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Annotation\Route;

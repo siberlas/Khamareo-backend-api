@@ -3,7 +3,7 @@
 namespace App\Payment\Controller;
 
 use App\User\Entity\User;
-use App\Payment\StripePaymentProvider;
+use App\Payment\Provider\StripePaymentProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Bundle\SecurityBundle\Security;

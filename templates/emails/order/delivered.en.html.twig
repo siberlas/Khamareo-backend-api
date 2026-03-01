@@ -1,0 +1,20 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>✅ Order Delivered</h1>
+    <p>We hope everything is perfect</p>
+{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Your order <strong>#{{ order.orderNumber }}</strong> has been delivered.</p>
+
+    <div class="highlight">
+        <p>Your feedback matters a lot to us.</p>
+    </div>
+
+    <div style="text-align: center; margin: 24px 0;">
+        <a href="{{ orderUrl }}" class="button">View my order</a>
+    </div>
+{% endblock %}

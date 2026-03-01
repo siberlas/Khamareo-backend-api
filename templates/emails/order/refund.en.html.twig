@@ -1,0 +1,73 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>💸 Refund Processed</h1>
+    <p>Order #{{ order.orderNumber }}</p>
+{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Your refund has been processed following your request.<br>
+    The funds should appear on your bank account <strong>within a few days</strong>, depending on your bank's processing times.</p>
+
+    {# ── Refund amount ─────────────────────────────────────── #}
+    <div class="highlight" style="text-align: center;">
+        <p style="margin: 0 0 6px; font-size: 13px; color: #7A5C47;">Refunded amount</p>
+        <p style="margin: 0; font-size: 32px; font-weight: 700; color: #4A2E20;">
+            {{ refundAmount|format_currency('EUR') }}
+        </p>
+        {% if refundId %}
+        <p style="margin: 10px 0 0; font-size: 12px; color: #7A5C47;">
+            Refund reference: <span style="font-family: monospace; color: #4A2E20;">{{ refundId }}</span>
+        </p>
+        {% endif %}
+    </div>
+
+    {# ── Order summary ─────────────────────────────────────── #}
+    {% if order.items is not empty %}
+    <div class="card">
+        <h3 style="margin-top: 0; color: #4A2E20;">Summary — Order #{{ order.orderNumber }}</h3>
+        <table>
+            <tbody>
+                {% for item in order.items %}
+                <tr style="border-bottom: 1px solid #E8DFD3;">
+                    <td style="padding: 10px 8px 10px 0;">
+                        <strong>{{ item.product ? item.product.name : (item.productName ?? 'Product') }}</strong>
+                        <br><span class="muted">Qty: {{ item.quantity }}</span>
+                    </td>
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #C9A96E; white-space: nowrap;">
+                        {{ (item.quantity * item.unitPrice)|format_currency('EUR') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="divider"></div>
+        <table>
+            {% if order.shippingCost > 0 %}
+            <tr>
+                <td style="padding: 4px 0; color: #7A5C47; text-align: right;">Shipping</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; white-space: nowrap; padding-left: 16px;">{{ order.shippingCost|format_currency('EUR') }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td style="padding: 4px 0; color: #7A5C47; text-align: right;">Total paid</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; white-space: nowrap; padding-left: 16px;">{{ order.totalAmount|format_currency('EUR') }}</td>
+            </tr>
+            <tr>
+                <td style="padding: 8px 0; text-align: right;"><strong style="color: #4A2E20;">Refunded</strong></td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #C9A96E; font-size: 16px; white-space: nowrap; padding-left: 16px;">{{ refundAmount|format_currency('EUR') }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <div style="text-align: center; margin: 24px 0;">
+        <a href="{{ orderUrl }}" class="button">View my order</a>
+    </div>
+
+    <p class="muted" style="text-align: center;">
+        Questions? Contact us at <a href="mailto:support@khamareo.com" style="color: #C9A96E;">support@khamareo.com</a>
+    </p>
+{% endblock %}

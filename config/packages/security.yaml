@@ -15,13 +15,25 @@ security:
             security: false
         # Firewall pour toutes les routes de l'API protégées
         
-        # Point d'entrée login JWT
+        # Point d'entrée login JWT (frontend)
         login:
             pattern: ^/api/auth
             stateless: true
             provider: app_user_provider
             json_login:
                 check_path: /api/auth
+                username_path: email
+                password_path: password
+                success_handler: lexik_jwt_authentication.handler.authentication_success
+                failure_handler: lexik_jwt_authentication.handler.authentication_failure
+
+        # Point d'entrée login JWT (admin)
+        admin_login:
+            pattern: ^/waraba-l19/login
+            stateless: true
+            provider: app_user_provider
+            json_login:
+                check_path: /waraba-l19/login
                 username_path: email
                 password_path: password
                 success_handler: lexik_jwt_authentication.handler.authentication_success
@@ -53,8 +65,13 @@ security:
         # ✅ Routes publiques (catalogue)
         - { path: ^/api/categories, roles: PUBLIC_ACCESS }
         - { path: ^/api/products, roles: PUBLIC_ACCESS }
+        - { path: ^/api/reviews, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/hero_slides, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/shipping_methods, roles: PUBLIC_ACCESS }
         - { path: ^/api/shipping_rates, roles: PUBLIC_ACCESS }
+        - { path: ^/api/menu, roles: PUBLIC_ACCESS }
+        - { path: ^/api/public, roles: PUBLIC_ACCESS }
+        - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
 
         # ============================================================
         # PANIER INVITÉ (PUBLIC) ✅ AJOUTÉ

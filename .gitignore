@@ -12,8 +12,8 @@
 ###> lexik/jwt-authentication-bundle ###
 /config/jwt/*.pem
 ###< lexik/jwt-authentication-bundle ###
-.env
-.env.local
-.env.dev
-.env.prod
-.env.test
+/.env.dev
+/.env.prod
+/.env.test
+/node_modules/
+/.phpunit.cache/

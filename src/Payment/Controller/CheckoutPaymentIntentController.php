@@ -8,7 +8,7 @@ use App\Shipping\Entity\ShippingMethod;
 use App\Shipping\Repository\ShippingRateRepository;
 use App\Cart\Service\CartWeightCalculator;
 use App\Shipping\Service\ShippingRateCalculator;
-use App\Payment\StripePaymentProvider;
+use App\Payment\Provider\StripePaymentProvider;
 use App\Shared\Service\CurrencyResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;

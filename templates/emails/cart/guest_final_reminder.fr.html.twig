@@ -1,0 +1,9 @@
+<p>Bonjour {{ user.firstname|default('') }},</p>
+<p>Votre panier va être supprimé dans 3 jours !</p>
+<ul>
+    {% for item in cart.items %}
+        <li>{{ item.product.name }} x {{ item.quantity }}</li>
+    {% endfor %}
+</ul>
+<p><a href="{{ frontUrl }}/panier">Valider mon panier</a></p>
+<p>Après ce délai, il sera définitivement effacé.</p>

@@ -2,6 +2,7 @@
 namespace App\Payment\Provider;
 
 use App\Order\Entity\Order;
+use App\Payment\Response\PaymentResponse;
 use App\User\Entity\User;
 
 /**

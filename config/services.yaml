@@ -17,6 +17,18 @@ services:
             # Injection automatique pour tous les services
             $frontBaseUrl: '%app.frontend_url%'
             $fromEmail: '%app.mailer_from%'
+            $backendUrl: '%env(BACKEND_BASE_URL)%'
+            $projectDir: '%kernel.project_dir%'
+            $tempDir: '%kernel.project_dir%/var/documents'
+            # Rate limiters
+            $loginLimiter: '@limiter.login_limiter'
+            $registrationLimiter: '@limiter.registration_limiter'
+            $passwordResetLimiter: '@limiter.password_reset_limiter'
+            $consentLimiter: '@limiter.consent_limiter'
+            $retractationLimiter: '@limiter.retractation_limiter'
+            $searchLimiter: '@limiter.search_limiter'
+            $resendConfirmationLimiter: '@limiter.resend_confirmation_limiter'
+            $newsletterLimiter: '@limiter.newsletter_limiter'
 
     # makes classes in src/ available to be used as services
     # this creates a service per class whose id is the fully-qualified class name
@@ -35,12 +47,12 @@ services:
         arguments:
             $logger: '@monolog.logger.registration'
     
-    App\Payment\StripePaymentProvider:
+    App\Payment\Provider\StripePaymentProvider:
         arguments:
             $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'
             $logger: '@monolog.logger.payment'
        
-    App\Payment\PaymentProviderFactory:
+    App\Payment\Provider\PaymentProviderFactory:
         arguments:
             $providers: !tagged_iterator { tag: 'app.payment_provider', index_by: 'alias' }
     
@@ -74,13 +86,43 @@ services:
     
     Twig\Extra\Intl\IntlExtension: ~
 
+    App\Shipping\Service\LabelGenerator\LabelGeneratorFactory:
+        arguments:
+            $generators: !tagged_iterator app.label_generator
+
+    App\Shipping\Service\LabelGenerator\ColissimoLabelGenerator:
+        tags: ['app.label_generator']
+
+    App\Shipping\Service\OrderDocumentPdfService:
+        arguments:
+            $outputDir: '%kernel.project_dir%/var/documents'
+
+    App\Shipping\Service\MapboxGeocodingService:
+        arguments:
+            $accessToken: '%env(MAPBOX_TOKEN)%'
+
+    App\Shipping\Service\AddressCacheService:
+        arguments:
+            $cache: '@cache.app'
+
+    App\Shared\Service\MailchimpService:
+        arguments:
+            $envApiKey: '%env(MAILCHIMP_API_KEY)%'
+            $envListId: '%env(MAILCHIMP_LIST_ID)%'
+            $envServerPrefix: '%env(MAILCHIMP_SERVER_PREFIX)%'
+
+    app.rate_limiter.storage:
+        class: Symfony\Component\RateLimiter\Storage\CacheStorage
+        arguments:
+            - '@cache.app'
+
     App\Media\Service\CloudinaryService:
         arguments:
             $cloudName: '%cloudinary.cloud_name%'
             $apiKey: '%cloudinary.api_key%'
             $apiSecret: '%cloudinary.api_secret%'
     
-    App\Command\TestCloudinaryConnectionCommand:
+    App\Media\Command\TestCloudinaryConnectionCommand:
         arguments:
             $cloudName: '%cloudinary.cloud_name%'
             $apiKey: '%cloudinary.api_key%'
@@ -99,6 +141,14 @@ services:
         tags:
             - { name: kernel.event_subscriber }
     
+    App\Catalog\State\ProductDeleteProcessor:
+        arguments:
+            $persistProcessor: '@api_platform.doctrine.orm.state.persist_processor'
+
+    App\Catalog\State\ProductProvider:
+        arguments:
+            $itemProvider: '@api_platform.doctrine.orm.state.item_provider'
+
     App\Catalog\State\ManualTranslationProvider:
         decorates: 'api_platform.doctrine.orm.state.item_provider'
         arguments:

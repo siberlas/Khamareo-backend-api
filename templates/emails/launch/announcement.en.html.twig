@@ -1,0 +1,58 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>🌍 Khamareo is Now Open!</h1>
+{% endblock %}
+
+{% block content %}
+    <p>Hello,</p>
+
+    <p>
+        You were among the first to join us — and today is finally the big day!
+        Authentic African beauty is now available to everyone on <strong>Khamareo</strong>.
+    </p>
+
+    <p>To thank you for your trust, here is an exclusive promo code, reserved for our first subscribers:</p>
+
+    <div style="background: linear-gradient(135deg, #F9F5F0 0%, #F2C879 100%); padding: 40px 30px; border-radius: 12px; text-align: center; margin: 32px 0; border: 2px solid #E8DFD3;">
+        <p style="font-size: 14px; text-transform: uppercase; letter-spacing: 2px; color: #7A5C47; margin-bottom: 12px; font-weight: 600;">
+            Your launch code
+        </p>
+        <p style="font-size: 40px; font-family: 'Libre Baskerville', Georgia, serif; font-weight: 700; color: #4A2E20; letter-spacing: 6px; margin: 16px 0; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+            {{ promoCode }}
+        </p>
+        <p style="font-size: 26px; font-weight: 700; color: #A25D3C; margin-top: 8px;">
+            {{ discountPercentage }}% off
+        </p>
+        <p style="font-size: 13px; color: #7A5C47; margin-top: 8px;">
+            on your first order
+        </p>
+    </div>
+
+    <div class="card">
+        <p style="text-align: center; margin: 0;">
+            <span class="muted">Valid until</span><br>
+            <strong style="font-size: 18px; color: #D8A35D;">{{ expiresAt|date('d/m/Y') }}</strong>
+        </p>
+    </div>
+
+    <p style="margin-top: 24px;">
+        Use code <strong>{{ promoCode }}</strong> at checkout to enjoy your discount on our selection of natural African beauty products.
+    </p>
+
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{{ shopUrl }}" class="button">Discover the shop</a>
+    </div>
+
+    <div class="highlight">
+        <p>
+            <strong>💡 How to use it?</strong><br>
+            Enter <strong>{{ promoCode }}</strong> in the "Promo code" field at checkout.
+            The discount applies automatically to eligible products.
+        </p>
+    </div>
+
+    <p class="muted" style="text-align:center; margin-top:32px; font-size:11px; border-top:1px solid #E8DFD3; padding-top:16px;">
+        You are receiving this email because you pre-registered on Khamareo.
+    </p>
+{% endblock %}

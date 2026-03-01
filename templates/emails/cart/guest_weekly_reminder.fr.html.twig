@@ -1,0 +1,9 @@
+<p>Bonjour {{ user.firstname|default('') }},</p>
+<p>Vous avez un panier en attente sur Khamareo !</p>
+<ul>
+    {% for item in cart.items %}
+        <li>{{ item.product.name }} x {{ item.quantity }}</li>
+    {% endfor %}
+</ul>
+<p><a href="{{ frontUrl }}/panier">Valider mon panier</a></p>
+<p>À bientôt sur Khamareo !</p>

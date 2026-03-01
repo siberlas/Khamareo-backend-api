@@ -1,0 +1,36 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>📬 Confirmez votre inscription</h1>
+    <p>Une dernière étape avant de rejoindre la famille Khamareo</p>
+{% endblock %}
+
+{% block content %}
+    <p>Bonjour,</p>
+
+    <p>Vous avez demandé à vous inscrire à la newsletter Khamareo avec l'adresse <strong>{{ email }}</strong>.</p>
+
+    <p>Pour confirmer votre inscription et recevoir votre <strong>code de réduction de bienvenue (-10%)</strong>, cliquez sur le bouton ci-dessous :</p>
+
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{{ confirmUrl }}" class="button" style="display:inline-block; background:#C9A96E; color:#fff; padding:14px 32px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:16px; letter-spacing:0.5px;">
+            ✅ Confirmer mon inscription
+        </a>
+    </div>
+
+    <div class="highlight">
+        <p style="margin:0; font-size:13px; text-align:center;">
+            Ce lien est valable <strong>48 heures</strong>. Si vous n'avez pas demandé cette inscription, ignorez simplement cet email.
+        </p>
+    </div>
+
+    <p class="muted" style="text-align:center; margin-top:24px; font-size:11px; word-break:break-all;">
+        Lien de confirmation : <a href="{{ confirmUrl }}" style="color:#C9A96E;">{{ confirmUrl }}</a>
+    </p>
+
+    <p class="muted" style="text-align:center; margin-top:32px; font-size:11px; border-top:1px solid #E8DFD3; padding-top:16px;">
+        Vous recevez cet email car vous avez demandé à vous inscrire à la newsletter Khamareo.<br>
+        Si vous ne souhaitez plus recevoir nos emails,
+        <a href="{{ unsubscribeUrl }}" style="color:#888;">cliquez ici pour vous désabonner</a>.
+    </p>
+{% endblock %}

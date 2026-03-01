@@ -106,8 +106,9 @@ class Product
     private ?float $rating = null;
 
     #[Groups(['product:read', 'product:write'])]
-    #[ORM\Column(length: 255, nullable: true)]
-    private ?string $badge = null;
+    #[ORM\ManyToOne(targetEntity: Badge::class)]
+    #[ORM\JoinColumn(name: 'badge_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
+    private ?Badge $badge = null;
 
     #[Groups(['product:read', 'product:write'])]
     #[ORM\Column(type: 'json', nullable: true)]
@@ -240,8 +241,8 @@ class Product
     public function getRating(): ?float { return $this->rating; }
     public function setRating(?float $rating): static { $this->rating = $rating; return $this; }
 
-    public function getBadge(): ?string { return $this->badge; }
-    public function setBadge(?string $badge): static { $this->badge = $badge; return $this; }
+    public function getBadge(): ?Badge { return $this->badge; }
+    public function setBadge(?Badge $badge): static { $this->badge = $badge; return $this; }
 
     public function getBenefits(): ?array { return $this->benefits; }
     public function setBenefits(?array $benefits): static { $this->benefits = $benefits; return $this; }

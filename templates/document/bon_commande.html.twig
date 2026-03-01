@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #2c2c2c; line-height: 1.5; }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 18px;
+            border-bottom: 3px solid #C9A96E;
+            margin-bottom: 24px;
+        }
+        .logo-name { font-size: 26px; font-weight: bold; color: #4A2E20; letter-spacing: 1px; }
+        .logo-tagline { font-size: 10px; color: #888; margin-top: 4px; }
+        .doc-meta { text-align: right; }
+        .doc-title { font-size: 22px; font-weight: bold; color: #C9A96E; text-transform: uppercase; letter-spacing: 2px; }
+        .doc-ref { font-size: 11px; color: #7A5C47; margin-top: 6px; }
+
+        .addresses { display: flex; gap: 30px; margin-bottom: 28px; }
+        .address-block {
+            flex: 1;
+            background: #F9F5F0;
+            border: 1px solid #E8DFD3;
+            border-radius: 5px;
+            padding: 14px 16px;
+        }
+        .address-block h3 {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #C9A96E;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #E8DFD3;
+            padding-bottom: 5px;
+        }
+        .address-block p { margin: 2px 0; }
+
+        .order-info {
+            background: #fff3cd;
+            border-left: 4px solid #C9A96E;
+            padding: 10px 16px;
+            margin-bottom: 24px;
+            font-size: 11px;
+        }
+        .order-info span { margin-right: 30px; }
+        .order-info strong { color: #4A2E20; }
+
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        thead th {
+            background: #4A2E20;
+            color: white;
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        thead th.text-right { text-align: right; }
+        tbody tr:nth-child(even) { background: #F9F5F0; }
+        tbody td { padding: 9px 10px; border-bottom: 1px solid #E8DFD3; vertical-align: middle; }
+        tbody td.text-right { text-align: right; }
+        .product-name { font-weight: 600; }
+        .product-sku { font-size: 10px; color: #999; display: block; }
+
+        .totals-section { display: flex; justify-content: flex-end; margin-top: 10px; }
+        .totals-table { width: 320px; border-collapse: collapse; }
+        .totals-table td { padding: 7px 10px; border-bottom: 1px solid #E8DFD3; font-size: 12px; }
+        .totals-table td:last-child { text-align: right; font-weight: 600; }
+        .totals-table .row-discount td { color: #c0392b; }
+        .totals-table .row-total { background: #C9A96E; color: white; }
+        .totals-table .row-total td { font-size: 14px; font-weight: bold; border: none; padding: 10px; }
+
+        .payment-info { margin-top: 24px; font-size: 10px; color: #666; border-top: 1px dashed #E8DFD3; padding-top: 12px; }
+        .footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid #E8DFD3; font-size: 10px; color: #aaa; text-align: center; }
+    </style>
+</head>
+<body>
+
+{# ── Helpers : nom et email selon owner ou invité ── #}
+{% set customerName = order.owner
+    ? (order.owner.firstName ~ ' ' ~ order.owner.lastName)
+    : (order.guestFirstName ~ ' ' ~ order.guestLastName) %}
+
+{% set customerEmail = order.owner
+    ? order.owner.email
+    : order.guestEmail %}
+
+{# ── HEADER ── #}
+<div class="header">
+    <div>
+        <div class="logo-name">🌿 Khamareo</div>
+        <div class="logo-tagline">
+            Plantes médicinales africaines &amp; bien-être<br>
+            contact@khamareo.com — www.khamareo.com<br>
+            {% if sellerLegalForm is defined and sellerLegalForm %}{{ sellerLegalForm }}{% endif %}{% if sellerSiren is defined and sellerSiren %} — SIREN : {{ sellerSiren }}{% endif %}<br>
+            {% if sellerAddress is defined and sellerAddress %}{{ sellerAddress }}{% endif %}
+        </div>
+    </div>
+    <div class="doc-meta">
+        <div class="doc-title">Bon de Commande</div>
+        <div class="doc-ref">
+            N° {{ order.orderNumber }}<br>
+            Émis le {{ generatedAt|date('d/m/Y') }}
+        </div>
+    </div>
+</div>
+
+{# ── ADRESSES ── #}
+<div class="addresses">
+    <div class="address-block">
+        <h3>Expéditeur</h3>
+        <p><strong>Khamareo</strong></p>
+        <p>contact@khamareo.com</p>
+        <p>www.khamareo.com</p>
+    </div>
+
+    <div class="address-block">
+        <h3>Client</h3>
+        <p><strong>{{ customerName }}</strong></p>
+        {% if order.shippingAddress %}
+            <p>{{ order.shippingAddress.streetAddress }}</p>
+            {% if order.shippingAddress.addressLine2 is defined and order.shippingAddress.addressLine2 %}
+                <p>{{ order.shippingAddress.addressLine2 }}</p>
+            {% endif %}
+            <p>{{ order.shippingAddress.postalCode }} {{ order.shippingAddress.city }}</p>
+            <p>{{ order.shippingAddress.country }}</p>
+        {% endif %}
+        <p>{{ customerEmail }}</p>
+        {% if order.guestPhone %}
+            <p>Tél : {{ order.guestPhone }}</p>
+        {% endif %}
+    </div>
+
+    {% if order.billingAddress %}
+    <div class="address-block">
+        <h3>Facturation</h3>
+        <p><strong>{{ customerName }}</strong></p>
+        <p>{{ order.billingAddress.streetAddress }}</p>
+        {% if order.billingAddress.addressLine2 is defined and order.billingAddress.addressLine2 %}
+            <p>{{ order.billingAddress.addressLine2 }}</p>
+        {% endif %}
+        <p>{{ order.billingAddress.postalCode }} {{ order.billingAddress.city }}</p>
+        <p>{{ order.billingAddress.country }}</p>
+    </div>
+    {% endif %}
+</div>
+
+{# ── INFOS COMMANDE ── #}
+<div class="order-info">
+    <span><strong>Commande :</strong> {{ order.orderNumber }}</span>
+    <span><strong>Date :</strong> {{ order.createdAt|date('d/m/Y') }}</span>
+    <span><strong>Statut :</strong> {{ order.statusLabel }}</span>
+    <span><strong>Devise :</strong> {{ order.currency }}</span>
+</div>
+
+{# ── LIGNES PRODUITS ── #}
+<table>
+    <thead>
+        <tr>
+            <th>Référence</th>
+            <th>Désignation</th>
+            <th class="text-right">Prix unitaire</th>
+            <th class="text-right" style="width:50px">Qté</th>
+            <th class="text-right">Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in order.items %}
+        <tr>
+            <td>
+                {% if item.product.sku is defined %}
+                    <span class="product-sku">{{ item.product.sku }}</span>
+                {% endif %}
+            </td>
+            <td>
+                <span class="product-name">{{ item.product.name }}</span>
+            </td>
+            <td class="text-right">{{ item.unitPrice|number_format(2, ',', ' ') }} {{ order.currency }}</td>
+            <td class="text-right">{{ item.quantity }}</td>
+            <td class="text-right">{{ (item.unitPrice * item.quantity)|number_format(2, ',', ' ') }} {{ order.currency }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{# ── TOTAUX ── #}
+{% set subtotal = order.totalAmount - order.shippingCost %}
+<div class="totals-section">
+    <table class="totals-table">
+        <tr>
+            <td>Sous-total</td>
+            <td>{{ subtotal|number_format(2, ',', ' ') }} {{ order.currency }}</td>
+        </tr>
+        <tr>
+            <td>Frais de livraison</td>
+            <td>{{ order.shippingCost|number_format(2, ',', ' ') }} {{ order.currency }}</td>
+        </tr>
+        {% if order.discountAmount and order.discountAmount > 0 %}
+        <tr class="row-discount">
+            <td>Remise{% if order.promoCode %} ({{ order.promoCode }}){% endif %}</td>
+            <td>- {{ order.discountAmount|number_format(2, ',', ' ') }} {{ order.currency }}</td>
+        </tr>
+        {% endif %}
+        <tr class="row-total">
+            <td>TOTAL À PAYER</td>
+            <td>{{ order.totalAmount|number_format(2, ',', ' ') }} {{ order.currency }}</td>
+        </tr>
+    </table>
+</div>
+
+{# ── PAIEMENT ── #}
+<div class="payment-info">
+    {% if order.paidAt %}
+        ✅ Paiement reçu le {{ order.paidAt|date('d/m/Y') }}
+        {% if order.paymentMethod %} via {{ order.paymentMethod }}{% endif %}
+    {% else %}
+        ⏳ En attente de paiement
+    {% endif %}
+    — Ce document est un récapitulatif de commande et ne constitue pas une facture fiscale.
+</div>
+
+{# ── MENTIONS LÉGALES TVA ── #}
+<div class="payment-info" style="margin-top: 10px; border-top: 1px dashed #E8DFD3; padding-top: 10px;">
+    <strong>{{ tvaMention is defined and tvaMention ? tvaMention : 'TVA non applicable, article 293 B du CGI' }}</strong>
+    {% if sellerVatNumber is defined and sellerVatNumber %}
+        — N° TVA intracom : {{ sellerVatNumber }}
+    {% endif %}
+    {% if order.currency != 'EUR' and order.currency is defined %}
+        <br>Montant facturé en {{ order.currency }}.
+        {% if order.amountEur is defined and order.amountEur %}
+            Équivalent EUR : {{ order.amountEur|number_format(2, ',', ' ') }} €
+            {% if order.exchangeRate is defined and order.exchangeRate %}
+                (taux appliqué : 1 {{ order.currency }} = {{ order.exchangeRate|number_format(6, '.', '') }} EUR
+                {% if order.exchangeRateDate is defined and order.exchangeRateDate %} au {{ order.exchangeRateDate|date('d/m/Y') }}{% endif %})
+            {% endif %}
+        {% endif %}
+    {% endif %}
+</div>
+
+{# ── FOOTER ── #}
+<div class="footer">
+    Khamareo — Plantes médicinales africaines &amp; bien-être naturel<br>
+    Document généré le {{ generatedAt|date('d/m/Y \à H\:i') }} — Merci pour votre confiance 🌿
+</div>
+
+</body>
+</html>

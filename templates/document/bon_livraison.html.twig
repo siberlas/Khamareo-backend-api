@@ -1,0 +1,320 @@
+{# templates/document/bon_livraison.html.twig #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 12px;
+            color: #2c2c2c;
+            line-height: 1.5;
+        }
+
+        /* ─── HEADER ─── */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding-bottom: 18px;
+            border-bottom: 3px solid #C9A96E;
+            margin-bottom: 24px;
+        }
+        .logo-name {
+            font-size: 26px;
+            font-weight: bold;
+            color: #4A2E20;
+            letter-spacing: 1px;
+        }
+        .logo-tagline {
+            font-size: 10px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .doc-meta { text-align: right; }
+        .doc-title {
+            font-size: 22px;
+            font-weight: bold;
+            color: #C9A96E;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .doc-ref { font-size: 11px; color: #7A5C47; margin-top: 6px; }
+
+        /* ─── ADRESSES ─── */
+        .addresses {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 20px;
+        }
+        .address-block {
+            flex: 1;
+            background: #F9F5F0;
+            border: 1px solid #E8DFD3;
+            border-radius: 5px;
+            padding: 14px 16px;
+        }
+        .address-block h3 {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #C9A96E;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #E8DFD3;
+            padding-bottom: 5px;
+        }
+        .address-block p { margin: 2px 0; }
+
+        /* ─── TRACKING ─── */
+        .tracking-box {
+            background: #fff3cd;
+            border: 1.5px solid #C9A96E;
+            border-radius: 5px;
+            padding: 10px 16px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .tracking-box .label { color: #7A5C47; }
+        .tracking-box .number { font-weight: bold; font-size: 14px; color: #4A2E20; letter-spacing: 1px; }
+
+        /* ─── MULTI-COLIS ─── */
+        .parcels-summary {
+            margin-bottom: 18px;
+            font-size: 11px;
+        }
+        .parcels-summary table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .parcels-summary th {
+            background: #FFF8EE;
+            color: #4A2E20;
+            padding: 6px 10px;
+            text-align: left;
+            font-size: 10px;
+            text-transform: uppercase;
+            border-bottom: 1px solid #E8DFD3;
+        }
+        .parcels-summary td {
+            padding: 6px 10px;
+            border-bottom: 1px solid #F9F5F0;
+        }
+
+        /* ─── TABLEAU PRODUITS ─── */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 24px;
+        }
+        thead th {
+            background: #4A2E20;
+            color: white;
+            padding: 9px 10px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        thead th.text-center { text-align: center; }
+        tbody tr:nth-child(even) { background: #F9F5F0; }
+        tbody td {
+            padding: 9px 10px;
+            border-bottom: 1px solid #E8DFD3;
+            vertical-align: middle;
+        }
+        tbody td.text-center { text-align: center; }
+        .qty-shipped {
+            font-weight: bold;
+            font-size: 15px;
+            color: #C9A96E;
+        }
+        .product-sku { font-size: 10px; color: #999; display: block; }
+
+        /* ─── ZONE SIGNATURE ─── */
+        .signature-zone {
+            margin-top: 30px;
+            display: flex;
+            gap: 30px;
+        }
+        .signature-box {
+            flex: 1;
+            border: 1.5px dashed #E8DFD3;
+            border-radius: 5px;
+            padding: 16px;
+            min-height: 80px;
+            text-align: center;
+            color: #bbb;
+            font-size: 11px;
+        }
+        .signature-box p { margin-top: 6px; font-size: 10px; }
+
+        /* ─── FOOTER ─── */
+        .footer {
+            margin-top: 40px;
+            padding-top: 14px;
+            border-top: 1px solid #E8DFD3;
+            font-size: 10px;
+            color: #aaa;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+{# ── Helpers : nom selon owner ou invité ── #}
+{% set customerName = order.owner
+    ? (order.owner.firstName ~ ' ' ~ order.owner.lastName)
+    : (order.guestFirstName ~ ' ' ~ order.guestLastName) %}
+
+{# ── HEADER ── #}
+<div class="header">
+    <div>
+        <div class="logo-name">🌿 Khamareo</div>
+        <div class="logo-tagline">Plantes médicinales africaines &amp; bien-être<br>contact@khamareo.com — www.khamareo.com</div>
+    </div>
+    <div class="doc-meta">
+        <div class="doc-title">Bon de Livraison</div>
+        <div class="doc-ref">
+            Commande N° {{ order.orderNumber }}<br>
+            {% if parcel %}
+                Colis {{ parcel.parcelNumber ?? '1' }}/{{ order.parcels|length }}<br>
+            {% endif %}
+            Émis le {{ generatedAt|date('d/m/Y') }}
+        </div>
+    </div>
+</div>
+
+{# ── ADRESSES ── #}
+<div class="addresses">
+    <div class="address-block">
+        <h3>Expéditeur</h3>
+        <p><strong>Khamareo</strong></p>
+        <p>contact@khamareo.com</p>
+        <p>www.khamareo.com</p>
+    </div>
+    <div class="address-block">
+        <h3>Destinataire</h3>
+        <p><strong>{{ customerName }}</strong></p>
+        <p>{{ order.shippingAddress.streetAddress }}</p>
+        <p>{{ order.shippingAddress.postalCode }} {{ order.shippingAddress.city }}</p>
+        <p>{{ order.shippingAddress.country }}</p>
+    </div>
+    <div class="address-block">
+        <h3>Transport</h3>
+        {% if order.carrier %}
+            <p><strong>Transporteur :</strong> {{ order.carrier.name }}</p>
+        {% endif %}
+        {% if parcel %}
+            {% if parcel.weightKg is not null %}<p><strong>Poids :</strong> {{ parcel.weightKg }} kg</p>{% endif %}
+        {% else %}
+            <p><strong>Nombre de colis :</strong> {{ parcels|length }}</p>
+        {% endif %}
+    </div>
+</div>
+
+{# ── TRACKING ── #}
+{% if parcel and parcel.trackingNumber %}
+<div class="tracking-box">
+    <span>📦</span>
+    <span class="label">N° de suivi :</span>
+    <span class="number">{{ parcel.trackingNumber }}</span>
+    <span style="color:#888; font-size:10px; margin-left:auto">Suivez votre colis sur colissimo.fr</span>
+</div>
+{% elseif parcels|length > 1 %}
+{# Multi-colis : afficher tous les numéros de suivi #}
+<div class="parcels-summary">
+    <table>
+        <thead>
+            <tr>
+                <th>Colis</th>
+                <th>N° de suivi</th>
+                <th>Transporteur</th>
+                <th>Poids</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in parcels %}
+            <tr>
+                <td>Colis {{ loop.index }}</td>
+                <td><strong>{{ p.trackingNumber ?? '—' }}</strong></td>
+                <td>{{ order.carrier ? order.carrier.name : '—' }}</td>
+                <td>{{ p.weightKg is not null ? p.weightKg ~ ' kg' : '—' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{# ── LIGNES PRODUITS ── #}
+<table>
+    <thead>
+        <tr>
+            <th>Référence</th>
+            <th>Désignation</th>
+            <th class="text-center">Qté commandée</th>
+            <th class="text-center">Qté expédiée</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% if parcel %}
+            {# Mode colis : uniquement les produits de ce colis #}
+            {% for parcelItem in parcel.items %}
+            <tr>
+                <td><span class="product-sku">{{ parcelItem.orderItem.product.slug }}</span></td>
+                <td>
+                    {{ parcelItem.orderItem.product.name }}
+                    {% if parcelItem.orderItem.variant is defined and parcelItem.orderItem.variant %}
+                    <span class="product-sku">{{ parcelItem.orderItem.variant }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">{{ parcelItem.orderItem.quantity }}</td>
+                <td class="text-center"><span class="qty-shipped">{{ parcelItem.quantity }}</span></td>
+            </tr>
+            {% endfor %}
+        {% else %}
+            {# Mode commande globale : tous les produits #}
+            {% for item in order.items %}
+            <tr>
+                <td><span class="product-sku">{{ item.product.slug }}</span></td>
+                <td>
+                    {{ item.product.name }}
+                    {% if item.variant is defined and item.variant %}
+                    <span class="product-sku">{{ item.variant }}</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">{{ item.quantity }}</td>
+                <td class="text-center"><span class="qty-shipped">{{ item.quantity }}</span></td>
+            </tr>
+            {% endfor %}
+        {% endif %}
+    </tbody>
+</table>
+
+{# ── ZONE SIGNATURE ── #}
+<div class="signature-zone">
+    <div class="signature-box">
+        <strong>Expédié par</strong>
+        <p>Date : {{ generatedAt|date('d/m/Y') }}</p>
+        <p>Khamareo</p>
+    </div>
+    <div class="signature-box">
+        <strong>Reçu par le destinataire</strong>
+        <p>Date : ___/___/______</p>
+        <p>Signature &amp; cachet</p>
+    </div>
+</div>
+
+{# ── FOOTER ── #}
+<div class="footer">
+    Khamareo — Plantes médicinales africaines &amp; bien-être naturel<br>
+    Document généré le {{ generatedAt|date('d/m/Y \à H\:i') }} — Merci pour votre confiance 🌿
+</div>
+
+</body>
+</html>

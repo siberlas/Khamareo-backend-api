@@ -2,6 +2,7 @@
 
 namespace App\Cart\Service;
 
+use App\Shared\Service\MailerService;
 use App\User\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;

@@ -1,0 +1,113 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>📦 Commande en préparation</h1>
+    <p>Votre commande est entre nos mains</p>
+{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Bonne nouvelle ! Votre commande <strong style="color: #C9A96E;">#{{ order.orderNumber }}</strong>
+    est maintenant <strong>en cours de préparation</strong>. Nous préparons votre colis avec soin.</p>
+
+    {# ── Délais ───────────────────────────────────────────────── #}
+    <div class="highlight">
+        {% if dispatchDelay %}
+        <p style="margin: 0 0 6px;">
+            🕐 <strong>Délai d'expédition :</strong> {{ dispatchDelay }}
+        </p>
+        {% endif %}
+        {% if deliveryDelay %}
+        <p style="margin: 0 0 {% if deliveryNote %}6px{% else %}0{% endif %};">
+            🚚 <strong>Délai de livraison estimé :</strong> {{ deliveryDelay }}
+            {% if order.carrier %} par <strong>{{ order.carrier.name }}</strong>{% endif %}
+        </p>
+        {% else %}
+        <p style="margin: 0;">
+            📬 Vous recevrez un email dès que votre colis sera expédié, avec votre numéro de suivi.
+        </p>
+        {% endif %}
+        {% if deliveryNote %}
+        <p style="margin: 0; font-size: 12px; opacity: 0.75;">{{ deliveryNote }}</p>
+        {% endif %}
+    </div>
+
+    {# ── Articles ─────────────────────────────────────────────── #}
+    {% if order.items is not empty %}
+    <div class="card">
+        <h3 style="margin-top: 0; color: #4A2E20;">Récapitulatif de votre commande</h3>
+        <table>
+            <tbody>
+                {% for item in order.items %}
+                <tr style="border-bottom: 1px solid #E8DFD3;">
+                    <td style="padding: 10px 8px 10px 0;">
+                        <strong>{{ item.product ? item.product.name : (item.productName ?? 'Produit') }}</strong>
+                        <br><span class="muted">Qté : {{ item.quantity }}</span>
+                    </td>
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #C9A96E; white-space: nowrap;">
+                        {{ (item.quantity * item.unitPrice)|format_currency('EUR', locale='fr') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="divider"></div>
+        <table>
+            {% if order.shippingCost > 0 %}
+            <tr>
+                <td style="padding: 4px 0; color: #7A5C47; text-align: right;">Livraison</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; white-space: nowrap; padding-left: 16px;">{{ order.shippingCost|format_currency('EUR', locale='fr') }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td style="padding: 8px 0; text-align: right;"><strong>Total</strong></td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #C9A96E; font-size: 16px; white-space: nowrap; padding-left: 16px;">{{ order.totalAmount|format_currency('EUR', locale='fr') }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    {# ── Adresse / Point relais ───────────────────────────────── #}
+    {% if order.shippingAddress %}
+    <div class="card">
+        {% if order.isRelayPoint %}
+        <h3 style="margin-top: 0; color: #4A2E20;">📍 Point Relais</h3>
+        <p style="margin: 0 0 6px; font-size: 13px;">
+            <span class="tag">{{ order.carrier ? order.carrier.name : (order.relayCarrier ?? 'Point Relais') }}</span>
+        </p>
+        {% if order.relayPointId %}
+        <p style="margin: 0 0 6px;" class="muted">Identifiant du point relais : <strong>{{ order.relayPointId }}</strong></p>
+        {% endif %}
+        <p style="margin: 0; line-height: 1.8;">
+            <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
+            {{ order.shippingAddress.streetAddress ?? order.shippingAddress.street }}<br>
+            {{ order.shippingAddress.postalCode }} {{ order.shippingAddress.city }}<br>
+            {{ order.shippingAddress.country }}
+        </p>
+        {% else %}
+        <h3 style="margin-top: 0; color: #4A2E20;">🚚 Adresse de livraison</h3>
+        <p style="margin: 0; line-height: 1.8;">
+            <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
+            {{ order.shippingAddress.streetAddress ?? order.shippingAddress.street }}<br>
+            {{ order.shippingAddress.postalCode }} {{ order.shippingAddress.city }}<br>
+            {{ order.shippingAddress.country }}
+        </p>
+        {% endif %}
+        {% if order.carrier %}
+        <p class="muted" style="margin-top: 12px; margin-bottom: 0;">
+            Transporteur : <strong>{{ order.carrier.name }}</strong>
+            {% if order.shippingMode %} — {{ order.shippingMode.name }}{% endif %}
+        </p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div style="text-align: center; margin: 28px 0;">
+        <a href="{{ orderUrl }}" class="button">Voir ma commande</a>
+    </div>
+
+    <p class="muted" style="text-align: center;">
+        Des questions ? Contactez-nous à <a href="mailto:support@khamareo.com" style="color: #C9A96E;">support@khamareo.com</a>
+    </p>
+{% endblock %}

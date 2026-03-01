@@ -1,0 +1,22 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block header %}
+    <h1>🔔 Stock alert activated</h1>
+    <p>We’ll notify you as soon as it’s available</p>
+{% endblock %}
+
+{% block content %}
+    <p>Hello {{ user.firstName ?? 'Customer' }},</p>
+
+    <p>Your stock alert for <strong>{{ product.name }}</strong> has been activated.</p>
+
+    <div class="card">
+        <p><strong>Product:</strong> {{ product.name }}</p>
+        <p><strong>Link:</strong> <a href="{{ productUrl }}">View product</a></p>
+    </div>
+
+    <p class="muted">
+        You can manage your alerts anytime:
+        <a href="{{ manageAlertsUrl }}">Manage my alerts</a>
+    </p>
+{% endblock %}

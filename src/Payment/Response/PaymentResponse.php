@@ -1,5 +1,5 @@
 <?php
-namespace App\Payment;
+namespace App\Payment\Response;
 
 class PaymentResponse
 {
