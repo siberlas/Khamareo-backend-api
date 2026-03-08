@@ -34,6 +34,7 @@ class ApplyPromoCodeController extends AbstractController
         $data = json_decode($request->getContent(), true);
         $code = $data['code'] ?? null;
         $guestToken = $data['guestToken'] ?? null;
+        $emailFromBody = $data['email'] ?? null;
 
         if (!$code) {
             return $this->json(['error' => 'Code promo manquant'], 400);
@@ -69,29 +70,57 @@ class ApplyPromoCodeController extends AbstractController
             return $this->json(['error' => 'Code promo invalide'], 404);
         }
 
-        // Vérifier l'email si nécessaire
-        $email = $user ? $user->getEmail() : null;
-        if ($email && $promoCode->getEmail() !== $email) {
+        // Résoudre l'email (connecté > invité depuis body)
+        $email = $user ? $user->getEmail() : $emailFromBody;
+
+        // Vérifier l'email si nécessaire (seulement si le code a une restriction email)
+        if ($promoCode->getEmail() && $email && strtolower($promoCode->getEmail()) !== strtolower($email)) {
             return $this->json([
-                'error' => 'Ce code promo n\'est pas valide pour votre compte'
+                'error' => 'Ce code promo n\'est pas valide pour votre adresse email',
             ], 403);
+        }
+
+        // Vérifier la restriction d'audience
+        $eligibleCustomer = $promoCode->getEligibleCustomer();
+        $isGuest = $user === null;
+        if (!in_array($eligibleCustomer, ['all', 'both'], true)) {
+            if ($eligibleCustomer === 'registered' && $isGuest) {
+                return $this->json(['error' => 'Ce code promo est réservé aux clients inscrits'], 403);
+            }
+            if ($eligibleCustomer === 'guest' && !$isGuest) {
+                return $this->json(['error' => 'Ce code promo est réservé aux clients non inscrits'], 403);
+            }
         }
 
         if (!$promoCode->isValid()) {
             return $this->json(['error' => 'Ce code promo n\'est plus valide'], 400);
         }
 
+        // Vérifier la limite d'utilisations par email (1 par défaut)
+        if ($email) {
+            $maxPerEmail = $promoCode->getMaxUsesPerEmail() ?? 1;
+            $perEmailCount = (int) $this->em->createQuery(
+                'SELECT COUNT(r.id) FROM App\Marketing\Entity\PromoCodeRedemption r WHERE r.promoCode = :promo AND LOWER(r.email) = :email'
+            )->setParameter('promo', $promoCode)->setParameter('email', strtolower($email))->getSingleScalarResult();
+
+            if ($perEmailCount >= $maxPerEmail) {
+                return $this->json(['error' => 'Vous avez déjà utilisé ce code promo'], 400);
+            }
+        }
+
         // Appliquer le code promo
         try {
-            $this->promoCodeService->applyToCart($cart, $promoCode);
+            $this->promoCodeService->applyToCart($cart, $promoCode, $email);
 
             return $this->json([
                 'success' => true,
                 'message' => 'Code promo appliqué avec succès',
                 'cart' => [
-                    'promoCode' => $cart->getPromoCode(),
+                    'promoCode'      => $cart->getPromoCode(),
+                    'promoCodes'     => $cart->getPromoCodes(),
+                    'promoCodesData' => $cart->getPromoCodesData() ?? [],
                     'discountAmount' => $cart->getDiscountAmount(),
-                    'totalAmount' => $cart->getTotalAmount()
+                    'totalAmount'    => $cart->getTotalAmount(),
                 ]
             ]);
         } catch (\Exception $e) {
@@ -103,20 +132,15 @@ class ApplyPromoCodeController extends AbstractController
     public function removePromo(Request $request): JsonResponse
     {
         $data = json_decode($request->getContent(), true);
-        $guestToken = $data['guestToken'] ?? null;
+        $guestToken    = $data['guestToken'] ?? null;
+        $codeToRemove  = $data['code'] ?? null;
 
         $user = $this->security->getUser();
-        
+
         if ($user) {
-            $cart = $this->cartRepository->findOneBy([
-                'owner' => $user,
-                'isActive' => true
-            ]);
+            $cart = $this->cartRepository->findOneBy(['owner' => $user, 'isActive' => true]);
         } elseif ($guestToken) {
-            $cart = $this->cartRepository->findOneBy([
-                'guestToken' => $guestToken,
-                'isActive' => true
-            ]);
+            $cart = $this->cartRepository->findOneBy(['guestToken' => $guestToken, 'isActive' => true]);
         } else {
             return $this->json(['error' => 'Panier introuvable'], 404);
         }
@@ -125,17 +149,17 @@ class ApplyPromoCodeController extends AbstractController
             return $this->json(['error' => 'Panier introuvable'], 404);
         }
 
-        $cart->setPromoCode(null);
-        $cart->setDiscountAmount(null);
-        
-        $this->em->flush();
-
+        $this->promoCodeService->removeFromCart($cart, $codeToRemove);
 
         return $this->json([
-            'success' => true,
-            'message' => 'Code promo retiré',
+            'success'        => true,
+            'message'        => $codeToRemove ? "Code $codeToRemove retiré" : 'Codes promo retirés',
             'cart' => [
-                'totalAmount' => $cart->getTotalAmount()
+                'promoCode'      => $cart->getPromoCode(),
+                'promoCodes'     => $cart->getPromoCodes(),
+                'promoCodesData' => $cart->getPromoCodesData() ?? [],
+                'discountAmount' => $cart->getDiscountAmount(),
+                'totalAmount'    => $cart->getTotalAmount(),
             ]
         ]);
     }

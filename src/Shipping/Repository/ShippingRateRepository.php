@@ -1,7 +1,8 @@
 <?php
-// ...
+
 namespace App\Shipping\Repository;
 
+use App\Shipping\Entity\CarrierMode;
 use App\Shipping\Entity\ShippingRate;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -14,20 +15,20 @@ class ShippingRateRepository extends ServiceEntityRepository
     }
 
     /**
-     * Retourne le tarif correspondant à un provider, une zone et un poids.
+     * Retourne le tarif correspondant à un CarrierMode, une zone et un poids en grammes.
      * Prend la plus petite tranche qui contient le poids.
      */
-    public function findBestRate(string $provider, string $zone, float $weight): ?ShippingRate
+    public function findBestRate(CarrierMode $carrierMode, string $zone, int $weightGrams): ?ShippingRate
     {
         return $this->createQueryBuilder('r')
-            ->andWhere('r.provider = :provider')
+            ->andWhere('r.carrierMode = :carrierMode')
             ->andWhere('r.zone = :zone')
-            ->andWhere(':w >= r.minWeight')
-            ->andWhere(':w <= r.maxWeight')
-            ->setParameter('provider', $provider)
+            ->andWhere(':w >= r.minWeightGrams')
+            ->andWhere(':w <= r.maxWeightGrams')
+            ->setParameter('carrierMode', $carrierMode)
             ->setParameter('zone', $zone)
-            ->setParameter('w', $weight)
-            ->orderBy('r.maxWeight', 'ASC')
+            ->setParameter('w', $weightGrams)
+            ->orderBy('r.maxWeightGrams', 'ASC')
             ->setMaxResults(1)
             ->getQuery()
             ->getOneOrNullResult();

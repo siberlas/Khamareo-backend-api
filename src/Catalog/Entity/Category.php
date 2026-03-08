@@ -56,6 +56,14 @@ class Category
     #[Gedmo\Translatable]
     private ?string $description = null;
 
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    #[Groups(['category:read', 'category:write'])]
+    private bool $isEnabled = true;
+
+    #[ORM\Column(type: 'integer', options: ['default' => 0])]
+    #[Groups(['category:read', 'category:write'])]
+    private int $displayOrder = 0;
+
     #[ORM\ManyToOne(targetEntity: self::class, inversedBy: 'children')]
     #[Groups(['category:read', 'category:write'])]
     private ?self $parent = null;
@@ -67,6 +75,14 @@ class Category
     #[ORM\OneToMany(mappedBy: 'category', targetEntity: Product::class, cascade: ['persist', 'remove'])]
     #[Groups(['category:read'])]
     private Collection $products;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[Groups(['category:read'])]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
+    #[Groups(['category:read'])]
+    private ?\DateTimeImmutable $updatedAt = null;
 
     #[Gedmo\Locale]
     private string $locale = 'fr';
@@ -84,7 +100,8 @@ class Category
         $this->children = new ArrayCollection();
         $this->products = new ArrayCollection();
         $this->categoryMedias = new ArrayCollection();
-
+        $this->createdAt = new \DateTimeImmutable();
+        $this->updatedAt = new \DateTimeImmutable();
     }
 
     public function getId(): ?Uuid
@@ -116,6 +133,59 @@ class Category
 
     public function getDescription(): ?string { return $this->description; }
     public function setDescription(?string $description): static { $this->description = $description; return $this; }
+
+    public function isEnabled(): bool { return $this->isEnabled; }
+    public function setIsEnabled(bool $isEnabled): static { $this->isEnabled = $isEnabled; return $this; }
+
+    public function getDisplayOrder(): int { return $this->displayOrder; }
+    public function setDisplayOrder(int $displayOrder): static { $this->displayOrder = $displayOrder; return $this; }
+
+    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
+    public function setCreatedAt(\DateTimeImmutable $createdAt): static { $this->createdAt = $createdAt; return $this; }
+
+    public function getUpdatedAt(): ?\DateTimeImmutable { return $this->updatedAt; }
+    public function setUpdatedAt(\DateTimeImmutable $updatedAt): static { $this->updatedAt = $updatedAt; return $this; }
+
+    public function getProductsCount(): int
+    {
+        return $this->products->count();
+    }
+
+    public function getTotalProductsCount(): int
+    {
+        $count = $this->products->count();
+        foreach ($this->children as $child) {
+            $count += $child->getTotalProductsCount();
+        }
+        return $count;
+    }
+
+    public function hasChildren(): bool
+    {
+        return !$this->children->isEmpty();
+    }
+
+    public function getLevel(): int
+    {
+        $level = 0;
+        $current = $this->parent;
+        while ($current !== null) {
+            $level++;
+            $current = $current->getParent();
+        }
+        return $level;
+    }
+
+    public function getPath(): array
+    {
+        $path = [];
+        $current = $this;
+        while ($current !== null) {
+            array_unshift($path, $current->getName());
+            $current = $current->getParent();
+        }
+        return $path;
+    }
 
     public function getParent(): ?self
     {

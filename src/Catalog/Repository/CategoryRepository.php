@@ -11,6 +11,8 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class CategoryRepository extends ServiceEntityRepository
 {
+    public const CACHE_TAG = 'category';
+
     public function __construct(ManagerRegistry $registry)
     {
         parent::__construct($registry, Category::class);
@@ -75,6 +77,23 @@ class CategoryRepository extends ServiceEntityRepository
         }
 
         return $qb->getQuery()->getResult();
+    }
+
+    /**
+     * Retourne les catégories feuilles (sans enfants) activées, triées par displayOrder.
+     *
+     * @return Category[]
+     */
+    public function findEnabledLeavesOrderByDisplay(): array
+    {
+        return $this->createQueryBuilder('c')
+            ->leftJoin('c.children', 'ch')
+            ->where('ch.id IS NULL')       // feuilles uniquement
+            ->andWhere('c.isEnabled = true')
+            ->orderBy('c.displayOrder', 'ASC')
+            ->addOrderBy('c.name', 'ASC')
+            ->getQuery()
+            ->getResult();
     }
 
     private function buildTree(array $rows, ?string $parentId): array

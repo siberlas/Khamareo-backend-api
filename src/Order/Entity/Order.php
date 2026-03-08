@@ -16,18 +16,25 @@ use ApiPlatform\Metadata\Patch;
 use App\Payment\Controller\CheckoutController;
 use App\Order\State\OrderProvider;
 use App\Shipping\Entity\ShippingMethod;
+use App\Shipping\Entity\ShippingMode;
 use App\User\Entity\Address;
+use App\Shared\Enum\DeliveryIssueType;
 use App\Shared\Enum\OrderStatus;
 use Symfony\Component\Validator\Constraints as Assert;
 use App\Payment\Controller\OrderByPaymentIntentController;
 use App\Order\Controller\PublicOrderByNumberController;
 use App\User\Entity\User;
 use App\Payment\Entity\Payment;
+use App\Shipping\Entity\Parcel;
 use App\Shipping\Entity\ShippingLabel;
 
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: OrderRepository::class)]
 #[ORM\Table(name: '`order`')]
+#[ORM\Index(columns: ['status'], name: 'idx_order_status')]
+#[ORM\Index(columns: ['owner_id'], name: 'idx_order_owner')]
+#[ORM\Index(columns: ['created_at'], name: 'idx_order_created')]
+#[ORM\Index(columns: ['order_number'], name: 'idx_order_number')]
 #[ApiResource(
     normalizationContext: ['groups' => ['order:read']],
     denormalizationContext: ['groups' => ['order:write']],
@@ -116,6 +123,10 @@ class Order
     #[Groups(['order:read'])]
     private ?string $paymentStatus = 'unpaid';
 
+    #[ORM\Column(type: 'float', options: ['default' => 0])]
+    #[Groups(['order:read'])]
+    private float $refundedAmount = 0.0;
+
     #[ORM\Column(nullable: true)]
     #[Groups(['order:read'])]
     private ?\DateTimeImmutable $paidAt = null;
@@ -140,6 +151,30 @@ class Order
     #[Groups(['order:read'])]
     private bool $isLocked = false;
 
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['order:read'])]
+    private bool $parcelsConfirmed = false;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\DateTimeImmutable $parcelsConfirmedAt = null;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['order:read'])]
+    private bool $labelsInvalidated = false;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $labelsInvalidatedMessage = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\DateTimeImmutable $labelsInvalidatedAt = null;
+
+    #[ORM\OneToMany(mappedBy: 'order', targetEntity: Parcel::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    #[Groups(['order:read'])]
+    private Collection $parcels;
+
     #[ORM\Column(type: 'text', nullable: true)]
     #[Groups(['order:read','order:write'])]
     private ?string $customerNote = null;
@@ -154,10 +189,18 @@ class Order
     #[Groups(['order:read'])]
     private ?User $owner = null;
 
-    #[ORM\ManyToOne(targetEntity: ShippingMethod::class)]
-    #[ORM\JoinColumn(nullable: false)]
-    #[Groups(['order:read', 'order:write'])]
+    // Champ transient (pas de colonne en DB) - conservé pour rétrocompatibilité
     private ?ShippingMethod $shippingMethod = null;
+
+    #[ORM\ManyToOne(targetEntity: ShippingMode::class)]
+    #[ORM\JoinColumn(name: 'shipping_mode_id', nullable: true)]
+    #[Groups(['order:read'])]
+    private ?ShippingMode $shippingMode = null;
+
+    #[ORM\ManyToOne(targetEntity: \App\Shipping\Entity\Carrier::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\App\Shipping\Entity\Carrier $carrier = null;
 
     #[ORM\OneToMany(mappedBy: 'customerOrder', targetEntity: OrderItem::class, cascade: ['persist'], orphanRemoval: true)]
     #[Groups(['order:read','order:write'])]
@@ -180,6 +223,7 @@ class Order
     private ?ShippingLabel $shippingLabel = null;
 
     #[ORM\Column(type: 'float', nullable: true)]
+    #[Groups(['order:read'])]
     private ?float $shippingCost = null;
 
     // ============ 🔹 Champs “Guest checkout” (nouveaux) ============
@@ -217,9 +261,28 @@ class Order
     #[Groups(['order:read'])]
     private ?string $discountAmount = null;
 
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['order:read'])]
+    private ?array $promoCodesData = null;
+
     #[ORM\Column(length: 2, options: ['default' => 'fr'])]
     #[Groups(['order:read'])]
     private string $locale = 'fr';
+
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $cgvVersion = null;
+
+    #[ORM\Column(type: 'datetime', nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\DateTimeInterface $cgvAcceptedAt = null;
+
+    #[ORM\Column(type: 'string', enumType: DeliveryIssueType::class, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?DeliveryIssueType $deliveryIssueType = null;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $confirmationEmailSent = false;
 
     // Règle : soit owner, soit guestEmail doit être présent
     #[Assert\Expression(
@@ -234,6 +297,7 @@ class Order
         $this->id = Uuid::v7();
         $this->reference = 'ORD-' . strtoupper(bin2hex(random_bytes(4)));
         $this->items = new ArrayCollection();
+        $this->parcels = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -276,6 +340,11 @@ class Order
     public function getPaymentStatus(): ?string { return $this->paymentStatus; }
     public function setPaymentStatus(?string $paymentStatus): static { $this->paymentStatus = $paymentStatus; return $this; }
 
+    public function getRefundedAmount(): float { return $this->refundedAmount; }
+    public function setRefundedAmount(float $refundedAmount): static { $this->refundedAmount = $refundedAmount; return $this; }
+    public function addRefundedAmount(float $amount): static { $this->refundedAmount += $amount; return $this; }
+    public function getRemainingRefundable(): float { return max(0.0, ($this->totalAmount ?? 0) - $this->refundedAmount); }
+
     // ===== SNAPSHOT getters/setters =====
     public function getShippingAddress(): ?Address { return $this->shippingAddress; }
     public function setShippingAddress(?Address $address): static { $this->shippingAddress = $address; return $this; }
@@ -289,6 +358,12 @@ class Order
 
     public function getShippingMethod(): ?ShippingMethod { return $this->shippingMethod; }
     public function setShippingMethod(?ShippingMethod $shippingMethod): static { $this->shippingMethod = $shippingMethod; return $this; }
+
+    public function getShippingMode(): ?ShippingMode { return $this->shippingMode; }
+    public function setShippingMode(?ShippingMode $shippingMode): static { $this->shippingMode = $shippingMode; return $this; }
+
+    public function getCarrier(): ?\App\Shipping\Entity\Carrier { return $this->carrier; }
+    public function setCarrier(?\App\Shipping\Entity\Carrier $carrier): static { $this->carrier = $carrier; return $this; }
 
     public function getTrackingNumber(): ?string { return $this->trackingNumber; }
     public function setTrackingNumber(?string $trackingNumber): static { $this->trackingNumber = $trackingNumber; return $this; }
@@ -415,6 +490,9 @@ class Order
         return $this;
     }
 
+    public function getPromoCodesData(): ?array { return $this->promoCodesData; }
+    public function setPromoCodesData(?array $promoCodesData): static { $this->promoCodesData = $promoCodesData; return $this; }
+
     public function getLocale(): string
     {
         return $this->locale;
@@ -423,6 +501,60 @@ class Order
     public function setLocale(string $locale): self
     {
         $this->locale = $locale;
+        return $this;
+    }
+
+    public function getCgvVersion(): ?string { return $this->cgvVersion; }
+    public function setCgvVersion(?string $cgvVersion): static { $this->cgvVersion = $cgvVersion; return $this; }
+
+    public function getCgvAcceptedAt(): ?\DateTimeInterface { return $this->cgvAcceptedAt; }
+    public function setCgvAcceptedAt(?\DateTimeInterface $cgvAcceptedAt): static { $this->cgvAcceptedAt = $cgvAcceptedAt; return $this; }
+
+    public function getDeliveryIssueType(): ?DeliveryIssueType { return $this->deliveryIssueType; }
+    public function setDeliveryIssueType(?DeliveryIssueType $deliveryIssueType): self { $this->deliveryIssueType = $deliveryIssueType; return $this; }
+
+    public function isConfirmationEmailSent(): bool { return $this->confirmationEmailSent; }
+    public function setConfirmationEmailSent(bool $confirmationEmailSent): self { $this->confirmationEmailSent = $confirmationEmailSent; return $this; }
+
+    public function canEditParcels(): bool
+    {
+        return in_array($this->status, [OrderStatus::PENDING, OrderStatus::PAID, OrderStatus::PREPARING], true);
+    }
+
+    public function isParcelsConfirmed(): bool { return $this->parcelsConfirmed; }
+    public function setIsParcelsConfirmed(bool $parcelsConfirmed): self { $this->parcelsConfirmed = $parcelsConfirmed; return $this; }
+
+    public function getParcelsConfirmedAt(): ?\DateTimeImmutable { return $this->parcelsConfirmedAt; }
+    public function setParcelsConfirmedAt(?\DateTimeImmutable $parcelsConfirmedAt): self { $this->parcelsConfirmedAt = $parcelsConfirmedAt; return $this; }
+
+    public function isLabelsInvalidated(): bool { return $this->labelsInvalidated; }
+    public function setLabelsInvalidated(bool $labelsInvalidated): self { $this->labelsInvalidated = $labelsInvalidated; return $this; }
+
+    public function getLabelsInvalidatedMessage(): ?string { return $this->labelsInvalidatedMessage; }
+    public function setLabelsInvalidatedMessage(?string $labelsInvalidatedMessage): self { $this->labelsInvalidatedMessage = $labelsInvalidatedMessage; return $this; }
+
+    public function getLabelsInvalidatedAt(): ?\DateTimeImmutable { return $this->labelsInvalidatedAt; }
+    public function setLabelsInvalidatedAt(?\DateTimeImmutable $labelsInvalidatedAt): self { $this->labelsInvalidatedAt = $labelsInvalidatedAt; return $this; }
+
+    /** @return Collection<int, Parcel> */
+    public function getParcels(): Collection { return $this->parcels; }
+
+    public function addParcel(Parcel $parcel): self
+    {
+        if (!$this->parcels->contains($parcel)) {
+            $this->parcels->add($parcel);
+            $parcel->setOrder($this);
+        }
+        return $this;
+    }
+
+    public function removeParcel(Parcel $parcel): self
+    {
+        if ($this->parcels->removeElement($parcel)) {
+            if ($parcel->getOrder() === $this) {
+                $parcel->setOrder(null);
+            }
+        }
         return $this;
     }
 

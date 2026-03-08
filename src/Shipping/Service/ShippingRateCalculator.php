@@ -3,57 +3,95 @@
 namespace App\Shipping\Service;
 
 use App\Order\Entity\Order;
+use App\Shipping\Entity\CarrierMode;
 use App\Shipping\Entity\ShippingMethod;
+use App\Shipping\Entity\ShippingRate;
+use App\Shipping\Repository\CarrierModeRepository;
 use App\Shipping\Repository\ShippingRateRepository;
 
 class ShippingRateCalculator
 {
     public function __construct(
-        private ShippingRateRepository $shippingRateRepository
+        private ShippingRateRepository $shippingRateRepository,
+        private CarrierModeRepository $carrierModeRepository,
     ) {}
 
     /**
-     * Ancienne méthode (compat) – calcule depuis l’Order.
-     * Idéalement, vous utiliserez plutôt calculateFromMethod().
+     * Calcule depuis un Order (utilise le CarrierMode si disponible, sinon ShippingMethod.price).
      */
     public function calculate(Order $order): float
     {
-        $method = $order->getShippingMethod();
-        $address = $order->getShippingAddress();
-        $weight = 0.0;
+        $carrierMode = $this->resolveCarrierModeFromOrder($order);
 
-        // → calculez le poids depuis les OrderItems si besoin
-        foreach ($order->getItems() as $item) {
-            $p = $item->getProduct();
-            if ($p && $p->getWeight() !== null) {
-                $weight += ((float) $p->getWeight()) * (int) $item->getQuantity();
+        if ($carrierMode) {
+            $address = $order->getShippingAddress();
+            $zone = $this->mapCountryToZone((string) ($address?->getCountry() ?? 'FR'));
+            $weightGrams = $this->getTotalWeightGramsFromOrder($order);
+            $rate = $this->shippingRateRepository->findBestRate($carrierMode, $zone, $weightGrams);
+            if ($rate) {
+                return (float) $rate->getPrice();
             }
+            return (float) ($carrierMode->getBasePrice() ?? 0);
         }
 
-        $zone = $this->mapCountryToZone((string) $address->getCountry());
-        return $this->calculateFromMethod($method, $zone, $weight);
+        // Fallback: prix de base de la méthode de livraison legacy
+        $method = $order->getShippingMethod();
+        return $method ? (float) $method->getPrice() : 0.0;
     }
 
     /**
-     * Nouvelle méthode stateless pour l’estimation “au choix du mode”.
+     * Calcule depuis un CarrierMode, une zone et un poids en grammes.
+     */
+    public function calculateFromCarrierMode(CarrierMode $carrierMode, string $zone, int $weightGrams): float
+    {
+        $rate = $this->shippingRateRepository->findBestRate($carrierMode, $zone, $weightGrams);
+        if ($rate) {
+            return (float) $rate->getPrice();
+        }
+        return (float) ($carrierMode->getBasePrice() ?? 0);
+    }
+
+    /**
+     * @deprecated Use calculateFromCarrierMode() instead.
      */
     public function calculateFromMethod(ShippingMethod $method, string $zone, float $weight): float
     {
-        $provider = (string) $method->getCarrierCode(); // ex: "LA_POSTE" / "MONDIAL_RELAY"
-        $rate = $this->shippingRateRepository->findBestRate($provider, $zone, $weight);
-
-        if (!$rate) {
-            // fallback: on peut utiliser un prix “par défaut” de la méthode
-            return (float) $method->getPrice();
-        }
-
-        return (float) $rate->getPrice();
+        return (float) $method->getPrice();
     }
 
-    public function resolveRate(ShippingMethod $method, string $zone, float $weight): ?\App\Shipping\Entity\ShippingRate
+    /**
+     * @deprecated Use shippingRateRepository->findBestRate() with CarrierMode directly.
+     */
+    public function resolveRate(ShippingMethod $method, string $zone, float $weight): ?ShippingRate
     {
-        $provider = (string) $method->getCarrierCode();
-        return $this->shippingRateRepository->findBestRate($provider, $zone, $weight);
+        return null;
+    }
+
+    private function resolveCarrierModeFromOrder(Order $order): ?CarrierMode
+    {
+        $carrier = $order->getCarrier();
+        if (!$carrier) {
+            return null;
+        }
+        $modes = $this->carrierModeRepository->findBy(['carrier' => $carrier, 'isActive' => true]);
+        return $modes[0] ?? null;
+    }
+
+    private function getTotalWeightGramsFromOrder(Order $order): int
+    {
+        $total = 0;
+        foreach ($order->getItems() as $item) {
+            $p = $item->getProduct();
+            if (!$p) {
+                continue;
+            }
+            if ($p->getWeightGrams() !== null) {
+                $total += $p->getWeightGrams() * (int) $item->getQuantity();
+            } elseif ($p->getWeight() !== null) {
+                $total += (int) round($p->getWeight() * 1000) * (int) $item->getQuantity();
+            }
+        }
+        return $total;
     }
 
     private function mapCountryToZone(string $country): string
@@ -62,12 +100,7 @@ class ShippingRateCalculator
         if ($up === 'FR' || $up === 'FRANCE') {
             return 'FR';
         }
-
         $eu = ['BE','LU','NL','DE','ES','PT','IT','IE','AT','CZ','DK','EE','FI','GR','HR','HU','LT','LV','MT','PL','RO','SE','SI','SK','BG'];
-        if (in_array($up, $eu, true)) {
-            return 'EU';
-        }
-
-        return 'INTL';
+        return in_array($up, $eu, true) ? 'EU' : 'INTL';
     }
 }

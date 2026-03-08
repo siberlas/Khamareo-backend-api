@@ -3,10 +3,12 @@
 namespace App\Shared\Service;
 
 use App\Order\Entity\Order;
+use App\Marketing\Entity\NewsletterSubscriber;
 use App\Marketing\Entity\PromoCode;
 use App\User\Entity\User;
 use App\Contact\Entity\ContactMessage;
 use App\Marketing\Entity\StockAlert;
+use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
 use Symfony\Component\Mime\Email;
@@ -44,12 +46,33 @@ class MailerService
             'fr' => '🎉 {productName} est de nouveau en stock !',
             'en' => '🎉 {productName} is Back in Stock!'
         ],
+        'order_preparing' => [
+            'fr' => '📦 Votre commande #{orderNumber} est en préparation - Khamareo',
+            'en' => '📦 Your Order #{orderNumber} is Being Prepared - Khamareo'
+        ],
+        'order_shipped' => [
+            'fr' => '🚚 Votre commande #{orderNumber} est en route ! - Khamareo',
+            'en' => '🚚 Your Order #{orderNumber} is on its Way! - Khamareo'
+        ],
+        'order_delivered' => [
+            'fr' => '✅ Votre commande #{orderNumber} a été livrée - Khamareo',
+            'en' => '✅ Your Order #{orderNumber} has been Delivered - Khamareo'
+        ],
+        'newsletter_confirmation' => [
+            'fr' => '📬 Confirmez votre inscription à la newsletter - Khamareo',
+            'en' => '📬 Confirm Your Newsletter Subscription - Khamareo'
+        ],
+        'order_refund' => [
+            'fr' => '💸 Remboursement effectué #{orderNumber} - Khamareo',
+            'en' => '💸 Refund Processed #{orderNumber} - Khamareo'
+        ],
     ];
 
     public function __construct(
         private MailerInterface $mailer,
         private Environment $twig,
         private LoggerInterface $logger,
+        private EntityManagerInterface $em,
         private string $fromEmail,
         private string $frontBaseUrl,
         private string $backendUrl
@@ -117,7 +140,7 @@ class MailerService
     /**
      * Envoie l'email de confirmation d'inscription
      */
-    public function sendEmailConfirmation(User $user, string $token): void
+    public function sendEmailConfirmation(User $user, string $token, bool $newsletterSubscribed = false): void
     {
         try {
             $locale = $this->getEmailLocale($user);
@@ -127,6 +150,7 @@ class MailerService
                 [
                     'user' => $user,
                     'confirmationUrl' => $this->backendUrl . '/api/confirm/' . $token,
+                    'newsletterSubscribed' => $newsletterSubscribed,
                     'locale' => $locale,
                 ]
             );
@@ -265,6 +289,15 @@ class MailerService
      */
     public function sendOrderConfirmation(Order $order): void
     {
+        // Idempotence: ne pas renvoyer si déjà envoyé
+        if ($order->isConfirmationEmailSent()) {
+            $this->logger->info('📧 Order confirmation email already sent (skipped)', [
+                'order_id' => $order->getId(),
+                'order_number' => $order->getOrderNumber(),
+            ]);
+            return;
+        }
+
         try {
             $locale = $this->getEmailLocale(null, $order);
 
@@ -319,6 +352,10 @@ class MailerService
                 ->html($html);
 
             $this->mailer->send($email);
+
+            // Marquer l'email comme envoyé pour éviter les doublons
+            $order->setConfirmationEmailSent(true);
+            $this->em->flush();
 
             $this->logger->info('Order confirmation email sent', [
                 'order_id' => $order->getId(),
@@ -445,6 +482,263 @@ class MailerService
                 'error' => $e->getMessage(),
             ]);
             throw $e;
+        }
+    }
+
+    /**
+     * Notifie le client que sa commande est en préparation
+     */
+    public function sendPreparingNotification(Order $order): void
+    {
+        try {
+            $locale = $this->getEmailLocale(null, $order);
+
+            $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail();
+            if (!$recipientEmail) {
+                return;
+            }
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : "Bonjour",
+                'en' => $firstName ? "Hello {$firstName}" : "Hello",
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/preparing', $locale),
+                [
+                    'order'         => $order,
+                    'greeting'      => $greetings[$locale],
+                    'dispatchDelay' => null,
+                    'deliveryDelay' => null,
+                    'deliveryNote'  => null,
+                    'orderUrl'      => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'locale'        => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('order_preparing', $locale, [
+                    'orderNumber' => $order->getOrderNumber()
+                ]))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Preparing notification sent', [
+                'order_number' => $order->getOrderNumber(),
+                'email'        => $recipientEmail,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send preparing notification', [
+                'order_number' => $order->getOrderNumber(),
+                'error'        => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Notifie le client que sa commande a été expédiée
+     */
+    public function sendShippingNotification(Order $order): void
+    {
+        try {
+            $locale = $this->getEmailLocale(null, $order);
+
+            $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail();
+            if (!$recipientEmail) {
+                return;
+            }
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : "Bonjour",
+                'en' => $firstName ? "Hello {$firstName}" : "Hello",
+            ];
+
+            $trackingNumber = $order->getTrackingNumber()
+                ?? $order->getShippingLabel()?->getTrackingNumber();
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/shipped', $locale),
+                [
+                    'order'              => $order,
+                    'greeting'           => $greetings[$locale],
+                    'trackingNumber'     => $trackingNumber,
+                    'carrierTrackingUrl' => null,
+                    'deliveryDelay'      => null,
+                    'deliveryNote'       => null,
+                    'trackingUrl'        => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'locale'             => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('order_shipped', $locale, [
+                    'orderNumber' => $order->getOrderNumber()
+                ]))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Shipping notification sent', [
+                'order_number'   => $order->getOrderNumber(),
+                'email'          => $recipientEmail,
+                'tracking_number' => $trackingNumber,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send shipping notification', [
+                'order_number' => $order->getOrderNumber(),
+                'error'        => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Notifie le client que sa commande a été livrée
+     */
+    public function sendDeliveryNotification(Order $order): void
+    {
+        try {
+            $locale = $this->getEmailLocale(null, $order);
+
+            $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail();
+            if (!$recipientEmail) {
+                return;
+            }
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : "Bonjour",
+                'en' => $firstName ? "Hello {$firstName}" : "Hello",
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/delivered', $locale),
+                [
+                    'order'    => $order,
+                    'greeting' => $greetings[$locale],
+                    'orderUrl' => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'locale'   => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('order_delivered', $locale, [
+                    'orderNumber' => $order->getOrderNumber()
+                ]))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Delivery notification sent', [
+                'order_number' => $order->getOrderNumber(),
+                'email'        => $recipientEmail,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send delivery notification', [
+                'order_number' => $order->getOrderNumber(),
+                'error'        => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Envoie l'email de confirmation double opt-in pour la newsletter
+     */
+    public function sendNewsletterConfirmationEmail(
+        NewsletterSubscriber $subscriber,
+        string $confirmUrl,
+        string $unsubscribeUrl
+    ): void {
+        try {
+            $html = $this->twig->render(
+                'emails/newsletter/confirmation.fr.html.twig',
+                [
+                    'email'          => $subscriber->getEmail(),
+                    'confirmUrl'     => $confirmUrl,
+                    'unsubscribeUrl' => $unsubscribeUrl,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($subscriber->getEmail())
+                ->subject($this->getSubject('newsletter_confirmation', 'fr'))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Newsletter confirmation email sent', [
+                'email' => $subscriber->getEmail(),
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send newsletter confirmation email', [
+                'email' => $subscriber->getEmail(),
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Notifie le client qu'un remboursement a été effectué
+     */
+    public function sendRefundNotification(Order $order, float $amount, string $refundId): void
+    {
+        try {
+            $locale = $this->getEmailLocale(null, $order);
+
+            $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail();
+            if (!$recipientEmail) {
+                return;
+            }
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : "Bonjour",
+                'en' => $firstName ? "Hello {$firstName}" : "Hello",
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/refund', $locale),
+                [
+                    'order'        => $order,
+                    'greeting'     => $greetings[$locale],
+                    'refundAmount' => $amount,
+                    'refundId'     => $refundId,
+                    'orderUrl'     => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'locale'       => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('order_refund', $locale, [
+                    'orderNumber' => $order->getOrderNumber()
+                ]))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Refund notification sent', [
+                'order_number' => $order->getOrderNumber(),
+                'email'        => $recipientEmail,
+                'refund_id'    => $refundId,
+                'amount'       => $amount,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send refund notification', [
+                'order_number' => $order->getOrderNumber(),
+                'error'        => $e->getMessage(),
+            ]);
         }
     }
 }

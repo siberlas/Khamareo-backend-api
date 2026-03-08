@@ -2,6 +2,7 @@
 
 namespace App\Catalog\Repository;
 
+use App\Catalog\Entity\Product;
 use App\Catalog\Entity\Review;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
@@ -16,28 +17,22 @@ class ReviewRepository extends ServiceEntityRepository
         parent::__construct($registry, Review::class);
     }
 
-    //    /**
-    //     * @return Review[] Returns an array of Review objects
-    //     */
-    //    public function findByExampleField($value): array
-    //    {
-    //        return $this->createQueryBuilder('r')
-    //            ->andWhere('r.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->orderBy('r.id', 'ASC')
-    //            ->setMaxResults(10)
-    //            ->getQuery()
-    //            ->getResult()
-    //        ;
-    //    }
+    /**
+     * @return array{count: int, avg: float|null}
+     */
+    public function getVerifiedStats(Product $product): array
+    {
+        $result = $this->createQueryBuilder('r')
+            ->select('COUNT(r.id) AS cnt, AVG(r.rating) AS avg_rating')
+            ->where('r.product = :product')
+            ->andWhere('r.isVerified = true')
+            ->setParameter('product', $product)
+            ->getQuery()
+            ->getSingleResult();
 
-    //    public function findOneBySomeField($value): ?Review
-    //    {
-    //        return $this->createQueryBuilder('r')
-    //            ->andWhere('r.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+        return [
+            'count' => (int) $result['cnt'],
+            'avg' => $result['avg_rating'] !== null ? (float) $result['avg_rating'] : null,
+        ];
+    }
 }

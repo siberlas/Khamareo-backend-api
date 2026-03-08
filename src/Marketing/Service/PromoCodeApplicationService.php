@@ -3,6 +3,7 @@
 namespace App\Marketing\Service;
 
 use App\Marketing\Entity\PromoCode;
+use App\Marketing\Repository\PromoCodeRepository;
 use App\Cart\Entity\Cart;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -11,7 +12,8 @@ class PromoCodeApplicationService
 {
     public function __construct(
         private EntityManagerInterface $entityManager,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private PromoCodeRepository $promoCodeRepository,
     ) {
         $this->logger->debug('🔧 PromoCodeApplicationService initialisé');
     }
@@ -65,6 +67,11 @@ class PromoCodeApplicationService
                 ]);
             }
 
+            // Appliquer le plafond maxDiscountAmount si défini
+            if ($promoCode->getMaxDiscountAmount() !== null) {
+                $discount = min($discount, (float) $promoCode->getMaxDiscountAmount());
+            }
+
             // La réduction ne peut pas être supérieure au sous-total
             $finalDiscount = min($discount, $itemsSubtotal);
 
@@ -106,130 +113,132 @@ class PromoCodeApplicationService
     }
 
     /**
-     * Applique le code promo au panier (sur les items uniquement)
+     * Applique le code promo au panier.
+     * Gère la logique de cumul (stackable) : si le nouveau code ET tous les codes
+     * déjà appliqués sont cumulables, on accumule ; sinon on remplace tout.
      */
-    public function applyToCart(Cart $cart, PromoCode $promoCode): void
+    public function applyToCart(Cart $cart, PromoCode $promoCode, ?string $appliedWithEmail = null): void
     {
         $this->logger->info('🎟️ Application code promo au panier', [
             'cart_id' => $cart->getId(),
             'promo_code' => $promoCode->getCode(),
-            'promo_type' => $promoCode->getType(),
-            'current_promo' => $cart->getPromoCode()
+            'stackable' => $promoCode->isStackable(),
+            'current_promo' => $cart->getPromoCode(),
+            'applied_with_email' => $appliedWithEmail,
         ]);
 
-        // Validation du code promo
         if (!$promoCode->isValid()) {
-            $this->logger->warning('⚠️ Tentative utilisation code promo invalide', [
-                'cart_id' => $cart->getId(),
-                'promo_code' => $promoCode->getCode(),
-                'is_used' => $promoCode->isUsed(),
-                'expires_at' => $promoCode->getExpiresAt()?->format('Y-m-d H:i:s'),
-                'now' => (new \DateTimeImmutable())->format('Y-m-d H:i:s')
-            ]);
-
             throw new \InvalidArgumentException('Ce code promo n\'est pas valide');
         }
 
-        // Validation du panier
         if ($cart->getItems()->isEmpty()) {
-            $this->logger->warning('⚠️ Tentative application promo sur panier vide', [
-                'cart_id' => $cart->getId(),
-                'promo_code' => $promoCode->getCode()
-            ]);
-
             throw new \InvalidArgumentException('Impossible d\'appliquer un code promo sur un panier vide');
         }
 
         try {
-            // Calculer le sous-total des items (SANS shipping)
             $itemsSubtotal = $cart->getSubtotal();
 
-            $this->logger->debug('📊 Sous-total panier calculé', [
-                'cart_id' => $cart->getId(),
-                'items_subtotal' => $itemsSubtotal,
-                'items_count' => $cart->getItems()->count()
-            ]);
-
             if ($itemsSubtotal <= 0) {
-                $this->logger->error('❌ Sous-total invalide pour application promo', [
-                    'cart_id' => $cart->getId(),
-                    'items_subtotal' => $itemsSubtotal
-                ]);
-
                 throw new \RuntimeException('Le montant du panier est invalide');
             }
 
-            // Calculer la réduction
+            if ($promoCode->getMinOrderAmount() !== null) {
+                $minAmount = (float) $promoCode->getMinOrderAmount();
+                if ($itemsSubtotal < $minAmount) {
+                    throw new \InvalidArgumentException(
+                        sprintf('Ce code promo nécessite un panier d\'au moins %.2f €', $minAmount)
+                    );
+                }
+            }
+
             $discount = $this->calculateDiscount($promoCode, $itemsSubtotal);
 
             if ($discount <= 0) {
-                $this->logger->warning('⚠️ Réduction calculée nulle ou négative', [
-                    'cart_id' => $cart->getId(),
-                    'promo_code' => $promoCode->getCode(),
-                    'discount' => $discount,
-                    'items_subtotal' => $itemsSubtotal
-                ]);
-
                 throw new \RuntimeException('Ce code promo n\'offre aucune réduction pour votre panier');
             }
 
-            // Vérifier si un code promo était déjà appliqué
-            $previousPromo = $cart->getPromoCode();
-            $previousDiscount = $cart->getDiscountAmount();
+            // ── Logique de cumul ──────────────────────────────────────────────
+            $existingData = $cart->getPromoCodesData() ?? [];
 
-            if ($previousPromo) {
-                $this->logger->info('🔄 Remplacement code promo existant', [
-                    'cart_id' => $cart->getId(),
-                    'previous_promo' => $previousPromo,
-                    'previous_discount' => $previousDiscount,
-                    'new_promo' => $promoCode->getCode(),
-                    'new_discount' => $discount
-                ]);
+            // Vérifier que le code n'est pas déjà appliqué
+            foreach ($existingData as $item) {
+                if ($item['code'] === $promoCode->getCode()) {
+                    throw new \InvalidArgumentException('Ce code promo est déjà appliqué');
+                }
             }
 
-            // Stocker dans le panier
-            $cart->setPromoCode($promoCode->getCode());
-            $cart->setDiscountAmount((string) $discount);
+            $newItem = [
+                'code'             => $promoCode->getCode(),
+                'discount'         => $discount,
+                'stackable'        => $promoCode->isStackable(),
+                'appliedWithEmail' => $appliedWithEmail,
+            ];
 
+            if (!empty($existingData)) {
+                if (!$promoCode->isStackable()) {
+                    // Le nouveau code n'est pas cumulable → il remplace tout
+                    $existingData = [$newItem];
+                    $this->logger->info('🔄 Code non cumulable remplace les précédents', ['new_promo' => $promoCode->getCode()]);
+                } else {
+                    // Le nouveau code est cumulable → vérifier les codes existants depuis la DB (valeur actuelle)
+                    $nonStackable = $this->getNonStackableCodesFromDB($existingData);
+                    if (!empty($nonStackable)) {
+                        throw new \InvalidArgumentException(
+                            'Ce code promo ne peut pas être combiné avec : ' . implode(', ', $nonStackable)
+                        );
+                    }
+                    $existingData[] = $newItem;
+                    $this->logger->info('✅ Code promo cumulé', ['codes' => array_column($existingData, 'code')]);
+                }
+            } else {
+                $existingData = [$newItem];
+            }
+
+            $cart->setPromoCodesData($existingData);
+            $this->rebuildCartFields($cart);
             $this->entityManager->flush();
 
-            $this->logger->info('✅ Code promo appliqué avec succès au panier', [
-                'cart_id' => $cart->getId(),
-                'promo_code' => $promoCode->getCode(),
-                'discount_amount' => $discount,
-                'items_subtotal' => $itemsSubtotal,
-                'subtotal_after_discount' => $itemsSubtotal - $discount,
-                'savings_percentage' => round(($discount / $itemsSubtotal) * 100, 2)
-            ]);
-
-        } catch (\InvalidArgumentException $e) {
-            // Re-throw les exceptions de validation
+        } catch (\InvalidArgumentException | \RuntimeException $e) {
             throw $e;
-
-        } catch (\RuntimeException $e) {
-            // Re-throw les exceptions métier
-            throw $e;
-
-        } catch (\Doctrine\DBAL\Exception $e) {
-            $this->logger->critical('🔥 Erreur base de données lors application promo', [
-                'cart_id' => $cart->getId(),
-                'promo_code' => $promoCode->getCode(),
-                'error' => $e->getMessage(),
-                'sql_state' => $e->getSQLState()
-            ]);
-
-            throw new \RuntimeException('Erreur lors de l\'enregistrement du code promo', 0, $e);
-
         } catch (\Exception $e) {
-            $this->logger->critical('🔥 Erreur inattendue lors application promo', [
-                'cart_id' => $cart->getId(),
-                'promo_code' => $promoCode->getCode(),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
+            $this->logger->critical('🔥 Erreur lors application promo', ['error' => $e->getMessage()]);
             throw new \RuntimeException('Une erreur est survenue lors de l\'application du code promo', 0, $e);
         }
+    }
+
+    /**
+     * Retourne les codes non cumulables parmi ceux stockés dans le panier,
+     * en vérifiant la valeur ACTUELLE en base (pas le JSON potentiellement périmé).
+     */
+    private function getNonStackableCodesFromDB(array $promoCodesData): array
+    {
+        $nonStackable = [];
+        foreach ($promoCodesData as $item) {
+            $code = $item['code'] ?? null;
+            if (!$code) continue;
+            $existing = $this->promoCodeRepository->findOneBy(['code' => $code]);
+            if ($existing && !$existing->isStackable()) {
+                $nonStackable[] = $code;
+            }
+        }
+        return $nonStackable;
+    }
+
+    /**
+     * Reconstruit promoCode (dernier code) et discountAmount (somme) depuis promoCodesData.
+     */
+    private function rebuildCartFields(Cart $cart): void
+    {
+        $data = $cart->getPromoCodesData() ?? [];
+        if (empty($data)) {
+            $cart->setPromoCode(null);
+            $cart->setDiscountAmount(null);
+            return;
+        }
+        $last = end($data);
+        $cart->setPromoCode($last['code']);
+        $total = array_sum(array_column($data, 'discount'));
+        $cart->setDiscountAmount((string) round($total, 2));
     }
 
     /**
@@ -344,45 +353,40 @@ class PromoCodeApplicationService
     }
 
     /**
-     * Retire le code promo d'un panier
+     * Retire un code promo du panier.
+     * Si $codeToRemove est null, retire tous les codes.
+     * Si $codeToRemove est fourni, retire uniquement ce code (les autres restent).
      */
-    public function removeFromCart(Cart $cart): void
+    public function removeFromCart(Cart $cart, ?string $codeToRemove = null): void
     {
-        $previousPromo = $cart->getPromoCode();
-        $previousDiscount = $cart->getDiscountAmount();
-
-        if (!$previousPromo) {
-            $this->logger->debug('ℹ️ Aucun code promo à retirer du panier', [
-                'cart_id' => $cart->getId()
-            ]);
-            return;
-        }
-
         $this->logger->info('🗑️ Retrait code promo du panier', [
-            'cart_id' => $cart->getId(),
-            'promo_code' => $previousPromo,
-            'discount_removed' => $previousDiscount
+            'cart_id'        => $cart->getId(),
+            'code_to_remove' => $codeToRemove ?? 'ALL',
         ]);
 
         try {
-            $cart->setPromoCode(null);
-            $cart->setDiscountAmount(null);
+            if ($codeToRemove === null) {
+                // Supprimer tous les codes
+                $cart->setPromoCodesData(null);
+                $cart->setPromoCode(null);
+                $cart->setDiscountAmount(null);
+            } else {
+                $data = $cart->getPromoCodesData() ?? [];
+                $data = array_values(array_filter($data, fn($item) => $item['code'] !== $codeToRemove));
+                $cart->setPromoCodesData(empty($data) ? null : $data);
+                $this->rebuildCartFields($cart);
+            }
 
             $this->entityManager->flush();
 
-            $this->logger->info('✅ Code promo retiré du panier avec succès', [
-                'cart_id' => $cart->getId(),
-                'removed_promo' => $previousPromo,
-                'removed_discount' => $previousDiscount
+            $this->logger->info('✅ Code promo retiré du panier', [
+                'cart_id'        => $cart->getId(),
+                'removed'        => $codeToRemove ?? 'ALL',
+                'remaining_data' => $cart->getPromoCodesData(),
             ]);
 
         } catch (\Exception $e) {
-            $this->logger->error('❌ Erreur lors du retrait du code promo', [
-                'cart_id' => $cart->getId(),
-                'promo_code' => $previousPromo,
-                'error' => $e->getMessage()
-            ]);
-
+            $this->logger->error('❌ Erreur lors du retrait du code promo', ['error' => $e->getMessage()]);
             throw new \RuntimeException('Erreur lors du retrait du code promo', 0, $e);
         }
     }

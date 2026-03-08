@@ -80,8 +80,8 @@ class ShippingOptionsController extends AbstractController
         }
 
         // 4. Calculer le poids total en grammes
-        $weightGrams = $this->weightCalculator->getTotalWeightFromCartInGrams($cart);
-        $weightKg = round($weightGrams / 1000, 3);
+        $weightKg = $this->weightCalculator->getTotalWeightFromCart($cart);
+        $weightGrams = (int) round($weightKg * 1000);
         $this->shippingLogger->info('Poids calculé', ['weightGrams' => $weightGrams, 'weightKg' => $weightKg]);
         
         // 5. Résoudre les options disponibles

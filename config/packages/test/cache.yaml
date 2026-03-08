@@ -1,0 +1,7 @@
+# En test, le rate limiter utilise un cache in-memory (array)
+# pour éviter la persistance Redis entre les runs de tests.
+framework:
+    cache:
+        pools:
+            cache.rate_limiter:
+                adapter: cache.adapter.array

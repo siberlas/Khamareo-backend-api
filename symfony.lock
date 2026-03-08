@@ -61,6 +61,15 @@
             "migrations/.gitignore"
         ]
     },
+    "gesdinet/jwt-refresh-token-bundle": {
+        "version": "1.5",
+        "recipe": {
+            "repo": "github.com/symfony/recipes-contrib",
+            "branch": "main",
+            "version": "1.0",
+            "ref": "2390b4ed5c195e0b3f6dea45221f3b7c0af523a0"
+        }
+    },
     "lexik/jwt-authentication-bundle": {
         "version": "3.1",
         "recipe": {
@@ -84,6 +93,30 @@
         "files": [
             "config/packages/nelmio_cors.yaml"
         ]
+    },
+    "phpunit/phpunit": {
+        "version": "11.5",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "11.1",
+            "ref": "1117deb12541f35793eec9fff7494d7aa12283fc"
+        },
+        "files": [
+            ".env.test",
+            "phpunit.dist.xml",
+            "tests/bootstrap.php",
+            "bin/phpunit"
+        ]
+    },
+    "sentry/sentry-symfony": {
+        "version": "5.9",
+        "recipe": {
+            "repo": "github.com/symfony/recipes-contrib",
+            "branch": "main",
+            "version": "5.0",
+            "ref": "12f504985eb24e3b20a9e41e0ec7e398798d18f0"
+        }
     },
     "stof/doctrine-extensions-bundle": {
         "version": "1.15",
@@ -139,6 +172,18 @@
             "public/index.php",
             "src/Controller/.gitignore",
             "src/Kernel.php"
+        ]
+    },
+    "symfony/lock": {
+        "version": "6.4",
+        "recipe": {
+            "repo": "github.com/symfony/recipes",
+            "branch": "main",
+            "version": "5.2",
+            "ref": "8e937ff2b4735d110af1770f242c1107fdab4c8e"
+        },
+        "files": [
+            "config/packages/lock.yaml"
         ]
     },
     "symfony/mailer": {

@@ -57,11 +57,25 @@
                     Subtotal
                 </td>
                 <td style="padding: 8px 0; text-align: right; font-weight: 600; white-space: nowrap;">
-                    {{ itemsTotal|format_currency('EUR', locale='en') }}
+                    {{ itemsTotal|format_currency(order.currency, locale=locale) }}
                 </td>
             </tr>
-            
-            {% if order.promoCode %}
+
+            {% if order.promoCodesData is not empty %}
+                {% for promoItem in order.promoCodesData %}
+                <tr>
+                    <td colspan="2" style="padding: 8px 0; text-align: right; color: #A25D3C;">
+                        <span style="background-color: #F2C879; padding: 4px 8px; border-radius: 6px; font-size: 13px; font-weight: 600;">
+                            {{ promoItem.code }}
+                        </span>
+                        Promo Code
+                    </td>
+                    <td style="padding: 8px 0; text-align: right; color: #A25D3C; font-weight: 700; white-space: nowrap;">
+                        - {{ promoItem.discount|format_currency(order.currency, locale=locale) }}
+                    </td>
+                </tr>
+                {% endfor %}
+            {% elseif order.promoCode %}
             <tr>
                 <td colspan="2" style="padding: 8px 0; text-align: right; color: #A25D3C;">
                     <span style="background-color: #F2C879; padding: 4px 8px; border-radius: 6px; font-size: 13px; font-weight: 600;">
@@ -70,34 +84,39 @@
                     Promo Code
                 </td>
                 <td style="padding: 8px 0; text-align: right; color: #A25D3C; font-weight: 700; white-space: nowrap;">
-                    - {{ order.discountAmount|format_currency('EUR', locale='en') }}
+                    - {{ order.discountAmount|format_currency(order.currency, locale=locale) }}
                 </td>
             </tr>
             {% endif %}
-            
+
             <tr>
                 <td colspan="2" style="padding: 8px 0; text-align: right; color: #7A5C47;">
-                    Shipping - {{ order.shippingMethod.name }}
+                    Shipping{% if order.shippingMode %} — {{ order.shippingMode.name }}{% elseif order.carrier %} — {{ order.carrier.name }}{% endif %}
                 </td>
                 <td style="padding: 8px 0; text-align: right; font-weight: 600; white-space: nowrap;">
-                    {{ order.shippingCost|format_currency('EUR', locale='en') }}
+                    {% if order.shippingCost is not null and order.shippingCost > 0 %}
+                        {{ order.shippingCost|format_currency(order.currency, locale=locale) }}
+                    {% else %}
+                        <span style="color: #5C7357;">Free</span>
+                    {% endif %}
                 </td>
             </tr>
-            
+
             <tr style="background-color: #F9F5F0;">
                 <td colspan="2" style="padding: 16px 12px; text-align: right;">
                     <strong style="font-size: 18px; font-family: 'Libre Baskerville', Georgia, serif;">TOTAL</strong>
                 </td>
                 <td style="padding: 16px 12px; text-align: right; font-size: 22px; font-weight: 700; color: #D8A35D; white-space: nowrap;">
-                    {{ order.totalAmount|format_currency('EUR', locale='en') }}
+                    {{ order.totalAmount|format_currency(order.currency, locale=locale) }}
                 </td>
             </tr>
         </table>
     </div>
-    
+
+    {% if order.shippingAddress %}
     <div class="card">
         <h3 style="margin-top: 0;">🚚 Shipping Information</h3>
-        
+
         <div style="background-color: #FFFFFF; padding: 16px; border-left: 3px solid #D8A35D; border-radius: 6px; margin: 16px 0;">
             <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
             {{ order.shippingAddress.streetAddress }}<br>
@@ -107,11 +126,14 @@
             <br><span class="muted">☎️ {{ order.shippingAddress.phone }}</span>
             {% endif %}
         </div>
-        
+
+        {% if order.shippingMethod %}
         <p class="muted" style="margin-top: 16px;">
             <strong>Shipping Method:</strong> {{ order.shippingMethod.name }}
         </p>
+        {% endif %}
     </div>
+    {% endif %}
     
     <div style="text-align: center; margin: 32px 0;">
         <a href="{{ trackingUrl }}" class="button">Track My Order</a>

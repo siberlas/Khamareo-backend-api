@@ -77,8 +77,7 @@ class ShippingOptionsResolver
             $shippingRate = $this->shippingRateRepository->findBestRate(
                 $carrierMode,
                 $zone,
-                $weightGrams,
-                $countryCode
+                $weightGrams
             );
 
             // Prix = tarif trouvé OU prix de base du CarrierMode

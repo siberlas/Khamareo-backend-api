@@ -14,7 +14,6 @@ use App\Shared\Service\MailerService;
 use Psr\Log\LoggerInterface;
 use ApiPlatform\Metadata\Post;
 use Symfony\Component\HttpFoundation\RequestStack;
-use App\Marketing\Service\PromoCodeService;
 
 /**
  * @implements ProcessorInterface<User, User|void>
@@ -25,7 +24,6 @@ final readonly class UserPasswordHasher implements ProcessorInterface
         private ProcessorInterface $processor,
         private UserPasswordHasherInterface $passwordHasher,
         private MailerService $mailerService,
-        private PromoCodeService $promoCodeService,
         private LoggerInterface $logger,
         private RequestStack $requestStack
     )
@@ -106,39 +104,18 @@ final readonly class UserPasswordHasher implements ProcessorInterface
             'has_password' => !empty($result->getPassword()),
         ]);
         
-        // Envoi de l'email de confirmation (logique existante)
+        // Envoi de l'email de confirmation
+        // Le code promo est envoyé APRÈS confirmation (dans ConfirmAccountController)
         if ($isNewUser && $token) {
             try {
-                $this->mailerService->sendEmailConfirmation($result, $token);
+                $this->mailerService->sendEmailConfirmation(
+                    $result,
+                    $token,
+                    $result->isNewsletter()
+                );
             } catch (\Exception $e) {
                 $this->logger->error('Failed to send confirmation email', [
                     'email' => $result->getEmail(),
-                    'error' => $e->getMessage()
-                ]);
-                // Ne pas throw pour ne pas bloquer l'inscription
-            }
-        }
-        
-        if ($isNewUser) {
-            try {
-                $promoCode = $this->promoCodeService->handleUserRegistration(
-                    $data->getEmail()
-                );
-                
-                // Ajouter les infos du code promo à la réponse
-                $result->setPromoCode($promoCode->getCode());
-                $result->setPromoDiscountPercentage(
-                    $promoCode->getDiscountPercentage() ? (float) $promoCode->getDiscountPercentage() : null
-                );
-                $result->setPromoDiscountAmount(
-                    $promoCode->getDiscountAmount() ? (float) $promoCode->getDiscountAmount() : null
-                );
-                $result->setPromoExpiresAt($promoCode->getExpiresAt());
-                
-            } catch (\Exception $e) {
-                // Log l'erreur mais ne bloque pas l'inscription
-                $this->logger->error('Failed to create promo code for user registration', [
-                    'email' => $data->getEmail(),
                     'error' => $e->getMessage()
                 ]);
             }

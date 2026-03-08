@@ -16,19 +16,26 @@ class UniqueNewsletterEmailValidator extends ConstraintValidator
             return;
         }
 
+        assert($constraint instanceof UniqueNewsletterEmail);
+
         $email = strtolower(trim((string) $value));
 
-        $qb = $this->repository->createQueryBuilder('n');
-        $exists = (bool) $qb
-            ->select('COUNT(n.id)')
+        $subscriber = $this->repository->createQueryBuilder('n')
             ->andWhere('LOWER(n.email) = :email')
             ->setParameter('email', $email)
+            ->setMaxResults(1)
             ->getQuery()
-            ->getSingleScalarResult();
+            ->getOneOrNullResult();
 
-        if ($exists) {
-            $this->context->buildViolation($constraint->message)
-                ->addViolation();
+        if ($subscriber === null) {
+            return;
         }
+
+        $message = $subscriber->isConfirmed()
+            ? $constraint->message
+            : $constraint->pendingMessage;
+
+        $this->context->buildViolation($message)
+            ->addViolation();
     }
 }

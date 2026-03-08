@@ -31,13 +31,13 @@ class NewsletterSubscriberRepository extends ServiceEntityRepository
     //        ;
     //    }
 
-    //    public function findOneBySomeField($value): ?NewsletterSubscriber
-    //    {
-    //        return $this->createQueryBuilder('n')
-    //            ->andWhere('n.exampleField = :val')
-    //            ->setParameter('val', $value)
-    //            ->getQuery()
-    //            ->getOneOrNullResult()
-    //        ;
-    //    }
+    public function findByConfirmationToken(string $token): ?NewsletterSubscriber
+    {
+        return $this->findOneBy(['confirmationToken' => $token]);
+    }
+
+    public function findByUnsubscribeToken(string $token): ?NewsletterSubscriber
+    {
+        return $this->findOneBy(['unsubscribeToken' => $token]);
+    }
 }

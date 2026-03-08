@@ -79,7 +79,7 @@ class Address
     // Address kind (personal | business | relay)
     // ===================================
     #[ORM\Column(length: 20)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private string $addressKind = 'personal';
 
     // ===================================
@@ -105,8 +105,13 @@ class Address
     #[Groups(['address:read', 'address:write', 'order:read'])]
     private string $country;
 
+    /** État / Province — obligatoire pour US et CA */
+    #[ORM\Column(length: 100, nullable: true)]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
+    private ?string $state = null;
+
     #[ORM\Column(length: 150, nullable: true)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private ?string $label = null;
 
     // ===================================
@@ -117,15 +122,15 @@ class Address
     private ?string $civility = null;
 
     #[ORM\Column(length: 100, nullable: true)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private ?string $firstName = null;
 
     #[ORM\Column(length: 100, nullable: true)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private ?string $lastName = null;
 
     #[ORM\Column(length: 20, nullable: true)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private ?string $phone = null;
 
     // ===================================
@@ -136,23 +141,34 @@ class Address
     private bool $isBusiness = false;
 
     #[ORM\Column(length: 255, nullable: true)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private ?string $companyName = null;
 
     // ===================================
     // RELAY point fields
     // ===================================
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private bool $isRelayPoint = false;
 
     #[ORM\Column(type: 'string', length: 100, nullable: true)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private ?string $relayPointId = null;
 
     #[ORM\Column(type: 'string', length: 50, nullable: true)]
-    #[Groups(['address:read', 'address:write'])]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
     private ?string $relayCarrier = null;
+
+    // ===================================
+    // Geocoding fields
+    // ===================================
+    #[ORM\Column(type: 'float', nullable: true)]
+    #[Groups(['address:read', 'address:write'])]
+    private ?float $latitude = null;
+
+    #[ORM\Column(type: 'float', nullable: true)]
+    #[Groups(['address:read', 'address:write'])]
+    private ?float $longitude = null;
 
     // ===================================
     // Owner & metadata
@@ -194,6 +210,9 @@ class Address
     public function getCountry(): string { return $this->country; }
     public function setCountry(string $country): self { $this->country = $country; return $this; }
 
+    public function getState(): ?string { return $this->state; }
+    public function setState(?string $state): self { $this->state = $state; return $this; }
+
     public function getLabel(): ?string { return $this->label; }
     public function setLabel(?string $label): self { $this->label = $label; return $this; }
 
@@ -225,6 +244,12 @@ class Address
 
     public function getRelayCarrier(): ?string { return $this->relayCarrier; }
     public function setRelayCarrier(?string $carrier): self { $this->relayCarrier = $carrier; return $this; }
+
+    public function getLatitude(): ?float { return $this->latitude; }
+    public function setLatitude(?float $latitude): self { $this->latitude = $latitude; return $this; }
+
+    public function getLongitude(): ?float { return $this->longitude; }
+    public function setLongitude(?float $longitude): self { $this->longitude = $longitude; return $this; }
 
     public function getOwner(): ?User { return $this->owner; }
     public function setOwner(?User $owner): self { $this->owner = $owner; return $this; }

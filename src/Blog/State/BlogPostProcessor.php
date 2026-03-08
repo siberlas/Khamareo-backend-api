@@ -7,6 +7,8 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Blog\Entity\BlogPost;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HtmlSanitizer\HtmlSanitizerInterface;
 use Symfony\Component\String\Slugger\SluggerInterface;
 
 /**
@@ -22,7 +24,9 @@ class BlogPostProcessor implements ProcessorInterface
         private ProcessorInterface $persistProcessor,
         private EntityManagerInterface $entityManager,
         private Security $security,
-        private SluggerInterface $slugger
+        private SluggerInterface $slugger,
+        #[Autowire(service: 'html_sanitizer.sanitizer.blog.sanitizer')]
+        private HtmlSanitizerInterface $blogSanitizer,
     ) {}
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): mixed
@@ -173,27 +177,17 @@ class BlogPostProcessor implements ProcessorInterface
     }
 
     /**
-     * Nettoie et valide le contenu HTML
-     * Supprime les scripts et autres contenus dangereux
+     * Nettoie et valide le contenu HTML via symfony/html-sanitizer.
      */
     private function sanitizeContent(BlogPost $blogPost): void
     {
         $content = $blogPost->getContent();
-        
+
         if (!$content) {
             return;
         }
 
-        // Liste des balises autorisées
-        $allowedTags = '<p><br><strong><em><u><h1><h2><h3><h4><ul><ol><li><a><img><blockquote><code><pre>';
-        
-        // Nettoyer le HTML (supprimer scripts, iframes, etc.)
-        $cleanContent = strip_tags($content, $allowedTags);
-        
-        // Supprimer les attributs dangereux (onclick, onerror, etc.)
-        $cleanContent = preg_replace('/on\w+\s*=\s*["\'].*?["\']/i', '', $cleanContent);
-        
-        $blogPost->setContent($cleanContent);
+        $blogPost->setContent($this->blogSanitizer->sanitize($content));
 
         // Générer automatiquement l'excerpt si vide
         if (!$blogPost->getExcerpt()) {

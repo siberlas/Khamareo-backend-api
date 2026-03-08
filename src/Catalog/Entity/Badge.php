@@ -2,11 +2,14 @@
 namespace App\Catalog\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
+use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Uid\Uuid;
 use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity]
+#[UniqueEntity(fields: ['code'], message: 'Un badge avec ce code existe déjà.')]
 #[ApiResource(
     normalizationContext: ['groups' => ['badge:read']],
     denormalizationContext: ['groups' => ['badge:write']],
@@ -27,10 +30,13 @@ class Badge
 
     #[ORM\Column(length: 100, unique: true)]
     #[Groups(['badge:read', 'badge:write', 'product:read'])]
+    #[Assert\NotBlank(message: 'Le code est obligatoire.')]
+    #[Assert\Length(max: 100, maxMessage: 'Le code ne peut pas dépasser {{ limit }} caractères.')]
     private string $code;
 
     #[ORM\Column(length: 255)]
     #[Groups(['badge:read', 'badge:write', 'product:read'])]
+    #[Assert\NotBlank(message: 'Le label est obligatoire.')]
     private string $label;
 
     public function __construct()

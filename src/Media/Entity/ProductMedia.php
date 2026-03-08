@@ -11,6 +11,7 @@ use App\Catalog\Entity\Product;
 
 #[ORM\Entity]
 #[ORM\Table(name: 'product_media')]
+#[ORM\Index(columns: ['product_id', 'is_primary'], name: 'idx_pm_product_primary')]
 #[ApiResource(
     normalizationContext: ['groups' => ['product_media:read']],
     security: "is_granted('ROLE_ADMIN')"

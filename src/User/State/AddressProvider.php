@@ -26,12 +26,7 @@ class AddressProvider implements ProviderInterface
 
         // Si c'est une collection (GetCollection)
         if (!isset($uriVariables['id'])) {
-            // Admin voit tout
-            if ($isAdmin) {
-                return $this->addressRepository->findBy(['deletedAt' => null]);
-            }
-            
-            // Utilisateur normal voit uniquement ses adresses
+            // Tous les utilisateurs (y compris admin) voient uniquement leurs propres adresses
             return $this->addressRepository
             ->createQueryBuilder('a')
             ->where('a.owner = :user')
@@ -39,8 +34,6 @@ class AddressProvider implements ProviderInterface
             ->setParameter('user', $user)
             ->getQuery()
             ->getResult();
-            dd($results[0]);
-
         }
 
         // Si c'est un item individuel (Get, Patch, Delete)

@@ -2,68 +2,87 @@
 
 namespace App\Catalog\Controller;
 
-use App\Catalog\Dto\ReviewInput;
 use App\Catalog\Entity\Review;
 use App\Catalog\Repository\ProductRepository;
 use App\Catalog\Service\ReviewRatingService;
 use App\Order\Repository\OrderRepository;
+use App\User\Entity\User;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Attribute\AsController;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
-use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Security\Core\Security;
-use Symfony\Component\Validator\Validator\ValidatorInterface;
-use App\User\Entity\User;
 
 #[AsController]
+#[Route('/api/reviews', name: 'review_create', methods: ['POST'])]
 class ReviewCreateController extends AbstractController
 {
     public function __construct(
         private ProductRepository $productRepository,
         private EntityManagerInterface $em,
         private Security $security,
-        private ValidatorInterface $validator,
         private OrderRepository $orderRepository,
         private ReviewRatingService $ratingService,
     ) {}
 
-    public function __invoke(ReviewInput $data): Review
+    public function __invoke(Request $request): JsonResponse
     {
-        $user = $this->security->getUser();
-        $groups = $user ? ['Default'] : ['Default', 'guest'];
+        $data = json_decode($request->getContent(), true);
 
-        $errors = $this->validator->validate($data, null, $groups);
-        if (count($errors) > 0) {
-            throw new BadRequestHttpException((string) $errors);
+        if (!$data) {
+            return $this->json(['error' => 'Données JSON invalides'], 400);
         }
 
-        $productSlug = $this->extractProductSlug($data->product);
+        $productSlug = $this->extractProductSlug($data['product'] ?? null);
+        if (!$productSlug) {
+            return $this->json(['error' => 'Produit requis'], 400);
+        }
+
         $product = $this->productRepository->findOneBy(['slug' => $productSlug]);
         if (!$product) {
-            throw new NotFoundHttpException('Produit introuvable');
+            return $this->json(['error' => 'Produit introuvable'], 404);
         }
+
+        $rating = (int) ($data['rating'] ?? 0);
+        if ($rating < 1 || $rating > 5) {
+            return $this->json(['error' => 'La note doit être entre 1 et 5'], 400);
+        }
+
+        $comment = trim((string) ($data['comment'] ?? ''));
+        if (strlen($comment) < 5) {
+            return $this->json(['error' => 'Le commentaire doit faire au moins 5 caractères'], 400);
+        }
+
+        $user = $this->security->getUser();
 
         $review = new Review();
         $review->setProduct($product);
-        $review->setRating((int) $data->rating);
-        $review->setComment((string) $data->comment);
+        $review->setRating($rating);
+        $review->setComment($comment);
 
         if ($user instanceof User) {
             $fullName = trim((string) $user->getFullName());
             $firstName = trim((string) $user->getFirstName());
             $lastName = trim((string) $user->getLastName());
             $displayName = $fullName !== '' ? $fullName : trim($firstName . ' ' . $lastName);
-
             if ($displayName === '') {
                 $displayName = 'Utilisateur';
             }
-
             $review->setName($displayName);
             $review->setEmail($user->getEmail());
         } else {
-            $review->setName((string) $data->name);
-            $review->setEmail($data->email);
+            $name = trim((string) ($data['name'] ?? ''));
+            $email = trim((string) ($data['email'] ?? ''));
+            if (strlen($name) < 2) {
+                return $this->json(['error' => 'Le nom doit faire au moins 2 caractères'], 400);
+            }
+            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                return $this->json(['error' => 'Email invalide'], 400);
+            }
+            $review->setName($name);
+            $review->setEmail($email);
         }
 
         // Auto-verify if the reviewer has a paid order containing this product
@@ -76,29 +95,33 @@ class ReviewCreateController extends AbstractController
         $this->em->persist($review);
         $this->em->flush();
 
-        // Recalculate product rating (only verified reviews count)
         if ($review->getIsVerified()) {
             $this->ratingService->recalculate($product);
         }
 
-        return $review;
+        return $this->json([
+            '@id' => '/api/reviews/' . $review->getId()->toRfc4122(),
+            'id' => $review->getId()->toRfc4122(),
+            'name' => $review->getName(),
+            'rating' => $review->getRating(),
+            'comment' => $review->getComment(),
+            'isVerified' => $review->getIsVerified(),
+            'createdAt' => $review->getCreatedAt()?->format(\DateTime::ATOM),
+        ], 201);
     }
 
-    private function extractProductSlug(?string $value): string
+    private function extractProductSlug(?string $value): ?string
     {
         if (!$value) {
-            throw new BadRequestHttpException('Produit requis');
+            return null;
         }
-
         $value = trim($value);
-
         if (str_starts_with($value, '/api/products/')) {
             return substr($value, strlen('/api/products/'));
         }
         if (str_starts_with($value, '/products/')) {
             return substr($value, strlen('/products/'));
         }
-
         return $value;
     }
 }

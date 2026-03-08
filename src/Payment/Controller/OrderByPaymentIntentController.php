@@ -4,6 +4,8 @@ namespace App\Payment\Controller;
 
 use App\Order\Entity\Order;
 use App\Payment\Entity\Payment;
+use App\Shared\Enum\OrderStatus;
+use App\Shared\Service\MailerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,7 +16,8 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 class OrderByPaymentIntentController extends AbstractController
 {
     public function __construct(
-        private readonly EntityManagerInterface $em
+        private readonly EntityManagerInterface $em,
+        private readonly MailerService $mailerService,
     ) {}
 
     #[Route('/api/orders/by-payment-intent/{piId}', name: 'order_by_payment_intent', methods: ['GET'])]
@@ -32,6 +35,11 @@ class OrderByPaymentIntentController extends AbstractController
 
         if (!$order) {
             return $this->json(['error' => 'Order not found'], 404);
+        }
+
+        // Fallback: envoyer l'email de confirmation si le webhook Stripe ne l'a pas encore fait
+        if ($order->getStatus() === OrderStatus::PAID && !$order->isConfirmationEmailSent()) {
+            $this->mailerService->sendOrderConfirmation($order);
         }
 
         return $this->json([

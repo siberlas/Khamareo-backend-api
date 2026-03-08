@@ -189,7 +189,7 @@ services:
     App\Shipping\Service\ColissimoApiService:
         arguments:
             $apiUrl: '%env(COLISSIMO_API_URL)%'
-            $apiKey: '%env(default::COLISSIMO_API_KEY)%'
+            $apiKey: '%env(COLISSIMO_API_KEY)%'
             $senderInfo:
                 company: '%env(COLISSIMO_SENDER_COMPANY)%'
                 firstname: '%env(COLISSIMO_SENDER_FIRSTNAME)%'
@@ -200,3 +200,9 @@ services:
                 country: '%env(COLISSIMO_SENDER_COUNTRY)%'
                 email: '%env(COLISSIMO_SENDER_EMAIL)%'
                 phone: '%env(COLISSIMO_SENDER_PHONE)%'
+            $productCodes:
+                fr: '%env(COLISSIMO_PRODUCT_CODE_FR)%'
+                om: '%env(COLISSIMO_PRODUCT_CODE_OM)%'
+                eu: '%env(COLISSIMO_PRODUCT_CODE_EU)%'
+                eu_out: '%env(COLISSIMO_PRODUCT_CODE_EU_OUT)%'
+                intl: '%env(COLISSIMO_PRODUCT_CODE_INTL)%'

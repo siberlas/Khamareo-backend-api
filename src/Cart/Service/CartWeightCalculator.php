@@ -19,7 +19,9 @@ class CartWeightCalculator
             if (!$product instanceof Product) {
                 continue;
             }
-            $weight = (float) ($product->getWeight() ?? 0);
+            $weight = $product->getWeight() !== null
+                ? (float) $product->getWeight()
+                : ($product->getWeightGrams() !== null ? $product->getWeightGrams() / 1000.0 : 0.0);
             $qty = (int) $item->getQuantity();
             $total += $weight * $qty;
         }
@@ -46,8 +48,11 @@ class CartWeightCalculator
 
             $product = $findProductBySlug($productSlug);
 
-            if ($product instanceof Product && $product->getWeight() !== null) {
-                $total += ((float) $product->getWeight()) * $qty;
+            if ($product instanceof Product) {
+                $weight = $product->getWeight() !== null
+                    ? (float) $product->getWeight()
+                    : ($product->getWeightGrams() !== null ? $product->getWeightGrams() / 1000.0 : 0.0);
+                $total += $weight * $qty;
             }
         }
 

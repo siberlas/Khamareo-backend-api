@@ -9,6 +9,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\RateLimiter\RateLimiterFactory;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
@@ -16,25 +17,29 @@ use Symfony\Component\Routing\Attribute\Route;
  *
  * POST /api/newsletter/resend-confirm
  *   body: { "email": "user@example.com" }
- *
- * Garde-fou : un seul renvoi autorisé toutes les 10 minutes par adresse.
  */
 #[AsController]
 class NewsletterResendController extends AbstractController
 {
-    private const COOLDOWN_SECONDS = 600; // 10 minutes
-
     public function __construct(
         private NewsletterSubscriberRepository $repository,
         private EntityManagerInterface         $em,
         private MailerService                  $mailerService,
+        private RateLimiterFactory             $newsletterLimiter,
         private string                         $backendUrl,
-        private string                         $frontBaseUrl,
     ) {}
 
     #[Route('/api/newsletter/resend-confirm', name: 'newsletter_resend_confirm', methods: ['POST'])]
     public function resend(Request $request): JsonResponse
     {
+        $limiter = $this->newsletterLimiter->create($request->getClientIp() ?? 'unknown');
+        if (!$limiter->consume(1)->isAccepted()) {
+            return $this->json([
+                'error'   => 'rate_limited',
+                'message' => 'Trop de tentatives. Veuillez patienter 15 minutes avant de réessayer.',
+            ], 429);
+        }
+
         $body  = $request->toArray();
         $email = strtolower(trim((string) ($body['email'] ?? '')));
 
@@ -58,33 +63,15 @@ class NewsletterResendController extends AbstractController
             ], 409);
         }
 
-        // Garde-fou : cooldown de 10 minutes entre deux renvois
-        $lastSent = $subscriber->getConfirmationSentAt();
-        if ($lastSent !== null) {
-            $elapsed = (new \DateTimeImmutable())->getTimestamp() - $lastSent->getTimestamp();
-            if ($elapsed < self::COOLDOWN_SECONDS) {
-                $retryAfter = self::COOLDOWN_SECONDS - $elapsed;
-                $minutes    = (int) ceil($retryAfter / 60);
-                return $this->json([
-                    'error'      => 'rate_limited',
-                    'message'    => sprintf(
-                        'Veuillez patienter encore %d minute%s avant de renvoyer l\'email de confirmation.',
-                        $minutes,
-                        $minutes > 1 ? 's' : ''
-                    ),
-                    'retryAfter' => $retryAfter,
-                ], 429);
-            }
-        }
-
         // Générer un nouveau token et mettre à jour l'horodatage
         $token = bin2hex(random_bytes(32));
         $subscriber->setConfirmationToken($token);
         $subscriber->setConfirmationSentAt(new \DateTimeImmutable());
         $this->em->flush();
 
-        $confirmUrl = $this->backendUrl . '/api/newsletter/confirm?token=' . $token;
-        $this->mailerService->sendNewsletterConfirmationEmail($subscriber, $confirmUrl);
+        $confirmUrl     = $this->backendUrl . '/api/newsletter/confirm?token=' . $token;
+        $unsubscribeUrl = $this->backendUrl . '/api/newsletter/unsubscribe?token=' . $subscriber->getUnsubscribeToken();
+        $this->mailerService->sendNewsletterConfirmationEmail($subscriber, $confirmUrl, $unsubscribeUrl);
 
         return $this->json([
             'message' => 'Email de confirmation renvoyé. Vérifiez votre boîte de réception.',

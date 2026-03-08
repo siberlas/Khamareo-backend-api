@@ -3,6 +3,8 @@
 namespace App\Catalog\Entity;
 
 use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
 use App\Catalog\Repository\ReviewRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
@@ -12,7 +14,11 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Entity(repositoryClass: ReviewRepository::class)]
 #[ApiResource(
     normalizationContext: ['groups' => ['review:read']],
-    denormalizationContext: ['groups' => ['review:write']]
+    denormalizationContext: ['groups' => ['review:write']],
+    operations: [
+        new GetCollection(security: "is_granted('PUBLIC_ACCESS')"),
+        new Get(security: "is_granted('PUBLIC_ACCESS')"),
+    ]
 )]
 class Review
 {
@@ -36,6 +42,26 @@ class Review
     #[ORM\Column(type: 'text')]
     #[Groups(['review:read', 'review:write', 'product:read'])]
     private ?string $comment = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['review:read', 'review:write'])]
+    private ?string $email = null;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['review:read', 'review:write', 'product:read'])]
+    private bool $isVerified = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['review:read', 'product:read'])]
+    private bool $isPurchaseVerified = false;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['review:read', 'review:write', 'product:read'])]
+    private ?string $adminReply = null;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['review:read', 'product:read'])]
+    private ?\DateTimeImmutable $adminRepliedAt = null;
 
     #[ORM\ManyToOne(targetEntity: Product::class, inversedBy: 'reviews')]
     #[ORM\JoinColumn(nullable: false)]
@@ -95,6 +121,21 @@ class Review
         $this->comment = $comment;
         return $this;
     }
+
+    public function getEmail(): ?string { return $this->email; }
+    public function setEmail(?string $email): self { $this->email = $email; return $this; }
+
+    public function getIsVerified(): bool { return $this->isVerified; }
+    public function setIsVerified(bool $isVerified): self { $this->isVerified = $isVerified; return $this; }
+
+    public function getIsPurchaseVerified(): bool { return $this->isPurchaseVerified; }
+    public function setIsPurchaseVerified(bool $isPurchaseVerified): self { $this->isPurchaseVerified = $isPurchaseVerified; return $this; }
+
+    public function getAdminReply(): ?string { return $this->adminReply; }
+    public function setAdminReply(?string $adminReply): self { $this->adminReply = $adminReply; return $this; }
+
+    public function getAdminRepliedAt(): ?\DateTimeImmutable { return $this->adminRepliedAt; }
+    public function setAdminRepliedAt(?\DateTimeImmutable $adminRepliedAt): self { $this->adminRepliedAt = $adminRepliedAt; return $this; }
 
     public function getProduct(): ?Product
     {

@@ -7,13 +7,16 @@ use App\Catalog\Repository\ReviewRepository;
 use App\Catalog\Service\ReviewRatingService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\Uid\Uuid;
 
 #[AsController]
+#[Route('/api/admin/reviews', name: 'admin_reviews_')]
 class AdminReviewUpdateController extends AbstractController
 {
     public function __construct(
@@ -22,7 +25,8 @@ class AdminReviewUpdateController extends AbstractController
         private ReviewRatingService $ratingService,
     ) {}
 
-    public function __invoke(Request $request): Review
+    #[Route('/{id}', name: 'update', methods: ['PATCH'])]
+    public function __invoke(Request $request): JsonResponse
     {
         // Extract UUID from route attribute
         $idString = $request->attributes->get('id');
@@ -62,6 +66,20 @@ class AdminReviewUpdateController extends AbstractController
             $this->ratingService->recalculate($review->getProduct());
         }
 
-        return $review;
+        return $this->json([
+            'id' => $review->getId()->toRfc4122(),
+            '@id' => '/api/admin/reviews/' . $review->getId()->toRfc4122(),
+            'name' => $review->getName(),
+            'email' => $review->getEmail(),
+            'rating' => $review->getRating(),
+            'comment' => $review->getComment(),
+            'isVerified' => $review->getIsVerified(),
+            'isPurchaseVerified' => $review->getIsPurchaseVerified(),
+            'adminReply' => $review->getAdminReply(),
+            'adminRepliedAt' => $review->getAdminRepliedAt()?->format(\DateTime::ATOM),
+            'createdAt' => $review->getCreatedAt()?->format(\DateTime::ATOM),
+            'productSlug' => $review->getProduct()?->getSlug(),
+            'productName' => $review->getProduct()?->getName(),
+        ]);
     }
 }

@@ -29,6 +29,9 @@ use App\Media\Entity\Media;
 
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
+#[ORM\Index(columns: ['slug'], name: 'idx_product_slug')]
+#[ORM\Index(columns: ['is_enabled', 'is_deleted'], name: 'idx_product_active')]
+#[ORM\Index(columns: ['category_id'], name: 'idx_product_category')]
 #[ApiResource(
     normalizationContext: ['groups' => ['product:read']],
     denormalizationContext: ['groups' => ['product:write']],
@@ -80,7 +83,7 @@ class Product
     #[ORM\Column]
     private ?int $stock = 0;
 
-    #[Groups(['product:read', 'product:write','cart:read','favorite:read'])]
+    #[Groups(['product:read', 'product:write', 'cart:read', 'favorite:read', 'order:read', 'orderitem:read'])]
     #[ORM\Column(length: 255)]
     private ?string $imageUrl = null;
 
@@ -128,10 +131,26 @@ class Product
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?float $originalPrice = null;
 
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    private bool $isEnabled = true;
+
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isDeleted = false;
+
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isFeatured = false;
+
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $weightGrams = null;
+
     #[Groups(['product:read'])]
     private ?Currency $currency = null;
 
-    #[Groups(['product:read', 'product:write'])]
+    #[Groups(['product:read', 'product:write', 'order:read', 'orderitem:read'])]
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $images = null;
 
@@ -240,6 +259,18 @@ class Product
 
     public function getRating(): ?float { return $this->rating; }
     public function setRating(?float $rating): static { $this->rating = $rating; return $this; }
+
+    public function getIsEnabled(): bool { return $this->isEnabled; }
+    public function setIsEnabled(bool $isEnabled): static { $this->isEnabled = $isEnabled; return $this; }
+
+    public function getIsDeleted(): bool { return $this->isDeleted; }
+    public function setIsDeleted(bool $isDeleted): static { $this->isDeleted = $isDeleted; return $this; }
+
+    public function getIsFeatured(): bool { return $this->isFeatured; }
+    public function setIsFeatured(bool $isFeatured): static { $this->isFeatured = $isFeatured; return $this; }
+
+    public function getWeightGrams(): ?int { return $this->weightGrams; }
+    public function setWeightGrams(?int $weightGrams): static { $this->weightGrams = $weightGrams; return $this; }
 
     public function getBadge(): ?Badge { return $this->badge; }
     public function setBadge(?Badge $badge): static { $this->badge = $badge; return $this; }

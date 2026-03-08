@@ -27,18 +27,3 @@ interface LabelGeneratorInterface
      */
     public function supports(string $carrierCode): bool;
 }
-
-/**
- * Résultat de génération d'étiquette
- */
-class LabelGenerationResult
-{
-    public function __construct(
-        public bool $success,
-        public ?string $trackingNumber = null,
-        public ?string $labelUrl = null,
-        public ?string $cn23Url = null,
-        public ?string $error = null,
-        public ?string $rawData = null,
-    ) {}
-}

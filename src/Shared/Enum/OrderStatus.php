@@ -13,6 +13,14 @@ enum OrderStatus: string
     case REFUNDED = 'refunded';      // Remboursée
     case FAILED = 'failed';
 
+    public function canBeCancelled(): bool
+    {
+        return match($this) {
+            self::PENDING, self::PAID, self::PREPARING => true,
+            default => false,
+        };
+    }
+
     public function label(): string
     {
         return match($this) {

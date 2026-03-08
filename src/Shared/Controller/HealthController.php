@@ -36,14 +36,11 @@ class HealthController extends AbstractController
 
         // Redis (optionnel – non bloquant)
         try {
-            $redis = new \Redis();
-            $redis->connect('redis', 6379, 1.0);
+            $redis = new \Predis\Client(['host' => 'redis', 'port' => 6379, 'timeout' => 1.0]);
             $redis->ping();
             $checks['redis'] = 'ok';
-            $redis->close();
         } catch (\Throwable) {
             $checks['redis'] = 'unavailable';
-            // Redis non bloquant en dev
         }
 
         $httpCode = $status === 'ok' ? 200 : 503;

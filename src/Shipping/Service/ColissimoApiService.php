@@ -4,6 +4,8 @@
 namespace App\Shipping\Service;
 
 use App\Order\Entity\Order;
+use App\Shipping\Entity\Parcel;
+use App\Shipping\Enum\DestinationZone;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -17,8 +19,21 @@ class ColissimoApiService
         private LoggerInterface $logger,
         private string $apiUrl,
         private string $apiKey,
-        private array $senderInfo
+        private array $senderInfo,
+        private DestinationClassifier $destinationClassifier,
+        private array $productCodes = [],
     ) {}
+
+    private function resolveProductCode(DestinationZone $zone): string
+    {
+        return match ($zone) {
+            DestinationZone::FRANCE_METRO      => $this->productCodes['fr']     ?? 'DOM',
+            DestinationZone::OUTRE_MER         => $this->productCodes['om']     ?? 'COM',
+            DestinationZone::UNION_EUROPEENNE  => $this->productCodes['eu']     ?? 'DOS',
+            DestinationZone::EUROPE_HORS_UE    => $this->productCodes['eu_out'] ?? 'DOM',
+            DestinationZone::INTERNATIONAL     => $this->productCodes['intl']   ?? 'COLI',
+        };
+    }
 
     public function generateLabel(Order $order): array
     {
@@ -26,11 +41,344 @@ class ColissimoApiService
             'order' => $order->getOrderNumber(),
         ]);
 
-        if ($this->isOM($order)) {
-            return $this->generateOMLabel($order);
+        $zone = $this->resolveZone($order);
+
+        if ($zone === DestinationZone::FRANCE_METRO) {
+            return $this->generateDomesticLabel($order);
         }
 
-        return $this->generateDomesticLabel($order);
+        return $this->generateOMLabel($order, $zone);
+    }
+
+    /**
+     * Génère une étiquette pour un colis spécifique (multi-colis).
+     * Utilise le poids du colis et ses items pour le CN23.
+     * Retourne ['success', 'trackingNumber', 'labelPdf' (base64), 'cn23Pdf' (base64|null), 'rawData']
+     */
+    public function generateLabelForParcel(Parcel $parcel): array
+    {
+        $order = $parcel->getOrder();
+        $zone  = $this->resolveZone($order);
+
+        $this->logger->info('Generating Colissimo label for parcel', [
+            'parcel_id'    => $parcel->getId()->toRfc4122(),
+            'parcel_number'=> $parcel->getParcelNumber(),
+            'order'        => $order->getOrderNumber(),
+            'weight_grams' => $parcel->getWeightGrams(),
+            'zone'         => $zone->value,
+            'product_code' => $this->resolveProductCode($zone),
+        ]);
+
+        if ($zone === DestinationZone::FRANCE_METRO) {
+            return $this->generateDomesticParcelLabel($parcel);
+        }
+
+        return $this->generateOMParcelLabel($parcel, $zone);
+    }
+
+    private function resolveZone(Order $order): DestinationZone
+    {
+        $address = $order->getShippingAddress();
+        return $this->destinationClassifier->classify(
+            $address?->getPostalCode(),
+            $address?->getCountry()
+        );
+    }
+
+    private function generateDomesticParcelLabel(Parcel $parcel): array
+    {
+        $order = $parcel->getOrder();
+        $payload = $this->buildDomesticParcelPayload($parcel);
+
+        $this->logger->info('Colissimo DOM parcel payload', [
+            'payload' => json_encode($payload, JSON_PRETTY_PRINT),
+        ]);
+
+        try {
+            $response = $this->httpClient->request('POST', rtrim($this->apiUrl, '/') . '/generateLabel', [
+                'json' => $payload,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'apikey' => $this->apiKey,
+                ],
+            ]);
+
+            $content = $response->getContent(false);
+
+            if ($this->isMultipart($content)) {
+                $json = $this->extractJsonFromMultipart($content);
+                $pdf  = $this->extractPdfFromMultipart($content);
+
+                if ($json && isset($json['messages'][0]['type']) && $json['messages'][0]['type'] === 'ERROR') {
+                    $msg = $json['messages'][0]['messageContent'] ?? 'Erreur Colissimo DOM';
+                    throw new \RuntimeException($msg);
+                }
+
+                if ($pdf !== null) {
+                    $cn23 = $this->extractCn23FromMultipart($content);
+                    return [
+                        'success' => true,
+                        'trackingNumber' => $json['labelV2Response']['parcelNumber']
+                            ?? $json['labelResponse']['parcelNumber']
+                            ?? $order->getOrderNumber() . '-P' . $parcel->getParcelNumber(),
+                        'labelPdf' => base64_encode($pdf),
+                        'cn23Pdf' => $cn23 !== null ? base64_encode($cn23) : null,
+                        'rawData' => $json ?: ['pdfExtracted' => true],
+                    ];
+                }
+
+                throw new \RuntimeException('Réponse multipart DOM sans PDF exploitable.');
+            }
+
+            $data = $response->toArray(false);
+
+            return [
+                'success' => true,
+                'trackingNumber' => $data['labelV2Response']['parcelNumber'] ?? $data['labelResponse']['parcelNumber'] ?? null,
+                'labelPdf' => $data['labelV2Response']['label'] ?? $data['labelResponse']['label'] ?? null,
+                'cn23Pdf' => null,
+                'rawData' => $data,
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Colissimo DOM parcel label generation failed', [
+                'error' => $e->getMessage(),
+                'parcel_id' => $parcel->getId()->toRfc4122(),
+            ]);
+
+            throw new \RuntimeException('Erreur génération étiquette DOM: ' . $e->getMessage());
+        }
+    }
+
+    private function buildDomesticParcelPayload(Parcel $parcel): array
+    {
+        $order = $parcel->getOrder();
+        $address = $order->getShippingAddress();
+        $customerData = $this->getCustomerData($order, $address);
+
+        $totalWeightGrams = max(1, (int) ($parcel->getWeightGrams() ?? 500));
+        $parcelWeightKg   = $this->finalParcelWeightKg($totalWeightGrams / 1000);
+
+        // Référence unique par colis
+        $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
+
+        $addresseeAddress = [
+            'lastName' => $customerData['lastName'],
+            'firstName' => $customerData['firstName'],
+            'line2' => $address->getStreetAddress(),
+            'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
+            'city' => $address->getCity(),
+            'countryCode' => 'FR',
+            'email' => $customerData['email'],
+            'mobileNumber' => $customerData['phone'],
+        ];
+
+        if ($customerData['companyName'] !== null) {
+            $addresseeAddress['companyName'] = $customerData['companyName'];
+        }
+
+        return [
+            'outputFormat' => [
+                'x' => 0,
+                'y' => 0,
+                'outputPrintingType' => 'PDF_A4_300dpi',
+            ],
+            'letter' => [
+                'service' => [
+                    'productCode' => 'DOM',
+                    'depositDate' => (new \DateTime())->format('Y-m-d'),
+                    'orderNumber' => $parcelRef,
+                    'transportationAmount' => (float) ($order->getShippingCost() ?? 0),
+                    'totalAmount' => (float) $order->getTotalAmount(),
+                ],
+                'parcel' => [
+                    'weight' => $parcelWeightKg,
+                ],
+                'sender' => [
+                    'address' => [
+                        'companyName' => $this->senderInfo['company'],
+                        'lastName' => $this->senderInfo['lastname'],
+                        'firstName' => $this->senderInfo['firstname'],
+                        'line2' => $this->senderInfo['address'],
+                        'zipCode' => $this->senderInfo['zipcode'],
+                        'city' => $this->senderInfo['city'],
+                        'countryCode' => $this->senderInfo['country'],
+                        'email' => $this->senderInfo['email'],
+                        'mobileNumber' => $this->senderInfo['phone'],
+                    ],
+                ],
+                'addressee' => [
+                    'address' => $addresseeAddress,
+                ],
+            ],
+        ];
+    }
+
+    private function generateOMParcelLabel(Parcel $parcel, DestinationZone $zone = DestinationZone::OUTRE_MER): array
+    {
+        $order = $parcel->getOrder();
+        $payload = $this->buildOMParcelPayload($parcel, $zone);
+
+        $this->logger->info('Colissimo OM parcel payload', [
+            'payload' => json_encode($payload, JSON_PRETTY_PRINT),
+        ]);
+
+        try {
+            $response = $this->httpClient->request('POST', rtrim($this->apiUrl, '/') . '/generateLabel', [
+                'json' => $payload,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'apikey' => $this->apiKey,
+                ],
+            ]);
+
+            $content = $response->getContent(false);
+
+            if ($this->isMultipart($content)) {
+                $json = $this->extractJsonFromMultipart($content);
+                $pdf  = $this->extractPdfFromMultipart($content);
+
+                if ($json && isset($json['messages'][0]['type']) && $json['messages'][0]['type'] === 'ERROR') {
+                    $msg = $json['messages'][0]['messageContent'] ?? 'Erreur Colissimo OM';
+                    throw new \RuntimeException($msg);
+                }
+
+                if ($pdf !== null) {
+                    $cn23 = $this->extractCn23FromMultipart($content);
+                    return [
+                        'success' => true,
+                        'trackingNumber' => $json['labelResponse']['parcelNumber']
+                            ?? $json['labelV2Response']['parcelNumber']
+                            ?? $order->getOrderNumber() . '-P' . $parcel->getParcelNumber(),
+                        'labelPdf' => base64_encode($pdf),
+                        'cn23Pdf' => $cn23 !== null ? base64_encode($cn23) : null,
+                        'rawData' => $json ?: ['pdfExtracted' => true],
+                    ];
+                }
+
+                throw new \RuntimeException('Réponse multipart OM sans PDF exploitable.');
+            }
+
+            $data = $response->toArray(false);
+
+            return [
+                'success' => true,
+                'trackingNumber' => $data['labelResponse']['parcelNumber'] ?? $data['labelV2Response']['parcelNumber'] ?? null,
+                'labelPdf' => $data['labelResponse']['label'] ?? $data['labelV2Response']['label'] ?? null,
+                'cn23Pdf' => null,
+                'rawData' => $data,
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Colissimo OM parcel label generation failed', [
+                'error' => $e->getMessage(),
+                'parcel_id' => $parcel->getId()->toRfc4122(),
+            ]);
+
+            throw new \RuntimeException('Erreur génération étiquette OM: ' . $e->getMessage());
+        }
+    }
+
+    private function buildOMParcelPayload(Parcel $parcel, DestinationZone $zone = DestinationZone::OUTRE_MER): array
+    {
+        $order = $parcel->getOrder();
+        $address = $order->getShippingAddress();
+        $customerData = $this->getCustomerData($order, $address);
+
+        $articles = [];
+        $sumArticlesKg = 0.0;
+
+        foreach ($parcel->getItems() as $parcelItem) {
+            $orderItem = $parcelItem->getOrderItem();
+            $product = $orderItem?->getProduct();
+            if (!$product) {
+                continue;
+            }
+
+            $qty = $parcelItem->getQuantity();
+            $unitWeightGrams = $this->safeProductWeightGrams($product);
+            $unitWeightKg = $this->gramsToKgCN23($unitWeightGrams);
+
+            $articles[] = [
+                'description' => $this->getProductDescription($product),
+                'quantity' => $qty,
+                'weight' => $unitWeightKg,
+                'value' => (float) $orderItem->getUnitPrice(),
+                'hsCode' => self::HS_CODE_PLANTS,
+                'originCountry' => 'FR',
+                'currency' => 'EUR',
+            ];
+
+            $sumArticlesKg += ($unitWeightKg * $qty);
+        }
+
+        $parcelWeightKg = $this->finalParcelWeightKg($sumArticlesKg);
+        $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
+
+        $countryCode = $this->resolveAddresseeCountryCode($order);
+
+        $addresseeAddress = [
+            'lastName' => $customerData['lastName'],
+            'firstName' => $customerData['firstName'],
+            'line2' => $address->getStreetAddress(),
+            'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
+            'city' => $address->getCity(),
+            'countryCode' => $countryCode,
+            'email' => $customerData['email'],
+            'mobileNumber' => $customerData['phone'],
+        ];
+
+        // État/Province obligatoire pour US et CA (Colissimo : champ line3)
+        if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
+            $addresseeAddress['line3'] = strtoupper($address->getState());
+        }
+
+        if ($customerData['companyName'] !== null) {
+            $addresseeAddress['companyName'] = $customerData['companyName'];
+        }
+
+        return [
+            'outputFormat' => [
+                'x' => 0,
+                'y' => 0,
+                'outputPrintingType' => 'PDF_A4_300dpi',
+            ],
+            'letter' => [
+                'service' => [
+                    'productCode' => $this->resolveProductCode($zone),
+                    'depositDate' => (new \DateTime())->format('Y-m-d'),
+                    'orderNumber' => $parcelRef,
+                    'transportationAmount' => (float) ($order->getShippingCost() ?? 0),
+                    'totalAmount' => (float) $order->getTotalAmount(),
+                ],
+                'parcel' => [
+                    'weight' => $parcelWeightKg,
+                ],
+                'customsDeclarations' => [
+                    'includeCustomsDeclarations' => 1,
+                    'contents' => [
+                        'category' => ['value' => 3],
+                        'article' => $articles,
+                    ],
+                ],
+                'sender' => [
+                    'address' => [
+                        'companyName' => $this->senderInfo['company'],
+                        'lastName' => $this->senderInfo['lastname'],
+                        'firstName' => $this->senderInfo['firstname'],
+                        'line2' => $this->senderInfo['address'],
+                        'zipCode' => $this->senderInfo['zipcode'],
+                        'city' => $this->senderInfo['city'],
+                        'countryCode' => $this->senderInfo['country'],
+                        'email' => $this->senderInfo['email'],
+                        'mobileNumber' => $this->senderInfo['phone'],
+                    ],
+                ],
+                'addressee' => [
+                    'address' => $addresseeAddress,
+                ],
+            ],
+        ];
     }
 
     // ------------------------------------------------------------------
@@ -108,7 +456,7 @@ class ColissimoApiService
         $address = $order->getShippingAddress();
         $customerData = $this->getCustomerData($order, $address);
 
-        // ✅ DOM : poids en grammes (int)
+        // DOM : poids total en grammes, converti en kg pour l'API REST
         $totalWeightGrams = 0;
         foreach ($order->getItems() as $item) {
             $product = $item->getProduct();
@@ -116,6 +464,7 @@ class ColissimoApiService
             $unitWeightGrams = $this->safeProductWeightGrams($product);
             $totalWeightGrams += ($unitWeightGrams * $qty);
         }
+        $parcelWeightKg = $this->finalParcelWeightKg($totalWeightGrams / 1000);
 
         $addresseeAddress = [
             'lastName' => $customerData['lastName'],
@@ -147,7 +496,7 @@ class ColissimoApiService
                     'totalAmount' => (float) $order->getTotalAmount(),
                 ],
                 'parcel' => [
-                    'weight' => max(1, (int) $totalWeightGrams),
+                    'weight' => $parcelWeightKg,
                 ],
                 'sender' => [
                     'address' => [
@@ -173,9 +522,9 @@ class ColissimoApiService
     // OM (CN23)
     // ------------------------------------------------------------------
 
-    private function generateOMLabel(Order $order): array
+    private function generateOMLabel(Order $order, DestinationZone $zone = DestinationZone::OUTRE_MER): array
     {
-        $payload = $this->buildOMPayload($order);
+        $payload = $this->buildOMPayload($order, $zone);
 
         $this->logger->info('Colissimo OM REST payload', [
             'payload' => json_encode($payload, JSON_PRETTY_PRINT),
@@ -246,7 +595,7 @@ class ColissimoApiService
      * - parcel.weight  : kg (float, 2 décimales)
      * - parcel.weight = somme(articles déjà arrondis) + 0.10 kg (marge de sécurité), min 0.10kg
      */
-    private function buildOMPayload(Order $order): array
+    private function buildOMPayload(Order $order, DestinationZone $zone = DestinationZone::OUTRE_MER): array
     {
         $address = $order->getShippingAddress();
         $customerData = $this->getCustomerData($order, $address);
@@ -294,6 +643,11 @@ class ColissimoApiService
             $addresseeAddress['companyName'] = $customerData['companyName'];
         }
 
+        $countryCode = $addresseeAddress['countryCode'];
+        if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
+            $addresseeAddress['line3'] = strtoupper($address->getState());
+        }
+
         $this->logger->info('OM weight calculation', [
             'sumArticlesKg' => $sumArticlesKg,
             'parcelWeightKg' => $parcelWeightKg,
@@ -308,7 +662,7 @@ class ColissimoApiService
             ],
             'letter' => [
                 'service' => [
-                    'productCode' => 'COM',
+                    'productCode' => $this->resolveProductCode($zone),
                     'depositDate' => (new \DateTime())->format('Y-m-d'),
                     'orderNumber' => $order->getOrderNumber(),
                     'transportationAmount' => (float) ($order->getShippingCost() ?? 0),
@@ -476,19 +830,41 @@ class ColissimoApiService
         return null;
     }
 
+    /**
+     * Territoires français utilisant des codes postaux à 5 chiffres.
+     * Pour ces territoires uniquement, la résolution depuis le CP prime
+     * (ex: CP 97100 stocké avec country=FR → résolve en GP).
+     */
+    private const FRENCH_POSTAL_TERRITORIES = [
+        'FR', 'GP', 'MQ', 'GF', 'RE', 'YT', 'PM', 'BL', 'MF',
+        'NC', 'PF', 'WF', 'TF', 'AD',
+    ];
+
     private function resolveAddresseeCountryCode(Order $order): string
     {
         $address = $order->getShippingAddress();
-        $postalCode = $address ? $address->getPostalCode() : null;
+        $storedCountry = strtoupper(trim((string) ($address?->getCountry() ?? '')));
 
+        // Si le pays stocké est un ISO-2 valide hors territoire français,
+        // on l'utilise directement sans tenter une résolution par CP
+        // (évite que "43952" (US zip) soit résolu comme code postal FR)
+        if (
+            preg_match('/^[A-Z]{2}$/', $storedCountry)
+            && !in_array($storedCountry, self::FRENCH_POSTAL_TERRITORIES, true)
+        ) {
+            return $storedCountry;
+        }
+
+        // Pour les adresses potentiellement françaises, résolution par CP
+        // (gère les DOM-TOM stockés en country=FR ou avec leur propre code)
+        $postalCode = $address ? $address->getPostalCode() : null;
         $fromPostal = $this->resolveCountryCodeFromPostalCode((string) $postalCode);
         if ($fromPostal) {
             return $fromPostal;
         }
 
-        $country = strtoupper(trim((string) ($address?->getCountry() ?? '')));
-        if (preg_match('/^[A-Z]{2}$/', $country)) {
-            return $country;
+        if (preg_match('/^[A-Z]{2}$/', $storedCountry)) {
+            return $storedCountry;
         }
 
         return 'FR';
@@ -551,12 +927,41 @@ class ColissimoApiService
             return null;
         }
 
-        $pdfEnd = strrpos($content, '%%EOF');
+        // strpos (first occurrence) to extract only the label PDF,
+        // not a blob spanning both label and CN23
+        $pdfEnd = strpos($content, '%%EOF', $pdfStart);
         if ($pdfEnd === false || $pdfEnd <= $pdfStart) {
             return null;
         }
 
         return substr($content, $pdfStart, $pdfEnd - $pdfStart + 5);
+    }
+
+    private function extractCn23FromMultipart(string $content): ?string
+    {
+        // Locate the end of the first PDF (label)
+        $firstPdfStart = strpos($content, '%PDF');
+        if ($firstPdfStart === false) {
+            return null;
+        }
+
+        $firstPdfEnd = strpos($content, '%%EOF', $firstPdfStart);
+        if ($firstPdfEnd === false) {
+            return null;
+        }
+
+        // The CN23 is the second PDF in the multipart body
+        $cn23Start = strpos($content, '%PDF', $firstPdfEnd + 5);
+        if ($cn23Start === false) {
+            return null;
+        }
+
+        $cn23End = strpos($content, '%%EOF', $cn23Start);
+        if ($cn23End === false || $cn23End <= $cn23Start) {
+            return null;
+        }
+
+        return substr($content, $cn23Start, $cn23End - $cn23Start + 5);
     }
 
     private function extractJsonFromMultipart(string $content): array

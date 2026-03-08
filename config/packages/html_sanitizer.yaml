@@ -1,0 +1,22 @@
+framework:
+    html_sanitizer:
+        sanitizers:
+            blog.sanitizer:
+                allow_safe_elements: true
+                allow_elements:
+                    img: ['src', 'alt', 'title', 'width', 'height', 'loading', 'style', 'class']
+                    a: ['href', 'target', 'rel', 'title', 'class']
+                    span: ['style', 'class']
+                    div: ['style', 'class']
+                    p: ['style', 'class']
+                    figure: ['class']
+                    figcaption: ['class']
+                    table: ['class']
+                    thead: []
+                    tbody: []
+                    tr: []
+                    th: ['class']
+                    td: ['class']
+                    sup: []
+                    sub: []
+                    hr: []

@@ -47,6 +47,22 @@ class ShippingLabel
     #[Groups(['shipping_label:read'])]
     private ?string $documentUrl = null; // URL Cloudinary PDF 3-en-1
 
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['shipping_label:read'])]
+    private ?string $preparationSheetUrl = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['shipping_label:read'])]
+    private ?string $deliverySlipUrl = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['shipping_label:read'])]
+    private ?string $cn23Url = null;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['shipping_label:read'])]
+    private ?\DateTimeImmutable $generatedAt = null;
+
     #[ORM\OneToOne(inversedBy: 'shippingLabel', cascade: ['persist', 'remove'])]
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['shipping_label:read', 'shipping_label:write'])]
@@ -86,4 +102,16 @@ class ShippingLabel
     public function setOrder(Order $order): self { $this->order = $order; return $this; }
     
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
+
+    public function getPreparationSheetUrl(): ?string { return $this->preparationSheetUrl; }
+    public function setPreparationSheetUrl(?string $preparationSheetUrl): self { $this->preparationSheetUrl = $preparationSheetUrl; return $this; }
+
+    public function getDeliverySlipUrl(): ?string { return $this->deliverySlipUrl; }
+    public function setDeliverySlipUrl(?string $deliverySlipUrl): self { $this->deliverySlipUrl = $deliverySlipUrl; return $this; }
+
+    public function getCn23Url(): ?string { return $this->cn23Url; }
+    public function setCn23Url(?string $cn23Url): self { $this->cn23Url = $cn23Url; return $this; }
+
+    public function getGeneratedAt(): ?\DateTimeImmutable { return $this->generatedAt; }
+    public function setGeneratedAt(?\DateTimeImmutable $generatedAt): self { $this->generatedAt = $generatedAt; return $this; }
 }

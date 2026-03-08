@@ -9,12 +9,15 @@ use ApiPlatform\Metadata\Get;
 use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Patch;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Serializer\Annotation\Groups;
 use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: PromoCodeRepository::class)]
+#[Assert\Callback([self::class, 'validateDiscount'])]
 #[ApiResource(
     operations: [
         new GetCollection(security: "is_granted('ROLE_ADMIN')"),
@@ -41,7 +44,7 @@ class PromoCode
     #[Assert\Choice(choices: ['newsletter', 'first_order', 'registration', 'manual'])]
     private ?string $type = null;
 
-    #[ORM\Column(type: 'decimal', precision: 5, scale: 2)]
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
     #[Groups(['promo:read', 'promo:write'])]
     #[Assert\Range(min: 0, max: 100)]
     private ?string $discountPercentage = null;
@@ -50,7 +53,7 @@ class PromoCode
     #[Groups(['promo:read', 'promo:write'])]
     private ?string $discountAmount = null;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, nullable: true)]
     #[Groups(['promo:read', 'promo:write'])]
     private ?string $email = null;
 
@@ -74,12 +77,76 @@ class PromoCode
     #[Groups(['promo:read', 'promo:write'])]
     private bool $isActive = true;
 
-    
+    #[ORM\Column(nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?\DateTimeImmutable $startsAt = null;
+
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?string $minOrderAmount = null;
+
+    #[ORM\Column(type: 'integer', nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?int $maxUses = null;
+
+    #[ORM\Column(type: 'integer', nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?int $maxUsesPerEmail = null;
+
+    #[ORM\Column(length: 20, options: ['default' => 'all'])]
+    #[Groups(['promo:read', 'promo:write'])]
+    private string $eligibleCustomer = 'all';
+
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['promo:read', 'promo:write'])]
+    private bool $stackable = false;
+
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['promo:read', 'promo:write'])]
+    private bool $firstOrderOnly = false;
+
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?string $maxDiscountAmount = null;
+
+    #[ORM\Column(type: 'integer', nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?int $usageWindowDays = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['promo:read', 'promo:write'])]
+    private bool $autoApply = false;
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?array $allowedCountries = null;
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?array $allowedLocales = null;
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['promo:read', 'promo:write'])]
+    private ?array $allowedChannels = null;
+
+    #[ORM\OneToMany(mappedBy: 'promoCode', targetEntity: PromoCodeRedemption::class, cascade: ['remove'])]
+    private Collection $redemptions;
+
+    #[ORM\OneToMany(mappedBy: 'promoCode', targetEntity: PromoCodeRecipient::class, cascade: ['remove'])]
+    private Collection $recipients;
 
     public function __construct()
     {
         $this->id = Uuid::v7();
+        $this->redemptions = new ArrayCollection();
+        $this->recipients = new ArrayCollection();
     }
+
+    /** @return Collection<int, PromoCodeRedemption> */
+    public function getRedemptions(): Collection { return $this->redemptions; }
+
+    /** @return Collection<int, PromoCodeRecipient> */
+    public function getRecipients(): Collection { return $this->recipients; }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void
@@ -204,10 +271,79 @@ class PromoCode
         return $this;
     }
 
+    public function getStartsAt(): ?\DateTimeImmutable { return $this->startsAt; }
+    public function setStartsAt(?\DateTimeImmutable $startsAt): static { $this->startsAt = $startsAt; return $this; }
+
+    public function getMinOrderAmount(): ?string { return $this->minOrderAmount; }
+    public function setMinOrderAmount(?string $minOrderAmount): static { $this->minOrderAmount = $minOrderAmount; return $this; }
+
+    public function getMaxUses(): ?int { return $this->maxUses; }
+    public function setMaxUses(?int $maxUses): static { $this->maxUses = $maxUses; return $this; }
+
+    public function getMaxUsesPerEmail(): ?int { return $this->maxUsesPerEmail; }
+    public function setMaxUsesPerEmail(?int $maxUsesPerEmail): static { $this->maxUsesPerEmail = $maxUsesPerEmail; return $this; }
+
+    public function getEligibleCustomer(): string { return $this->eligibleCustomer; }
+    public function setEligibleCustomer(string $eligibleCustomer): static { $this->eligibleCustomer = $eligibleCustomer; return $this; }
+
+    public function isStackable(): bool { return $this->stackable; }
+    public function setStackable(bool $stackable): static { $this->stackable = $stackable; return $this; }
+
+    public function isFirstOrderOnly(): bool { return $this->firstOrderOnly; }
+    public function setFirstOrderOnly(bool $firstOrderOnly): static { $this->firstOrderOnly = $firstOrderOnly; return $this; }
+
+    public function getMaxDiscountAmount(): ?string { return $this->maxDiscountAmount; }
+    public function setMaxDiscountAmount(?string $maxDiscountAmount): static { $this->maxDiscountAmount = $maxDiscountAmount; return $this; }
+
+    public function getUsageWindowDays(): ?int { return $this->usageWindowDays; }
+    public function setUsageWindowDays(?int $usageWindowDays): static { $this->usageWindowDays = $usageWindowDays; return $this; }
+
+    public function isAutoApply(): bool { return $this->autoApply; }
+    public function setAutoApply(bool $autoApply): static { $this->autoApply = $autoApply; return $this; }
+
+    public function getAllowedCountries(): ?array { return $this->allowedCountries; }
+    public function setAllowedCountries(?array $allowedCountries): static { $this->allowedCountries = $allowedCountries; return $this; }
+
+    public function getAllowedLocales(): ?array { return $this->allowedLocales; }
+    public function setAllowedLocales(?array $allowedLocales): static { $this->allowedLocales = $allowedLocales; return $this; }
+
+    public function getAllowedChannels(): ?array { return $this->allowedChannels; }
+    public function setAllowedChannels(?array $allowedChannels): static { $this->allowedChannels = $allowedChannels; return $this; }
+
+    /**
+     * Un code est "à usage unique" s'il a une restriction email directe OU si maxUses = 1.
+     * Dans ce cas, le flag isUsed bloque les réutilisations.
+     * Pour les codes multi-usages (maxUses > 1 ou null), on comptabilise via PromoCodeRedemption.
+     */
+    public function isSingleInstance(): bool
+    {
+        return $this->maxUses === 1 || (!empty($this->email) && $this->email !== '');
+    }
+
     public function isValid(): bool
     {
-        return $this->isActive 
-            && !$this->isUsed 
-            && $this->expiresAt > new \DateTimeImmutable();
+        if (!$this->isActive) return false;
+        if ($this->expiresAt !== null && $this->expiresAt <= new \DateTimeImmutable()) return false;
+        // Pour les codes à usage unique, le flag isUsed bloque la réutilisation
+        if ($this->isSingleInstance() && $this->isUsed) return false;
+        return true;
+    }
+
+    public static function validateDiscount(self $promo, \Symfony\Component\Validator\Context\ExecutionContextInterface $context): void
+    {
+        $hasPercentage = $promo->getDiscountPercentage() !== null && (float) $promo->getDiscountPercentage() > 0;
+        $hasAmount     = $promo->getDiscountAmount()    !== null && (float) $promo->getDiscountAmount()    > 0;
+
+        if (!$hasPercentage && !$hasAmount) {
+            $context->buildViolation('Vous devez définir une remise (pourcentage ou montant fixe).')
+                ->atPath('discountPercentage')
+                ->addViolation();
+        }
+
+        if ($hasPercentage && $hasAmount) {
+            $context->buildViolation('Vous ne pouvez pas cumuler un pourcentage et un montant fixe.')
+                ->atPath('discountPercentage')
+                ->addViolation();
+        }
     }
 }

@@ -31,10 +31,19 @@
     <div style="background-color: #F9F5F0; padding: 24px; border-radius: 12px; border: 2px dashed #D8A35D; margin: 32px 0; text-align: center;">
         <h3 style="margin: 0 0 12px 0; color: #A25D3C;">🎁 Welcome Gift</h3>
         <p style="margin: 0;">
-            Once your account is confirmed, you'll receive a <strong style="color: #D8A35D;">10% promo code</strong> for your first order!
+            Once your account is confirmed, you'll receive a <strong style="color: #D8A35D;">15% promo code</strong> for your first order!
         </p>
     </div>
-    
+
+    {% if newsletterSubscribed %}
+    <div style="background-color: #F0F5F9; padding: 24px; border-radius: 12px; border: 2px dashed #5D9ED8; margin: 32px 0; text-align: center;">
+        <h3 style="margin: 0 0 12px 0; color: #3C6FA2;">📧 Newsletter Subscription Included</h3>
+        <p style="margin: 0;">
+            You signed up for our newsletter. After confirming your account, your subscription will be activated and you'll also receive a <strong style="color: #5D9ED8;">bonus 10% newsletter promo code</strong>!
+        </p>
+    </div>
+    {% endif %}
+
     <div class="highlight">
         <p>
             <strong>💡 Did You Know?</strong><br>

@@ -57,14 +57,14 @@ class PdfStorageService
 
             $this->logger->info('Pdf uploaded to Cloudinary', [
                 'filename' => $result->filename,
-                'asset_id' => $uploadResult['asset_id'],
+                'asset_id' => $uploadResult['assetId'],
                 'folder'   => $folder,
             ]);
 
             return $result->withCloudinaryData(
-                url:      $uploadResult['secure_url'],
-                assetId:  $uploadResult['asset_id'],
-                publicId: $uploadResult['public_id'],
+                url:      $uploadResult['url'],
+                assetId:  $uploadResult['assetId'],
+                publicId: $uploadResult['publicId'],
             );
 
         } catch (\Throwable $e) {

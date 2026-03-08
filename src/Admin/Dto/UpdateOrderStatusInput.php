@@ -7,7 +7,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 final class UpdateOrderStatusInput
 {
     public function __construct(
-        #[Assert\NotBlank]
+        #[Assert\NotBlank(message: 'Le statut est obligatoire.')]
         #[Assert\Type('string')]
         public ?string $status = null,
     ) {}

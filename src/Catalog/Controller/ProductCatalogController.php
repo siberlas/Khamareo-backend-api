@@ -46,11 +46,6 @@ class ProductCatalogController extends AbstractController
     #[Route('/products', name: 'products', methods: ['GET'])]
     public function products(Request $request): JsonResponse
     {
-        // DEBUG : Logger tous les paramètres reçus
-        $allParams = $request->query->all();
-        error_log('=== CATALOG API PARAMS ===');
-        error_log('All params: ' . json_encode($allParams));
-        
         // Pagination
         $page = max(1, (int) $request->query->get('page', 1));
         $itemsPerPage = min(100, max(1, (int) $request->query->get('itemsPerPage', 12)));
@@ -103,17 +98,6 @@ class ProductCatalogController extends AbstractController
             $orderPrice = $orderParams['price'] ?? null;
             $orderCreatedAt = $orderParams['createdAt'] ?? null;
         }
-
-        // DEBUG : Logger les valeurs parsées
-        error_log('=== PARSED VALUES ===');
-        error_log(sprintf('search: %s', $search ?? 'null'));
-        error_log(sprintf('categorySlug: %s', $categorySlug ?? 'null'));
-        error_log(sprintf('minRating: %s', $minRating ?? 'null'));
-        error_log(sprintf('orderRating: %s, orderPrice: %s, orderCreatedAt: %s', 
-            $orderRating ?? 'null', 
-            $orderPrice ?? 'null', 
-            $orderCreatedAt ?? 'null'
-        ));
 
         // Construire les conditions WHERE
         $whereConditions = [
@@ -278,7 +262,7 @@ SQL;
         
         $totalPages = (int) ceil($totalItems / $itemsPerPage);
 
-        return $this->json([
+        $response = $this->json([
             'success' => true,
             'data' => $products,
             'pagination' => [
@@ -298,6 +282,9 @@ SQL;
                 ],
             ],
         ]);
+        $response->headers->set('Cache-Control', 'public, max-age=120, s-maxage=300');
+
+        return $response;
     }
 
     /**
@@ -402,7 +389,7 @@ SQL;
 
         usort($images, fn($a, $b) => $a['displayOrder'] <=> $b['displayOrder']);
 
-        return $this->json([
+        $response = $this->json([
             'success' => true,
             'product' => [
                 'id' => $product->getId()->toRfc4122(),
@@ -432,5 +419,8 @@ SQL;
                 'primaryImage' => $images[0]['url'] ?? null,
             ],
         ]);
+        $response->headers->set('Cache-Control', 'public, max-age=300, s-maxage=600');
+
+        return $response;
     }
 }

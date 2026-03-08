@@ -42,6 +42,16 @@ class StoreSettingsController
             $settings->setDispatchNote($data['dispatchNote'] !== '' ? $data['dispatchNote'] : null);
         }
 
+        // ── Livraison gratuite ──────────────────────────────────────────
+        if (array_key_exists('freeShippingEnabled', $data)) {
+            $settings->setFreeShippingEnabled((bool) $data['freeShippingEnabled']);
+        }
+        if (array_key_exists('freeShippingThreshold', $data)) {
+            $settings->setFreeShippingThreshold(
+                $data['freeShippingThreshold'] !== null ? (string) $data['freeShippingThreshold'] : null
+            );
+        }
+
         // ── Boutique ──────────────────────────────────────────────────────
         if (array_key_exists('shopName', $data)) {
             $settings->setShopName(trim($data['shopName']) ?: null);
@@ -65,6 +75,14 @@ class StoreSettingsController
         }
         if (array_key_exists('socialTiktok', $data)) {
             $settings->setSocialTiktok(trim($data['socialTiktok']) ?: null);
+        }
+        if (array_key_exists('instagramFollowers', $data)) {
+            $settings->setInstagramFollowers(trim($data['instagramFollowers']) ?: null);
+        }
+
+        // ── Contenu homepage ────────────────────────────────────────────
+        if (array_key_exists('communityVignettes', $data)) {
+            $settings->setCommunityVignettes($data['communityVignettes']);
         }
 
         $settings->setUpdatedAt(new \DateTimeImmutable());
@@ -90,10 +108,12 @@ class StoreSettingsController
     {
         return [
             // Expédition
-            'dispatchMinDays'  => $s->getDispatchMinDays(),
-            'dispatchMaxDays'  => $s->getDispatchMaxDays(),
-            'dispatchDaysUnit' => $s->getDispatchDaysUnit(),
-            'dispatchNote'     => $s->getDispatchNote(),
+            'dispatchMinDays'       => $s->getDispatchMinDays(),
+            'dispatchMaxDays'       => $s->getDispatchMaxDays(),
+            'dispatchDaysUnit'      => $s->getDispatchDaysUnit(),
+            'dispatchNote'          => $s->getDispatchNote(),
+            'freeShippingEnabled'   => $s->isFreeShippingEnabled(),
+            'freeShippingThreshold' => $s->getFreeShippingThreshold() !== null ? (float) $s->getFreeShippingThreshold() : null,
             // Boutique
             'shopName'         => $s->getShopName(),
             'shopEmail'        => $s->getShopEmail(),
@@ -101,8 +121,11 @@ class StoreSettingsController
             'shopAddress'      => $s->getShopAddress(),
             'shopHours'        => $s->getShopHours(),
             // Réseaux sociaux
-            'socialInstagram'  => $s->getSocialInstagram(),
-            'socialTiktok'     => $s->getSocialTiktok(),
+            'socialInstagram'    => $s->getSocialInstagram(),
+            'socialTiktok'       => $s->getSocialTiktok(),
+            'instagramFollowers' => $s->getInstagramFollowers(),
+            // Contenu homepage
+            'communityVignettes' => $s->getCommunityVignettes(),
             // Méta
             'updatedAt'        => $s->getUpdatedAt()->format(\DateTimeInterface::ATOM),
         ];

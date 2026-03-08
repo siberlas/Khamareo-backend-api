@@ -28,7 +28,30 @@ class AddressValidationListener
 
     public function preUpdate(PreUpdateEventArgs $args): void
     {
-        $this->validateAddress($args->getObject());
+        $entity = $args->getObject();
+        if (!$entity instanceof Address) {
+            return;
+        }
+
+        // Si les champs d'adresse ont changé, invalider les anciennes coordonnées
+        // pour forcer la re-validation par texte (pas par reverse geocode des anciens coords)
+        $addressFieldsChanged = $args->hasChangedField('streetAddress')
+            || $args->hasChangedField('city')
+            || $args->hasChangedField('postalCode');
+
+        if ($addressFieldsChanged) {
+            $this->logger->info('🔄 [ADDRESS VALIDATION] Address fields changed, clearing old coordinates', [
+                'changedFields' => array_filter([
+                    'streetAddress' => $args->hasChangedField('streetAddress'),
+                    'city' => $args->hasChangedField('city'),
+                    'postalCode' => $args->hasChangedField('postalCode'),
+                ]),
+            ]);
+            $entity->setLatitude(null);
+            $entity->setLongitude(null);
+        }
+
+        $this->validateAddress($entity);
     }
 
     private function validateAddress(mixed $entity): void

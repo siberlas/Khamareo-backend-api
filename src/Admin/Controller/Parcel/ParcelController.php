@@ -11,6 +11,7 @@ use App\Shipping\Entity\ParcelItem;
 use App\Shipping\Repository\ParcelRepository;
 use App\Shipping\Service\ParcelManager;
 use App\Shipping\Service\LabelGenerator\LabelGeneratorFactory;
+use App\Media\Service\CloudinaryService;
 use App\Order\Service\Pdf\OrderPdfService;
 use App\Shared\Service\MailerService;
 use Symfony\Component\HttpFoundation\Response;
@@ -35,7 +36,8 @@ class ParcelController extends AbstractController
         private OrderPdfService $orderPdfService,
         private EntityManagerInterface $em,
         private LoggerInterface $logger,
-        private MailerService $mailerService
+        private MailerService $mailerService,
+        private CloudinaryService $cloudinaryService,
     ) {}
 
     #[Route('/parcels/{parcelId}/delivery-note', name: 'generate_parcel_delivery_note', methods: ['POST'])]
@@ -114,6 +116,59 @@ class ParcelController extends AbstractController
         ]);
     }
 
+    #[Route('/parcels/{parcelId}/label/download', name: 'download_parcel_label', methods: ['GET'])]
+    public function downloadParcelLabel(string $parcelId): Response
+    {
+        $parcel = $this->getParcel($parcelId);
+        if (!$parcel) {
+            return $this->json(['error' => 'Colis introuvable'], 404);
+        }
+
+        $url = $parcel->getLabelPdfPath();
+        if (!$url) {
+            return $this->json(['error' => 'Aucune étiquette disponible pour ce colis'], 404);
+        }
+
+        return $this->proxyCloudinaryPdf(
+            $url,
+            sprintf('etiquette-colis-%s.pdf', $parcel->getParcelNumber() ?? '1')
+        );
+    }
+
+    #[Route('/parcels/{parcelId}/cn23/download', name: 'download_parcel_cn23', methods: ['GET'])]
+    public function downloadParcelCn23(string $parcelId): Response
+    {
+        $parcel = $this->getParcel($parcelId);
+        if (!$parcel) {
+            return $this->json(['error' => 'Colis introuvable'], 404);
+        }
+
+        $url = $parcel->getCn23PdfPath();
+        if (!$url) {
+            return $this->json(['error' => 'Aucun CN23 disponible pour ce colis'], 404);
+        }
+
+        return $this->proxyCloudinaryPdf(
+            $url,
+            sprintf('cn23-colis-%s.pdf', $parcel->getParcelNumber() ?? '1')
+        );
+    }
+
+    private function proxyCloudinaryPdf(string $url, string $filename): Response
+    {
+        // Utilise l'Admin API Cloudinary pour générer une URL signée (contourne les ACL)
+        $content = $this->cloudinaryService->downloadRawContent($url);
+        if ($content === false) {
+            return $this->json(['error' => 'Impossible de récupérer le fichier PDF'], 502);
+        }
+
+        return new Response($content, Response::HTTP_OK, [
+            'Content-Type'        => 'application/pdf',
+            'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),
+            'Content-Length'      => strlen($content),
+        ]);
+    }
+
     // ====== ✅ NOUVEAU : CONFIRMER UN COLIS INDIVIDUEL ======
 
     /**
@@ -150,12 +205,15 @@ class ParcelController extends AbstractController
             ], 400);
         }
 
-        if ($parcel->getWeightGrams() === null || $parcel->getWeightGrams() <= 0) {
+        if ($parcel->getItems()->count() === 0) {
             return $this->json([
                 'success' => false,
                 'error' => 'Le colis doit contenir au moins un produit'
             ], 400);
         }
+
+        // Recalculer le poids avant confirmation (au cas où il serait désynchronisé)
+        $this->parcelManager->recalculateParcelWeight($parcel);
 
         try {
             // Confirmer le colis
@@ -780,18 +838,6 @@ class ParcelController extends AbstractController
             $parcel->setCn23PdfPath($result->cn23Url);
             $parcel->setStatus('labeled');
             $parcel->setLabelGeneratedAt(new \DateTimeImmutable());
-
-            $deliveryNoteResult = $this->orderPdfService->generateDeliveryNoteForParcel($parcel);
-            if ($deliveryNoteResult->success && $deliveryNoteResult->cloudinaryUrl) {
-                $parcel->setDeliverySlipPdfPath($deliveryNoteResult->cloudinaryUrl);
-            } else {
-                $parcel->setDeliverySlipPdfPath(null);
-                $this->logger->warning('🧾 [LABEL GENERATION] Delivery note generation failed for parcel', [
-                    'parcel_id' => $parcel->getId()->toRfc4122(),
-                    'order_id' => $order->getId()->toRfc4122(),
-                    'error' => $deliveryNoteResult->error,
-                ]);
-            }
 
             $this->em->flush();
 

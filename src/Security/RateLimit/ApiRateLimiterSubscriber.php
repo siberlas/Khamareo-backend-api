@@ -19,6 +19,12 @@ class ApiRateLimiterSubscriber implements EventSubscriberInterface
         private RateLimiterFactory $registrationLimiter,
         #[Autowire(service: 'limiter.password_reset_limiter')]
         private RateLimiterFactory $passwordResetLimiter,
+        #[Autowire(service: 'limiter.contact_limiter')]
+        private RateLimiterFactory $contactLimiter,
+        #[Autowire(service: 'limiter.review_limiter')]
+        private RateLimiterFactory $reviewLimiter,
+        #[Autowire(service: 'limiter.checkout_limiter')]
+        private RateLimiterFactory $checkoutLimiter,
     ) {
     }
 
@@ -53,6 +59,21 @@ class ApiRateLimiterSubscriber implements EventSubscriberInterface
 
         if ($path === '/api/forgot-password' || $path === '/api/reset-password') {
             $this->consume($this->passwordResetLimiter, $request, 'password_reset');
+            return;
+        }
+
+        if ($path === '/api/contact_messages') {
+            $this->consume($this->contactLimiter, $request, 'contact');
+            return;
+        }
+
+        if (str_starts_with($path, '/api/reviews')) {
+            $this->consume($this->reviewLimiter, $request, 'review');
+            return;
+        }
+
+        if ($path === '/api/orders' || $path === '/api/checkout') {
+            $this->consume($this->checkoutLimiter, $request, 'checkout');
         }
     }
 

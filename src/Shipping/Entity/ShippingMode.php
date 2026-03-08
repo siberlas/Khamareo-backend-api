@@ -39,7 +39,7 @@ class ShippingMode
     private ?string $name = null; // "Domicile", "Point Relais", "Locker", "Express"
 
     #[ORM\Column(length: 50, unique: true)]
-    #[Groups(['shippingMode:read', 'shippingMode:write', 'admin:order:list','admin:order:detail'])]
+    #[Groups(['shippingMode:read', 'shippingMode:write', 'order:read', 'admin:order:list','admin:order:detail'])]
     private ?string $code = null; // "home", "relay_point", "locker", "express"
 
     #[ORM\Column(type: 'text', nullable: true)]

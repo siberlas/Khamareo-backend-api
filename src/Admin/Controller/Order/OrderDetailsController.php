@@ -262,6 +262,8 @@ class OrderDetailsController extends AbstractController
                     'statusLabel' => $order->getStatus()->label(),
                     'paymentStatus' => $order->getPaymentStatus(),
                     'totalAmount' => $order->getTotalAmount(),
+                    'refundedAmount' => $order->getRefundedAmount(),
+                    'remainingRefundable' => $order->getRemainingRefundable(),
                     'shippingCost' => $order->getShippingCost(),
                     'currency' => $order->getCurrency(),
                     'locale' => $order->getLocale(),

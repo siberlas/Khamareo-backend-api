@@ -44,10 +44,16 @@ security:
             pattern: ^/api
             stateless: true
             provider: app_user_provider
+            entry_point: jwt
             jwt: ~
+            refresh_jwt:
+                check_path: /api/token/refresh
             lazy: true
        
     access_control:
+
+        # Healthcheck (public – Docker / monitoring)
+        - { path: ^/api/health$, roles: PUBLIC_ACCESS }
 
          # Stripe – statut de paiement (public)
         - { path: ^/api/stripe/payment-status, roles: PUBLIC_ACCESS }
@@ -59,19 +65,26 @@ security:
         - { path: ^/api/auth$, roles: PUBLIC_ACCESS }
         - { path: ^/api/users$, roles: PUBLIC_ACCESS, methods: [POST] }  # Inscription
         - { path: ^/api/confirm, roles: PUBLIC_ACCESS }  # Confirmation email
+        - { path: ^/api/resend-confirmation, roles: PUBLIC_ACCESS }  # Renvoi confirmation email
+        - { path: ^/api/newsletter/confirm, roles: PUBLIC_ACCESS }  # Confirmation newsletter
+        - { path: ^/api/newsletter/resend-confirm, roles: PUBLIC_ACCESS }  # Renvoi confirmation newsletter
+        - { path: ^/api/newsletter/unsubscribe, roles: PUBLIC_ACCESS }  # Désinscription newsletter
         - { path: ^/api/reset-password, roles: PUBLIC_ACCESS }  # Reset password
         - { path: ^/api/forgot-password, roles: PUBLIC_ACCESS }  # Demande reset
         
         # ✅ Routes publiques (catalogue)
         - { path: ^/api/categories, roles: PUBLIC_ACCESS }
         - { path: ^/api/products, roles: PUBLIC_ACCESS }
-        - { path: ^/api/reviews, roles: PUBLIC_ACCESS, methods: [GET] }
+        - { path: ^/api/catalog, roles: PUBLIC_ACCESS }
+        - { path: ^/api/reviews, roles: PUBLIC_ACCESS, methods: [GET, POST] }
         - { path: ^/api/hero_slides, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/shipping_methods, roles: PUBLIC_ACCESS }
         - { path: ^/api/shipping_rates, roles: PUBLIC_ACCESS }
+        - { path: ^/api/shipping/options, roles: PUBLIC_ACCESS }
         - { path: ^/api/menu, roles: PUBLIC_ACCESS }
         - { path: ^/api/public, roles: PUBLIC_ACCESS }
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
+        - { path: ^/api/status, roles: PUBLIC_ACCESS }
 
         # ============================================================
         # PANIER INVITÉ (PUBLIC) ✅ AJOUTÉ
@@ -88,9 +101,10 @@ security:
         - { path: ^/api/cart/checkout, roles: PUBLIC_ACCESS }  # ✅ AJOUTER CETTE LIGNE
         - { path: ^/api/payment, roles: PUBLIC_ACCESS }
         - { path: ^/api/promo_codes/validate, roles: PUBLIC_ACCESS }
-        - { path: ^/api/promo_codes/validate, roles: PUBLIC_ACCESS }
+        - { path: ^/api/promo-codes/validate, roles: PUBLIC_ACCESS }
         - { path: ^/api/newsletter_subscribers, roles: PUBLIC_ACCESS }
         - { path: ^/api/cart/apply-promo, roles: PUBLIC_ACCESS }
+        - { path: ^/api/cart/remove-promo, roles: PUBLIC_ACCESS }
 
         # ============================================================
         # ADRESSES (POST public pour checkout invité)

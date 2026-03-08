@@ -428,7 +428,7 @@ class StripePaymentProvider implements PaymentProviderInterface
         string $currency = 'eur',
         float $shippingAmount = 0.0,
         string $shippingLabel = 'Shipping',
-        array $extraMetadata = []
+        array $extraMetadata = [],
     ): PaymentResponse {
         $currency = \strtolower($currency);
         $customerId = $cart->getOwner()?->getStripeCustomerId();
@@ -470,7 +470,7 @@ class StripePaymentProvider implements PaymentProviderInterface
         try {
             // UPDATE d'un PaymentIntent existant
             if ($cart->getPaymentIntentId()) {
-                return $this->updateExistingPaymentIntent(
+                $updated = $this->updateExistingPaymentIntent(
                     $cart,
                     $amountCents,
                     $currency,
@@ -478,6 +478,16 @@ class StripePaymentProvider implements PaymentProviderInterface
                     $metadata,
                     $customerId
                 );
+
+                if ($updated !== null) {
+                    return $updated;
+                }
+
+                // PI en état terminal (succeeded/canceled) → créer un nouveau
+                $this->logger->info('🔄 Ancien PI en état terminal, création d\'un nouveau', [
+                    'cart_id' => $cart->getId(),
+                    'old_pi' => $cart->getPaymentIntentId(),
+                ]);
             }
 
             // CRÉATION d'un nouveau PaymentIntent
@@ -511,7 +521,8 @@ class StripePaymentProvider implements PaymentProviderInterface
     }
 
     /**
-     * Met à jour un PaymentIntent existant
+     * Met à jour un PaymentIntent existant.
+     * Retourne null si le PI est en état terminal (succeeded/canceled) → le caller doit en créer un nouveau.
      */
     private function updateExistingPaymentIntent(
         Cart $cart,
@@ -520,7 +531,7 @@ class StripePaymentProvider implements PaymentProviderInterface
         float $shippingAmount,
         array $metadata,
         ?string $customerId
-    ): PaymentResponse {
+    ): ?PaymentResponse {
         $existingPiId = $cart->getPaymentIntentId();
         
         $this->logger->info('🔄 Mise à jour PaymentIntent existant', [
@@ -549,17 +560,12 @@ class StripePaymentProvider implements PaymentProviderInterface
             ];
 
             if (!\in_array($existingPi->status, $updatableStatuses, true)) {
-                $this->logger->warning('⚠️ PaymentIntent non modifiable', [
+                $this->logger->warning('⚠️ PaymentIntent en état terminal, création d\'un nouveau requis', [
                     'payment_intent_id' => $existingPi->id,
                     'status' => $existingPi->status,
-                    'allowed_statuses' => $updatableStatuses
                 ]);
 
-                throw new \RuntimeException(\sprintf(
-                    "Impossible de modifier le PaymentIntent %s (status = %s)",
-                    $existingPi->id,
-                    $existingPi->status
-                ));
+                return null;
             }
 
             // Récupérer et nettoyer les metadata existantes
@@ -696,6 +702,59 @@ class StripePaymentProvider implements PaymentProviderInterface
                 'error' => $e->getMessage()
             ]);
             throw new \RuntimeException('Erreur lors de la récupération du paiement', 0, $e);
+        }
+    }
+
+    /**
+     * Crée un remboursement Stripe sur un PaymentIntent
+     *
+     * @param string $paymentIntentId ID du PaymentIntent Stripe
+     * @param int    $amountCents     Montant en centimes
+     * @param string $reason          requested_by_customer | duplicate | fraudulent
+     * @param array  $metadata        Métadonnées optionnelles
+     */
+    public function refundPayment(
+        string $paymentIntentId,
+        int $amountCents,
+        string $reason = 'requested_by_customer',
+        array $metadata = []
+    ): array {
+        try {
+            $this->logger->info('💸 Creating Stripe refund', [
+                'payment_intent_id' => $paymentIntentId,
+                'amount_cents'      => $amountCents,
+                'reason'            => $reason,
+            ]);
+
+            $refund = $this->client->refunds->create([
+                'payment_intent' => $paymentIntentId,
+                'amount'         => $amountCents,
+                'reason'         => $reason,
+                'metadata'       => $metadata,
+            ]);
+
+            $this->logger->info('✅ Stripe refund created', [
+                'refund_id' => $refund->id,
+                'status'    => $refund->status,
+            ]);
+
+            return [
+                'success'   => true,
+                'refund_id' => $refund->id,
+                'status'    => $refund->status,
+                'amount'    => $refund->amount,
+            ];
+
+        } catch (ApiErrorException $e) {
+            $this->logger->error('❌ Stripe refund failed', [
+                'payment_intent_id' => $paymentIntentId,
+                'error'             => $e->getMessage(),
+            ]);
+
+            return [
+                'success' => false,
+                'error'   => $e->getMessage(),
+            ];
         }
     }
 }

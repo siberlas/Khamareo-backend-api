@@ -27,6 +27,14 @@ class StoreSettings
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $dispatchNote = null;
 
+    // ── Livraison gratuite ──────────────────────────────────────────────────
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $freeShippingEnabled = false;
+
+    #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
+    private ?string $freeShippingThreshold = null;
+
     // ── Boutique ──────────────────────────────────────────────────────────────
 
     #[ORM\Column(length: 255, nullable: true)]
@@ -52,6 +60,14 @@ class StoreSettings
 
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $socialTiktok = null;
+
+    #[ORM\Column(length: 50, nullable: true)]
+    private ?string $instagramFollowers = null;
+
+    // ── Contenu homepage ────────────────────────────────────────────────────
+
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $communityVignettes = null;
 
     // ── Timestamp ─────────────────────────────────────────────────────────────
 
@@ -79,6 +95,14 @@ class StoreSettings
     public function getDispatchNote(): ?string { return $this->dispatchNote; }
     public function setDispatchNote(?string $v): self { $this->dispatchNote = $v; return $this; }
 
+    // ── Getters/setters Livraison gratuite ───────────────────────────────
+
+    public function isFreeShippingEnabled(): bool { return $this->freeShippingEnabled; }
+    public function setFreeShippingEnabled(bool $v): self { $this->freeShippingEnabled = $v; return $this; }
+
+    public function getFreeShippingThreshold(): ?string { return $this->freeShippingThreshold; }
+    public function setFreeShippingThreshold(?string $v): self { $this->freeShippingThreshold = $v; return $this; }
+
     // ── Getters/setters Boutique ───────────────────────────────────────────
 
     public function getShopName(): ?string { return $this->shopName; }
@@ -103,6 +127,14 @@ class StoreSettings
 
     public function getSocialTiktok(): ?string { return $this->socialTiktok; }
     public function setSocialTiktok(?string $v): self { $this->socialTiktok = $v; return $this; }
+
+    public function getInstagramFollowers(): ?string { return $this->instagramFollowers; }
+    public function setInstagramFollowers(?string $v): self { $this->instagramFollowers = $v; return $this; }
+
+    // ── Getters/setters Contenu homepage ─────────────────────────────────
+
+    public function getCommunityVignettes(): ?array { return $this->communityVignettes; }
+    public function setCommunityVignettes(?array $v): self { $this->communityVignettes = $v; return $this; }
 
     // ── Timestamp ─────────────────────────────────────────────────────────
 

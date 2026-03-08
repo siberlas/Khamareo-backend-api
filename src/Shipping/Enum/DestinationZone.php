@@ -30,14 +30,14 @@ enum DestinationZone: string
 
     /**
      * Union Européenne (27 pays + Norvège + Islande via accords)
-     * Code produit: COLI
+     * Code produit: COLD
      * CN23: NON (marché unique)
      */
     case UNION_EUROPEENNE = 'union_europeenne';
 
     /**
      * Suisse, Royaume-Uni (post-Brexit), autres pays européens hors UE
-     * Code produit: COLI
+     * Code produit: COLD
      * CN23: OUI
      */
     case EUROPE_HORS_UE = 'europe_hors_ue';
@@ -52,14 +52,18 @@ enum DestinationZone: string
     /**
      * Obtient le code produit Colissimo pour cette zone
      */
+    /**
+     * Code produit par défaut (fallback si non configuré via env var).
+     * En pratique, utiliser ColissimoApiService::resolveProductCode() qui lit les env vars.
+     */
     public function getProductCode(): string
     {
         return match ($this) {
-            self::FRANCE_METRO => 'DOM',
-            self::OUTRE_MER => 'COM',
-            self::UNION_EUROPEENNE, 
-            self::EUROPE_HORS_UE, 
-            self::INTERNATIONAL => 'DOM',
+            self::FRANCE_METRO     => 'DOM',
+            self::OUTRE_MER        => 'COM',
+            self::UNION_EUROPEENNE => 'DOS',
+            self::EUROPE_HORS_UE   => 'DOM',
+            self::INTERNATIONAL    => 'COLI',
         };
     }
 

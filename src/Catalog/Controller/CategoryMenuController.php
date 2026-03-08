@@ -58,10 +58,13 @@ class CategoryMenuController extends AbstractController
         // Utiliser la version optimisée avec CTE
         $menu = $this->categoryRepository->findMenuCategoriesOptimized($onlyEnabled);
 
-        return $this->json([
+        $response = $this->json([
             'success' => true,
             'menu' => $menu,
         ]);
+        $response->headers->set('Cache-Control', 'public, max-age=600, s-maxage=1800');
+
+        return $response;
     }
 
     /**

@@ -10,4 +10,4 @@ gesdinet_jwt_refresh_token:
         same_site: none
         secure: true
         http_only: true
-        remove_token_from_body: false
+        remove_token_from_body: true

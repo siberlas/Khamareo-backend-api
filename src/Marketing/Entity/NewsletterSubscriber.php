@@ -2,7 +2,7 @@
 
 namespace App\Marketing\Entity;
 
-use App\Repository\NewsletterSubscriberRepository;
+use App\Marketing\Repository\NewsletterSubscriberRepository;
 use Doctrine\ORM\Mapping as ORM;
 use ApiPlatform\Metadata\ApiResource;
 use ApiPlatform\Metadata\Get;
@@ -19,7 +19,8 @@ use App\Marketing\State\NewsletterSubscriberProcessor;
 #[ORM\Entity(repositoryClass: NewsletterSubscriberRepository::class)]
 #[UniqueEntity(
     fields: ['email'],
-    message: 'Cet email est déjà inscrit à la newsletter.'
+    message: 'Cet email est déjà inscrit à la newsletter.',
+    groups: ['newsletter:create']
 )]
 #[ApiResource(
     operations: [
@@ -61,6 +62,18 @@ class NewsletterSubscriber
     #[ORM\Column]
     #[Groups(['newsletter:read'])]
     private ?\DateTimeImmutable $subscribedAt = null;
+
+    #[ORM\Column(length: 64, unique: true, nullable: true)]
+    private ?string $confirmationToken = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $confirmedAt = null;
+
+    #[ORM\Column(length: 64, unique: true)]
+    private string $unsubscribeToken = '';
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $confirmationSentAt = null;
 
     // Propriété transiente pour le code promo (non stockée en BDD)
     #[Groups(['newsletter:read'])]
@@ -109,7 +122,60 @@ class NewsletterSubscriber
         return $this;
     }
 
-      /**
+    public function getConfirmationToken(): ?string
+    {
+        return $this->confirmationToken;
+    }
+
+    public function setConfirmationToken(?string $confirmationToken): static
+    {
+        $this->confirmationToken = $confirmationToken;
+
+        return $this;
+    }
+
+    public function getConfirmedAt(): ?\DateTimeImmutable
+    {
+        return $this->confirmedAt;
+    }
+
+    public function setConfirmedAt(?\DateTimeImmutable $confirmedAt): static
+    {
+        $this->confirmedAt = $confirmedAt;
+
+        return $this;
+    }
+
+    public function isConfirmed(): bool
+    {
+        return $this->confirmedAt !== null;
+    }
+
+    public function getUnsubscribeToken(): string
+    {
+        return $this->unsubscribeToken;
+    }
+
+    public function setUnsubscribeToken(string $unsubscribeToken): static
+    {
+        $this->unsubscribeToken = $unsubscribeToken;
+
+        return $this;
+    }
+
+    public function getConfirmationSentAt(): ?\DateTimeImmutable
+    {
+        return $this->confirmationSentAt;
+    }
+
+    public function setConfirmationSentAt(?\DateTimeImmutable $confirmationSentAt): static
+    {
+        $this->confirmationSentAt = $confirmationSentAt;
+
+        return $this;
+    }
+
+    /**
      * Get the value of promoCode
      */ 
     public function getPromoCode(): ?string

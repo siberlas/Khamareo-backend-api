@@ -8,6 +8,7 @@ use Symfony\Component\Validator\Constraint;
 class UniqueNewsletterEmail extends Constraint
 {
     public string $message = 'Cet email est déjà inscrit à la newsletter.';
+    public string $pendingMessage = 'Cet email est inscrit mais l\'inscription n\'a pas encore été confirmée.';
 
     public function validatedBy(): string
     {

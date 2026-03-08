@@ -26,7 +26,6 @@ class NewsletterConfirmController extends AbstractController
         private EntityManagerInterface         $em,
         private PromoCodeService               $promoCodeService,
         private string                         $frontBaseUrl,
-        private string                         $backendUrl,
     ) {}
 
     #[Route('/api/newsletter/confirm', name: 'newsletter_confirm', methods: ['GET'])]
@@ -57,8 +56,7 @@ class NewsletterConfirmController extends AbstractController
         // handleNewsletterSubscription retourne null si l'email a déjà bénéficié d'un promo (ré-abonnement)
         $promoSent = false;
         try {
-            $unsubscribeUrl = $this->backendUrl . '/api/newsletter/unsubscribe?token=' . $subscriber->getUnsubscribeToken();
-            $result = $this->promoCodeService->handleNewsletterSubscription($subscriber->getEmail(), $unsubscribeUrl);
+            $result = $this->promoCodeService->handleNewsletterSubscription($subscriber->getEmail());
             $promoSent = ($result !== null);
         } catch (\Exception) {
             // Ne pas bloquer la confirmation si le promo échoue

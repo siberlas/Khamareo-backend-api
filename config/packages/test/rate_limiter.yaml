@@ -1,0 +1,26 @@
+# En environnement de test, tous les limiteurs sont désactivés
+# pour éviter les faux 429 lors des suites de tests répétées.
+framework:
+    rate_limiter:
+        login_limiter:
+            policy: no_limit
+        registration_limiter:
+            policy: no_limit
+        password_reset_limiter:
+            policy: no_limit
+        resend_confirmation_limiter:
+            policy: no_limit
+        retractation_limiter:
+            policy: no_limit
+        consent_limiter:
+            policy: no_limit
+        newsletter_limiter:
+            policy: no_limit
+        search_limiter:
+            policy: no_limit
+        contact_limiter:
+            policy: no_limit
+        review_limiter:
+            policy: no_limit
+        checkout_limiter:
+            policy: no_limit

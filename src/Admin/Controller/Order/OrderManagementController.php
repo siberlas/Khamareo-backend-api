@@ -577,92 +577,92 @@ class OrderManagementController extends AbstractController
                 return $this->json(['success' => false, 'error' => 'Commande introuvable'], 404);
             }
 
-            if ($order->getPaymentStatus() !== 'paid') {
-                return $this->json(['success' => false, 'error' => 'La commande n\'a pas été payée'], 400);
+            if (!in_array($order->getPaymentStatus(), ['paid', 'partially_refunded'], true)) {
+                return $this->json(['success' => false, 'error' => 'La commande ne peut plus être remboursée'], 400);
             }
 
             $data = json_decode($request->getContent(), true);
-            $amount = $data['amount'] ?? null;
             $adminReason = $data['reason'] ?? 'Remboursement administrateur';
             $fullRefund = $data['fullRefund'] ?? false;
 
-            if ($fullRefund) {
-                $amount = $order->getTotalAmount();
+            $remaining = $order->getRemainingRefundable();
+
+            if ($remaining <= 0) {
+                return $this->json(['success' => false, 'error' => 'Cette commande a déjà été entièrement remboursée'], 400);
             }
+
+            $amount = $fullRefund ? $remaining : (float) ($data['amount'] ?? 0);
 
             if (!$amount || $amount <= 0) {
                 return $this->json(['success' => false, 'error' => 'Montant invalide'], 400);
             }
 
-            if ($amount > $order->getTotalAmount()) {
-                return $this->json(['success' => false, 'error' => 'Montant trop élevé'], 400);
+            if ($amount > $remaining) {
+                return $this->json([
+                    'success' => false,
+                    'error' => sprintf('Montant trop élevé. Maximum remboursable : %.2f %s', $remaining, $order->getCurrency())
+                ], 400);
             }
 
-            // ✅ MAPPER vers raison Stripe valide
-            $stripeReason = 'requested_by_customer';
-
-            // ✅ APPELER STRIPE
             $refundResult = $this->stripeService->refundPayment(
                 $order->getPayment()->getProviderPaymentId(),
-                (int) ($amount * 100),
-                $stripeReason,
+                (int) round($amount * 100),
+                'requested_by_customer',
                 [
-                    'order_id' => (string) $order->getId(),
+                    'order_id'     => (string) $order->getId(),
                     'order_number' => $order->getOrderNumber(),
-                    'full_refund' => $fullRefund ? 'true' : 'false',
-                    'admin_reason' => $adminReason
+                    'admin_reason' => $adminReason,
                 ]
             );
 
-            // ✅ VÉRIFIER LE RÉSULTAT
             if (!$refundResult['success']) {
                 $this->logger->error('Stripe refund failed', [
                     'order_id' => $order->getId()->toRfc4122(),
-                    'error' => $refundResult['error']
+                    'error'    => $refundResult['error'],
                 ]);
-
                 return $this->json([
                     'success' => false,
-                    'error' => 'Échec du remboursement : ' . $refundResult['error']
+                    'error'   => 'Échec du remboursement : ' . $refundResult['error'],
                 ], 500);
             }
 
-            $this->logger->info('Stripe refund successful', [
-                'order_id' => $order->getId()->toRfc4122(),
-                'refund_id' => $refundResult['refund_id']
-            ]);
+            // Accumuler le montant remboursé
+            $order->addRefundedAmount($amount);
+            $isFullyRefunded = $order->getRemainingRefundable() <= 0;
 
-            // ✅ MAINTENANT on peut changer le statut
-            $oldStatus = $order->getStatus();
-            $order->setStatus(OrderStatus::REFUNDED);
-            $order->setPaymentStatus('refunded');
-
-            // Note de remboursement
-            $refundNote = sprintf(
-                "[REMBOURSEMENT - %s] Montant : %.2f %s - Raison : %s - Stripe Refund ID: %s",
-                (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
-                $amount,
-                $order->getCurrency(),
-                $adminReason,
-                $refundResult['refund_id']
-            );
-
-            $currentNote = $order->getCustomerNote();
-            $order->setCustomerNote($currentNote ? $currentNote . "\n\n" . $refundNote : $refundNote);
-
-            // Stock
-            if ($fullRefund) {
+            // Statut : fully refunded → REFUNDED, sinon on garde le statut actuel
+            if ($isFullyRefunded) {
+                $order->setStatus(OrderStatus::REFUNDED);
+                $order->setPaymentStatus('refunded');
+                // Stock : restituer uniquement si remboursement total
                 foreach ($order->getItems() as $item) {
                     $product = $item->getProduct();
                     if ($product) {
                         $product->setStock($product->getStock() + $item->getQuantity());
                     }
                 }
+            } else {
+                $order->setPaymentStatus('partially_refunded');
             }
+
+            // Note horodatée
+            $refundNote = sprintf(
+                "[REMBOURSEMENT%s - %s] Montant : %.2f %s | Total remboursé : %.2f / %.2f %s | Raison : %s | Stripe ID : %s",
+                $isFullyRefunded ? ' TOTAL' : ' PARTIEL',
+                (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                $amount,
+                $order->getCurrency(),
+                $order->getRefundedAmount(),
+                $order->getTotalAmount(),
+                $order->getCurrency(),
+                $adminReason,
+                $refundResult['refund_id']
+            );
+            $currentNote = $order->getCustomerNote();
+            $order->setCustomerNote($currentNote ? $currentNote . "\n\n" . $refundNote : $refundNote);
 
             $this->em->flush();
 
-            // Notifier le client par email
             try {
                 $this->mailerService->sendRefundNotification($order, $amount, $refundResult['refund_id']);
             } catch (\Throwable $e) {
@@ -674,16 +674,20 @@ class OrderManagementController extends AbstractController
 
             return $this->json([
                 'success' => true,
-                'order' => [
-                    'id' => $order->getId()->toRfc4122(),
-                    'reference' => $order->getReference(),
-                    'status' => $order->getStatus()->value,
-                    'statusLabel' => $order->getStatus()->label(),
-                    'paymentStatus' => $order->getPaymentStatus(),
+                'order'   => [
+                    'id'               => $order->getId()->toRfc4122(),
+                    'reference'        => $order->getReference(),
+                    'status'           => $order->getStatus()->value,
+                    'statusLabel'      => $order->getStatus()->label(),
+                    'paymentStatus'    => $order->getPaymentStatus(),
+                    'totalAmount'      => $order->getTotalAmount(),
+                    'refundedAmount'   => $order->getRefundedAmount(),
+                    'remainingRefundable' => $order->getRemainingRefundable(),
                 ],
-                'message' => sprintf('Remboursement de %.2f %s effectué avec succès', $amount, $order->getCurrency()),
-                'refundAmount' => $amount,
-                'stripeRefundId' => $refundResult['refund_id']
+                'message'        => sprintf('Remboursement de %.2f %s effectué avec succès', $amount, $order->getCurrency()),
+                'refundAmount'   => $amount,
+                'stripeRefundId' => $refundResult['refund_id'],
+                'isFullyRefunded' => $isFullyRefunded,
             ]);
 
         } catch (\Exception $e) {

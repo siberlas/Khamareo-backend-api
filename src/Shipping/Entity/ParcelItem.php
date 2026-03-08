@@ -81,40 +81,37 @@ class ParcelItem
      * Poids unitaire du produit en grammes
      */
     #[Groups(['parcelItem:read', 'parcel:read'])]
-    public function getUnitWeightGrams(): ?int
+    public function getUnitWeightGrams(): int
     {
         $product = $this->orderItem?->getProduct();
         if (!$product) {
-            return null;
+            return 500;
         }
 
         // Utilise getWeight() actuel (sera migré vers getWeightGrams() plus tard)
         $weight = $product->getWeight();
-        if ($weight === null) {
-            return null;
+        if ($weight === null || !is_numeric($weight)) {
+            return 500; // Même fallback que ParcelManager::getProductWeightGrams
         }
+
+        $weight = (float) $weight;
 
         // Conversion intelligente (comme dans ColissimoApiService)
         if ($weight > 0 && $weight <= 30) {
             // Valeur en KG (fixtures Faker) → convertir en grammes
-            return (int) round($weight * 1000);
+            return max(1, (int) round($weight * 1000));
         }
 
         // Déjà en grammes
-        return (int) round($weight);
+        return max(1, (int) round($weight));
     }
 
     /**
      * Poids total de cet item dans le colis (quantity × poids unitaire)
      */
     #[Groups(['parcelItem:read', 'parcel:read'])]
-    public function getTotalWeightGrams(): ?int
+    public function getTotalWeightGrams(): int
     {
-        $unitWeight = $this->getUnitWeightGrams();
-        if ($unitWeight === null) {
-            return null;
-        }
-
-        return $unitWeight * $this->quantity;
+        return $this->getUnitWeightGrams() * $this->quantity;
     }
 }

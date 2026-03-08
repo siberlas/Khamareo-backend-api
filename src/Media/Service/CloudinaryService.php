@@ -440,10 +440,10 @@ class CloudinaryService
                 'assetId' => $result['asset_id'],
                 'publicId' => $result['public_id'],
                 'url' => $result['secure_url'],
-                'width' => $result['width'],
-                'height' => $result['height'],
-                'format' => $result['format'],
-                'bytes' => $result['bytes'],
+                'width' => $result['width'] ?? null,
+                'height' => $result['height'] ?? null,
+                'format' => $result['format'] ?? null,
+                'bytes' => $result['bytes'] ?? null,
                 'tags' => $result['tags'] ?? [],
             ];
 
@@ -575,6 +575,47 @@ class CloudinaryService
                 'success' => false,
                 'error' => $e->getMessage(),
             ];
+        }
+    }
+
+    /**
+     * Télécharge le contenu d'une ressource raw Cloudinary via URL signée (Admin API).
+     * Contourne les ACL/restrictions du compte.
+     *
+     * @param string $cloudinaryUrl URL publique stockée (ex: https://res.cloudinary.com/...)
+     * @return string|false Contenu binaire du fichier, ou false en cas d'échec
+     */
+    public function downloadRawContent(string $cloudinaryUrl): string|false
+    {
+        // Extraire le public_id depuis l'URL stockée
+        // Format: .../raw/upload/v{version}/{public_id}.{ext}  ou  .../raw/upload/{public_id}.{ext}
+        if (!preg_match('#/raw/upload/(?:v\d+/)?(.+)$#', $cloudinaryUrl, $matches)) {
+            $this->logger->error('Cannot extract public_id from Cloudinary URL', ['url' => $cloudinaryUrl]);
+            return false;
+        }
+        $publicId = $matches[1];
+
+        try {
+            // Génère une URL signée temporaire via UploadApi::privateDownloadUrl()
+            // 'type' => 'upload' est obligatoire pour les assets raw uploadés normalement
+            $signedUrl = $this->cloudinary->uploadApi()->privateDownloadUrl($publicId, '', [
+                'resource_type' => 'raw',
+                'type'          => 'upload',
+                'attachment'    => true,
+            ]);
+
+            $content = file_get_contents($signedUrl);
+            if ($content === false) {
+                $this->logger->error('Failed to fetch Cloudinary signed URL', ['public_id' => $publicId]);
+            }
+            return $content;
+
+        } catch (\Exception $e) {
+            $this->logger->error('Cloudinary downloadRawContent failed', [
+                'public_id' => $publicId,
+                'error'     => $e->getMessage(),
+            ]);
+            return false;
         }
     }
 

@@ -17,3 +17,7 @@
 /.env.test
 /node_modules/
 /.phpunit.cache/
+###> phpunit/phpunit ###
+/phpunit.xml
+/.phpunit.cache/
+###< phpunit/phpunit ###

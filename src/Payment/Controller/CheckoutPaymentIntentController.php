@@ -4,12 +4,11 @@ namespace App\Payment\Controller;
 
 use App\Cart\Entity\Cart;
 use App\User\Entity\Address;
-use App\Shipping\Entity\ShippingMethod;
+use App\Shipping\Entity\CarrierMode;
 use App\Shipping\Repository\ShippingRateRepository;
+use App\Shipping\Repository\CarrierModeRepository;
 use App\Cart\Service\CartWeightCalculator;
-use App\Shipping\Service\ShippingRateCalculator;
 use App\Payment\Provider\StripePaymentProvider;
-use App\Shared\Service\CurrencyResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -27,40 +26,37 @@ class CheckoutPaymentIntentController extends AbstractController
         private readonly EntityManagerInterface  $em,
         private readonly Security                $security,
         private readonly CartWeightCalculator    $weightCalculator,
-        private readonly ShippingRateCalculator  $rateCalculator,
         private readonly ShippingRateRepository  $rateRepository,
+        private readonly CarrierModeRepository   $carrierModeRepository,
         private readonly StripePaymentProvider   $stripeProvider,
-        private readonly CurrencyRepository      $currencyRepository, // 🆕
-
+        private readonly CurrencyRepository      $currencyRepository,
     ) {}
 
     #[Route('/api/checkout/payment-intent', name: 'checkout_payment_intent', methods: ['POST'])]
     public function __invoke(Request $request): JsonResponse
     {
-        $user       = $this->security->getUser();
-        $guestToken = $request->query->get('guestToken');
+        $user         = $this->security->getUser();
+        $guestToken   = $request->query->get('guestToken');
         $currencyCode = strtoupper($request->query->get('currency', 'EUR'));
 
         $data = json_decode($request->getContent(), true) ?? [];
 
-        $shippingMethodIri  = $data['shippingMethod']   ?? null;
-        $billingInput       = $data['billingAddress']   ?? null;
-        $deliveryInput      = $data['deliveryAddress']  ?? null;
-        $shippingRateId     = $data['shippingRateId']   ?? null;
+        $carrierModeId  = $data['carrierModeId']   ?? null;
+        $billingInput   = $data['billingAddress']  ?? null;
+        $deliveryInput  = $data['deliveryAddress'] ?? null;
+        $shippingRateId = $data['shippingRateId']  ?? null;
 
-        if (!$shippingMethodIri || !$billingInput || !$deliveryInput) {
-            throw new BadRequestException("shippingMethod, billingAddress et deliveryAddress sont requis.");
+        if (!$carrierModeId || !$billingInput || !$deliveryInput) {
+            throw new BadRequestException("carrierModeId, billingAddress et deliveryAddress sont requis.");
         }
 
-        // 🆕 Valider que la devise existe
+        // Valider la devise
         $currency = $this->currencyRepository->findOneBy(['code' => $currencyCode]);
         if (!$currency) {
             throw new BadRequestException("Devise invalide : {$currencyCode}");
         }
 
-        // ----------------------------------------------------------------------
         // 1) Récupération du panier
-        // ----------------------------------------------------------------------
         if ($user) {
             $cart = $this->em->getRepository(Cart::class)->findOneBy(['owner' => $user, 'isActive' => true]);
         } else {
@@ -83,124 +79,110 @@ class CheckoutPaymentIntentController extends AbstractController
             }
         }
 
-        // ----------------------------------------------------------------------
-        // 2) Résolution des adresses : IRI → BDD, objet JSON → snapshot
-        // ----------------------------------------------------------------------
+        // 2) Résolution des adresses
         $billingAddress  = $this->resolveAddressInput($billingInput);
         $deliveryAddress = $this->resolveAddressInput($deliveryInput);
 
-        // ----------------------------------------------------------------------
-        // 3) Récupération de la méthode de livraison
-        // ----------------------------------------------------------------------
-        $shippingMethodId = $this->extractIdFromIri($shippingMethodIri);
-        $shippingMethod = $this->em->getRepository(ShippingMethod::class)->find($shippingMethodId);
-
-        if (!$shippingMethod) {
-            throw new BadRequestException("Méthode de livraison invalide.");
+        // 3) Récupération du CarrierMode
+        $carrierMode = $this->carrierModeRepository->find((int) $carrierModeId);
+        if (!$carrierMode) {
+            throw new BadRequestException("Mode de livraison invalide.");
         }
 
-        // ----------------------------------------------------------------------
         // 4) Calcul du coût de livraison
-        // ----------------------------------------------------------------------
-        $totalWeight = $this->weightCalculator->getTotalWeightFromCart($cart);
+        $weightKg    = $this->weightCalculator->getTotalWeightFromCart($cart);
+        $weightGrams = (int) round($weightKg * 1000);
         $zone        = $this->mapCountryToZone($deliveryAddress->getCountry());
 
-        $rate = $shippingRateId ? $this->rateRepository->find($shippingRateId) : null;
+        $rate = $shippingRateId ? $this->rateRepository->find((int) $shippingRateId) : null;
 
         if ($rate && (
             $rate->getZone() !== $zone ||
-            $rate->getProvider() !== $shippingMethod->getCarrierCode() ||
-            $totalWeight < $rate->getMinWeight() ||
-            $totalWeight > $rate->getMaxWeight()
+            $rate->getCarrierMode() !== $carrierMode ||
+            $weightGrams < $rate->getMinWeightGrams() ||
+            $weightGrams > $rate->getMaxWeightGrams()
         )) {
             $rate = null;
         }
 
-        $shippingCost = $rate
-            ? (float)$rate->getPrice()
-            : $this->rateCalculator->calculateFromMethod($shippingMethod, $zone, $totalWeight);
+        if (!$rate) {
+            $rate = $this->rateRepository->findBestRate($carrierMode, $zone, $weightGrams);
+        }
 
-        // ----------------------------------------------------------------------
+        $shippingCost = $rate
+            ? (float) $rate->getPrice()
+            : (float) ($carrierMode->getBasePrice() ?? 0);
+
         // 5) Total
-        // ----------------------------------------------------------------------
-        $itemsSubtotal = $cart->getSubtotal(); // Items seuls
-        $discountAmount = $cart->getDiscountAmount() ? (float) $cart->getDiscountAmount() : 0;
-        $subtotalAfterDiscount = $itemsSubtotal - $discountAmount; // Items - promo
-        $total = $subtotalAfterDiscount + $shippingCost; // + shipping
-      
+        $itemsSubtotal         = $cart->getSubtotal();
+        $discountAmount        = $cart->getDiscountAmount() ? (float) $cart->getDiscountAmount() : 0;
+        $subtotalAfterDiscount = $itemsSubtotal - $discountAmount;
+        $total                 = $subtotalAfterDiscount + $shippingCost;
+
         $stripeCurrency = strtolower($currencyCode);
 
+        $carrierName = ($carrierMode->getCarrier()?->getName() ?? '')
+            . ' - '
+            . ($carrierMode->getShippingMode()?->getName() ?? '');
 
-    
-
-        // ----------------------------------------------------------------------
         // 6) Créer / mettre à jour PaymentIntent Stripe
-        // ----------------------------------------------------------------------
         $resp = $this->stripeProvider->createOrUpdateCartPaymentIntent(
             $cart,
             (int) round($total * 100),
             $stripeCurrency,
             $shippingCost,
-            $shippingMethod->getName(),
+            $carrierName,
             [
-                'billing_address_id'  => (string)$billingAddress->getId(),
-                'delivery_address_id' => (string)$deliveryAddress->getId(),
+                'billing_address_id'  => (string) $billingAddress->getId(),
+                'delivery_address_id' => (string) $deliveryAddress->getId(),
                 'is_relay_point'      => $deliveryAddress->isRelayPoint() ? '1' : '0',
-                'relay_point_id'      => $deliveryAddress->getRelayPointId(),
-                'relay_carrier'       => $deliveryAddress->getRelayCarrier(),
-                'shipping_method_id'  => (string)$shippingMethod->getId(),
-                'shipping_cost'       => (string)$shippingCost,
+                'relay_point_id'      => $deliveryAddress->getRelayPointId() ?? '',
+                'relay_carrier'       => $deliveryAddress->getRelayCarrier() ?? '',
+                'carrier_mode_id'     => (string) $carrierMode->getId(),
+                'shipping_cost'       => (string) $shippingCost,
                 'promo_code'          => $cart->getPromoCode() ?? '',
-                'discount_amount'     => $cart->getDiscountAmount() ?? '0',
-                'currency'            => $currencyCode, // 🆕 Stocker la devise
+                'discount_amount'     => (string) ($cart->getDiscountAmount() ?? '0'),
+                'currency'            => $currencyCode,
             ]
         );
 
-        // ----------------------------------------------------------------------
         // 7) Mettre à jour le panier
-        // ----------------------------------------------------------------------
         $cart->setPaymentIntentId($resp->paymentId);
         $cart->setPaymentClientSecret($resp->clientSecret);
         $cart->setShippingCost($shippingCost);
 
         $this->em->flush();
 
-        // ----------------------------------------------------------------------
-        // 8) Réponse
-        // ----------------------------------------------------------------------
+        // 9) Réponse
         return $this->json([
-            'paymentIntentId'       => $resp->paymentId,
-            'clientSecret'          => $resp->clientSecret,
-            'total'                 => $total,
-            'subtotal'              => $subtotalAfterDiscount, // Sous-total après promo
-            'shippingCost'          => $shippingCost,
-            'currency'              => $currencyCode,
-            'currencySymbol'        => $currency->getSymbol(),
-            // 🆕 Détails promo pour affichage
-            'itemsSubtotal'         => $itemsSubtotal,
-            'discountAmount'        => $discountAmount,
-            'promoCode'             => $cart->getPromoCode(),
+            'paymentIntentId'  => $resp->paymentId,
+            'clientSecret'     => $resp->clientSecret,
+            'total'            => $total,
+            'subtotal'         => $itemsSubtotal,
+            'shippingCost'     => $shippingCost,
+            'currency'         => $currencyCode,
+            'currencySymbol'   => $currency->getSymbol(),
+            'itemsSubtotal'    => $itemsSubtotal,
+            'discountAmount'   => $discountAmount,
+            'promoCode'        => $cart->getPromoCode(),
         ]);
     }
 
     // =========================================================================
-    // 🧩 METHODES UTILITAIRES
+    // UTILITAIRES
     // =========================================================================
 
     private function resolveAddressInput(array|string $input): Address
     {
-        // Si c’est une string → IRI
         if (is_string($input)) {
             $id = $this->extractIdFromIri($input);
             $address = $this->em->getRepository(Address::class)->find($id);
-
             if (!$address) {
                 throw new BadRequestException("Adresse invalide : $input");
             }
             return $address;
         }
 
-        // Sinon → objet JSON → créer un snapshot
         if (is_array($input)) {
             $snapshot = (new Address())
                 ->setLabel('Adresse checkout')
@@ -211,7 +193,7 @@ class CheckoutPaymentIntentController extends AbstractController
                 ->setCity($input['city'] ?? '')
                 ->setCountry($input['country'] ?? 'FR')
                 ->setPhone($input['phone'] ?? null)
-                ->setOwner(null) // snapshot détaché
+                ->setOwner(null)
                 ->setIsDefault(false);
 
             if (!empty($input['isRelayPoint'])) {
@@ -224,19 +206,16 @@ class CheckoutPaymentIntentController extends AbstractController
             return $snapshot;
         }
 
-        throw new BadRequestException("Format d’adresse invalide.");
+        throw new BadRequestException("Format d'adresse invalide.");
     }
 
     private function extractIdFromIri(string $iri): int
     {
-        // Capture le dernier nombre de l’IRI, peu importe le préfixe
         if (preg_match('/\/(\d+)$/', $iri, $matches)) {
             return (int) $matches[1];
         }
-
-        throw new BadRequestException("Impossible d’extraire l’ID de l’IRI : $iri");
+        throw new BadRequestException("Impossible d'extraire l'ID de l'IRI : $iri");
     }
-
 
     private function mapCountryToZone(string $country): string
     {

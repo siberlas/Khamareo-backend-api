@@ -133,6 +133,14 @@ class Cart
     #[Groups(['cart:read'])]
     private ?string $discountAmount = null;
 
+    /**
+     * Stocke tous les codes promo appliqués avec leur réduction individuelle.
+     * Format : [['code' => 'PROMO10', 'discount' => 5.00, 'stackable' => true], ...]
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['cart:read'])]
+    private ?array $promoCodesData = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -337,5 +345,28 @@ class Cart
         return $this;
     }
 
+    public function getPromoCodesData(): ?array
+    {
+        return $this->promoCodesData;
+    }
+
+    public function setPromoCodesData(?array $promoCodesData): static
+    {
+        $this->promoCodesData = $promoCodesData;
+        return $this;
+    }
+
+    /**
+     * Retourne la liste des codes appliqués (pour compatibilité frontend).
+     * Préfère promoCodesData, fall-back sur promoCode unique.
+     */
+    #[Groups(['cart:read'])]
+    public function getPromoCodes(): array
+    {
+        if (!empty($this->promoCodesData)) {
+            return array_column($this->promoCodesData, 'code');
+        }
+        return $this->promoCode ? [$this->promoCode] : [];
+    }
 
 }

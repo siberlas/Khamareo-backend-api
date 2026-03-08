@@ -7,9 +7,10 @@ use App\Order\Entity\Order;
 use App\Order\Entity\OrderItem;
 use App\Payment\Entity\Payment;
 use App\User\Entity\Address;
-use App\Shipping\Entity\ShippingMethod;
+use App\Shipping\Repository\CarrierModeRepository;
 use App\Shared\Enum\OrderStatus;
 use App\Shared\Enum\PaymentStatus;
+use App\Marketing\Entity\PromoCodeRedemption;
 use App\Marketing\Repository\PromoCodeRepository;
 use App\Shared\Repository\CurrencyRepository;
 use App\Marketing\Service\PromoCodeApplicationService;
@@ -30,12 +31,13 @@ class CheckoutController extends AbstractController
     public function __construct(
         private EntityManagerInterface $em,
         private Security $security,
-        private readonly StripePaymentProvider   $stripeProvider,
+        private readonly StripePaymentProvider $stripeProvider,
         private PromoCodeRepository $promoCodeRepository,
         private PromoCodeApplicationService $promoCodeApplicationService,
         private LoggerInterface $logger,
         private RequestStack $requestStack,
-        private readonly CurrencyRepository $currencyRepository, // 🆕
+        private readonly CurrencyRepository $currencyRepository,
+        private readonly CarrierModeRepository $carrierModeRepository,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -48,7 +50,11 @@ class CheckoutController extends AbstractController
 
         $billingAddressIri  = $data['billingAddress']  ?? null;
         $deliveryAddressIri = $data['deliveryAddress'] ?? null;
-        $shippingMethodIri  = $data['shippingMethod']  ?? null;
+        $carrierModeId      = $data['carrierModeId']   ?? null;
+        $cgvVersion         = $data['cgvVersion']      ?? null;
+        $cgvAcceptedAt      = isset($data['cgvAcceptedAt'])
+            ? new \DateTimeImmutable($data['cgvAcceptedAt'])
+            : null;
 
         $currency = $this->currencyRepository->findOneBy(['code' => $currencyCode]);
         if (!$currency) {
@@ -161,15 +167,15 @@ class CheckoutController extends AbstractController
         $this->em->persist($shippingSnapshot);
 
         // ============================================================
-        // 3) Méthode de livraison
+        // 3) Mode de livraison (CarrierMode)
         // ============================================================
-        if (!$shippingMethodIri) {
-            throw new BadRequestException("Méthode de livraison requise.");
+        if (!$carrierModeId) {
+            throw new BadRequestException("carrierModeId requis.");
         }
 
-        $shippingMethod = $this->em->getRepository(ShippingMethod::class)->find(basename($shippingMethodIri));
-        if (!$shippingMethod) {
-            throw new BadRequestException("Méthode de livraison invalide.");
+        $carrierMode = $this->carrierModeRepository->find((int) $carrierModeId);
+        if (!$carrierMode) {
+            throw new BadRequestException("Mode de livraison invalide.");
         }
 
         // ============================================================
@@ -198,6 +204,58 @@ class CheckoutController extends AbstractController
         }
 
         // ============================================================
+        // 5b) Anti-fraude email : vérification si l'email de facturation
+        //     diffère de l'email utilisé lors de l'application du code promo.
+        //     Seuls les invités peuvent avoir un email différent (faux email saisi au panier).
+        // ============================================================
+        if (!$user) {
+            $checkoutEmail = is_array($billingAddressIri) && !empty($billingAddressIri['email'])
+                ? strtolower(trim($billingAddressIri['email']))
+                : strtolower(trim($cart->getOwner()?->getEmail() ?? ''));
+
+            $codesData = $cart->getPromoCodesData() ?? [];
+            if (empty($codesData) && $cart->getPromoCode()) {
+                $codesData = [['code' => $cart->getPromoCode(), 'appliedWithEmail' => null]];
+            }
+
+            foreach ($codesData as $codeData) {
+                $appliedWith = isset($codeData['appliedWithEmail'])
+                    ? strtolower(trim($codeData['appliedWithEmail']))
+                    : null;
+
+                // Pas de vérification si les emails correspondent ou si aucun email n'a été fourni
+                if ($appliedWith === null || $appliedWith === $checkoutEmail) {
+                    continue;
+                }
+
+                // Les emails diffèrent → re-valider le code pour l'email de facturation réel
+                $pc = $this->promoCodeRepository->findOneBy(['code' => $codeData['code'] ?? '']);
+                if (!$pc) {
+                    continue;
+                }
+
+                // 1. Code personnalisé (lié à un email précis) : doit matcher l'email de facturation
+                if ($pc->getEmail() !== null && strtolower($pc->getEmail()) !== $checkoutEmail) {
+                    throw new BadRequestException(
+                        sprintf('Le code promo %s n\'est pas valide pour votre adresse email.', $codeData['code'])
+                    );
+                }
+
+                // 2. Limite par email dépassée pour l'email réel de facturation (1 par défaut)
+                $maxPerEmail = $pc->getMaxUsesPerEmail() ?? 1;
+                $usedCount = (int) $this->em->createQuery(
+                    'SELECT COUNT(r.id) FROM App\Marketing\Entity\PromoCodeRedemption r WHERE r.promoCode = :promo AND LOWER(r.email) = :email'
+                )->setParameter('promo', $pc)->setParameter('email', strtolower($checkoutEmail))->getSingleScalarResult();
+
+                if ($usedCount >= $maxPerEmail) {
+                    throw new BadRequestException(
+                        sprintf('Le code promo %s n\'est pas valide pour votre adresse email.', $codeData['code'])
+                    );
+                }
+            }
+        }
+
+        // ============================================================
         // 6) Création Order
         // ============================================================
         $currentRequest = $this->requestStack->getCurrentRequest();
@@ -205,7 +263,8 @@ class CheckoutController extends AbstractController
         $order = new Order();
         $order
             ->setStatus(OrderStatus::PENDING)
-            ->setShippingMethod($shippingMethod)
+            ->setCarrier($carrierMode->getCarrier())
+            ->setShippingMode($carrierMode->getShippingMode())
             ->setBillingAddress($billingSnapshot)
             ->setShippingAddress($shippingSnapshot)
             ->setShippingCost($shippingCost)
@@ -213,11 +272,16 @@ class CheckoutController extends AbstractController
             ->setCurrency($currencyCode)
             ->setLocale($locale);
 
+        if ($cgvVersion) {
+            $order->setCgvVersion($cgvVersion)->setCgvAcceptedAt($cgvAcceptedAt);
+        }
+
         
         // 🆕 Transférer le code promo du panier à la commande
         if ($cart->getPromoCode()) {
             $order->setPromoCode($cart->getPromoCode())
-            ->setDiscountAmount($cart->getDiscountAmount());
+                ->setDiscountAmount($cart->getDiscountAmount())
+                ->setPromoCodesData($cart->getPromoCodesData());
         }
 
         if ($user) {
@@ -282,23 +346,44 @@ class CheckoutController extends AbstractController
         $this->em->persist($payment);
 
         // ============================================================
-        // 🆕 9) Marquer le code promo comme utilisé
+        // 🆕 9) Enregistrer les rédemptions de codes promo
         // ============================================================
-        if ($cart->getPromoCode()) {
+        $customerEmail = $user ? $user->getEmail() : ($order->getGuestEmail() ?? null);
+        $customerType  = $user ? 'registered' : 'guest';
+
+        // Priorité : promoCodesData (multi-codes) sinon fallback sur promoCode unique
+        $codesData = $cart->getPromoCodesData() ?? [];
+        if (empty($codesData) && $cart->getPromoCode()) {
+            $codesData = [['code' => $cart->getPromoCode(), 'discount' => (float) ($cart->getDiscountAmount() ?? 0), 'stackable' => false]];
+        }
+
+        foreach ($codesData as $codeData) {
             try {
-                $promoCode = $this->promoCodeRepository->findOneBy([
-                    'code' => $cart->getPromoCode()
-                ]);
-                
-                if ($promoCode && $promoCode->isValid()) {
+                $promoCode = $this->promoCodeRepository->findOneBy(['code' => $codeData['code']]);
+                if (!$promoCode) {
+                    continue;
+                }
+
+                // Créer l'enregistrement d'utilisation pour le suivi analytique et les limites par email
+                $redemption = new PromoCodeRedemption();
+                $redemption->setPromoCode($promoCode);
+                $redemption->setEmail($customerEmail);
+                $redemption->setCustomerType($customerType);
+                $redemption->setOrder($order);
+                $redemption->setDiscountAmount((string) ($codeData['discount'] ?? 0));
+                $this->em->persist($redemption);
+
+                // Pour les codes à usage unique seulement (restriction email directe OU maxUses=1),
+                // marquer le flag isUsed pour invalider définitivement le code
+                if ($promoCode->isSingleInstance()) {
                     $this->promoCodeApplicationService->markAsUsed($promoCode);
                 }
             } catch (\Exception $e) {
-                $this->logger->error('Failed to mark promo code as used', [
-                    'code' => $cart->getPromoCode(),
+                $this->logger->error('Failed to process promo code redemption', [
+                    'code'  => $codeData['code'] ?? '?',
                     'error' => $e->getMessage()
                 ]);
-                // Ne pas bloquer la commande si l'update du promo échoue
+                // Ne pas bloquer la commande si le traitement du promo échoue
             }
         }
 
