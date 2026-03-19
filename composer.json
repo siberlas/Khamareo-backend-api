@@ -36,6 +36,7 @@
         "symfony/lock": "6.4.*",
         "symfony/mailer": "6.4.*",
         "symfony/messenger": "6.4.*",
+        "symfony/monolog-bundle": "^3.11",
         "symfony/property-access": "6.4.*",
         "symfony/property-info": "6.4.*",
         "symfony/rate-limiter": "6.4.*",
@@ -102,7 +103,6 @@
         "fakerphp/faker": "^1.24",
         "phpunit/phpunit": "^11.5",
         "symfony/maker-bundle": "^1.64",
-        "symfony/monolog-bundle": "^3.11",
         "symfony/stopwatch": "6.4.*",
         "symfony/web-profiler-bundle": "6.4.*"
     }
