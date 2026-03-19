@@ -12,6 +12,7 @@ RUN composer install \
     --optimize-autoloader
 
 COPY . .
+RUN find src -type d -name "DataFixtures" -exec rm -rf {} + 2>/dev/null || true
 RUN composer dump-autoload --no-dev --optimize --classmap-authoritative
 
 # ── Stage 2: Production PHP-FPM ────────────────────────────
