@@ -44,7 +44,8 @@ COPY --from=composer-stage /app .
 
 # Create required directories and set permissions
 RUN mkdir -p var/cache var/log config/jwt \
-    && chown -R www-data:www-data var/ public/
+    && chown -R www-data:www-data var/ public/ \
+    && chmod -R 777 var/
 
 EXPOSE 9000
 

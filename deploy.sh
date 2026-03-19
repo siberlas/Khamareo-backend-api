@@ -76,7 +76,7 @@ fi
 
 # Clear cache
 echo ">>> Cache..."
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
     php bin/console cache:clear --env=prod --no-debug
 
 if [ "${1:-}" = "first-run" ]; then
