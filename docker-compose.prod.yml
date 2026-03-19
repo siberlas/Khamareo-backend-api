@@ -8,7 +8,7 @@ services:
     env_file:
       - .env.prod
     volumes:
-      - jwt_keys:/var/www/html/config/jwt:ro
+      - ./config/jwt:/var/www/html/config/jwt:ro
       - app_public:/var/www/html/public
     depends_on:
       db:
@@ -90,5 +90,4 @@ services:
 volumes:
   db_data:
   redis_data:
-  jwt_keys:
   app_public:

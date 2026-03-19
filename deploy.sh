@@ -5,7 +5,11 @@ set -euo pipefail
 # Usage: ./deploy.sh [first-run]
 
 COMPOSE_FILE="docker-compose.prod.yml"
+ENV_FILE=".env.prod"
 BACKUP_DIR="backups"
+
+# Charger les variables d'environnement
+export $(grep -v '^#' "$ENV_FILE" | grep -v '^\s*$' | xargs)
 
 echo "=== Khamareo Deploy $(date '+%Y-%m-%d %H:%M:%S') ==="
 
