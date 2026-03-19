@@ -66,7 +66,7 @@ echo ">>> Fail2ban configured"
 # SSH hardening
 sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
 sed -i 's/^#\?PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
-systemctl restart sshd
+systemctl restart ssh || systemctl restart sshd
 echo ">>> SSH hardened (key-only, no root)"
 
 # Create app directory
