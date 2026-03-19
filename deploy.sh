@@ -9,7 +9,9 @@ ENV_FILE=".env.prod"
 BACKUP_DIR="backups"
 
 # Charger les variables d'environnement
-export $(grep -v '^#' "$ENV_FILE" | grep -v '^\s*$' | xargs)
+set -a
+source "$ENV_FILE"
+set +a
 
 echo "=== Khamareo Deploy $(date '+%Y-%m-%d %H:%M:%S') ==="
 
