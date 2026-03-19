@@ -8,10 +8,7 @@ if [ -n "$JWT_SECRET_KEY_BASE64" ]; then
     chmod 644 config/jwt/private.pem config/jwt/public.pem
 fi
 
-# Run database migrations
-php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration 2>/dev/null || true
-
-# Clear and warm up cache
-php bin/console cache:clear --env=prod --no-debug 2>/dev/null || true
+# Wait for database to be ready
+php bin/console doctrine:migrations:status --no-interaction 2>/dev/null || true
 
 exec "$@"
