@@ -65,6 +65,8 @@ if [ "${1:-}" = "first-run" ]; then
 
     echo ">>> Marquage des migrations comme exécutées..."
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
+        php bin/console doctrine:migrations:sync-metadata-storage --no-interaction
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
         php bin/console doctrine:migrations:version --add --all --no-interaction
 else
     echo ">>> Migrations..."
