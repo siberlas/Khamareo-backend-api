@@ -6,10 +6,3 @@ when@prod:
     framework:
         scheduler:
             enabled: true
-            tasks:
-                # Nettoyage quotidien des invités expirés
-                cleanup_guests:
-                    task: 'app:cleanup-guests'
-                    frequency: 'daily'
-                    options:
-                        time: '03:00'
