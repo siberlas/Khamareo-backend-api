@@ -31,13 +31,15 @@ if [ ! -f "config/jwt/private.pem" ] && [ -z "${JWT_SECRET_KEY_BASE64:-}" ]; the
 fi
 
 # Backup database before deployment (if running)
-if docker compose -f "$COMPOSE_FILE" ps db --status running -q 2>/dev/null; then
+if docker compose -f "$COMPOSE_FILE" ps db --status running -q 2>/dev/null | grep -q .; then
     echo ">>> Backup de la base de données..."
     mkdir -p "$BACKUP_DIR"
     docker compose -f "$COMPOSE_FILE" exec -T db \
         pg_dump -U khamareo -Fc khamareo \
         > "$BACKUP_DIR/pre-deploy-$(date +%Y%m%d_%H%M%S).dump"
     echo "    Backup terminé."
+else
+    echo ">>> DB non démarrée, backup ignoré."
 fi
 
 # Pull latest code
