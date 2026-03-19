@@ -31,10 +31,10 @@ if [ ! -f "config/jwt/private.pem" ] && [ -z "${JWT_SECRET_KEY_BASE64:-}" ]; the
 fi
 
 # Backup database before deployment (if running)
-if docker compose -f "$COMPOSE_FILE" ps db --status running -q 2>/dev/null | grep -q .; then
+if docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" ps db --status running -q 2>/dev/null | grep -q .; then
     echo ">>> Backup de la base de données..."
     mkdir -p "$BACKUP_DIR"
-    docker compose -f "$COMPOSE_FILE" exec -T db \
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T db \
         pg_dump -U khamareo -Fc khamareo \
         > "$BACKUP_DIR/pre-deploy-$(date +%Y%m%d_%H%M%S).dump"
     echo "    Backup terminé."
@@ -48,10 +48,10 @@ git pull origin main
 
 # Build and restart
 echo ">>> Build des images..."
-docker compose -f "$COMPOSE_FILE" build
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" build
 
 echo ">>> Démarrage des services..."
-docker compose -f "$COMPOSE_FILE" up -d
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d
 
 # Wait for containers
 echo ">>> Attente des conteneurs..."
@@ -60,21 +60,21 @@ sleep 5
 # First run: create schema instead of running migrations
 if [ "${1:-}" = "first-run" ]; then
     echo ">>> Premier déploiement : création du schéma..."
-    docker compose -f "$COMPOSE_FILE" exec -T php \
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
         php bin/console doctrine:schema:create --no-interaction
 
     echo ">>> Marquage des migrations comme exécutées..."
-    docker compose -f "$COMPOSE_FILE" exec -T php \
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
         php bin/console doctrine:migrations:version --add --all --no-interaction
 else
     echo ">>> Migrations..."
-    docker compose -f "$COMPOSE_FILE" exec -T php \
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
         php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 fi
 
 # Clear cache
 echo ">>> Cache..."
-docker compose -f "$COMPOSE_FILE" exec -T php \
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
     php bin/console cache:clear --env=prod --no-debug
 
 if [ "${1:-}" = "first-run" ]; then
