@@ -15,5 +15,6 @@ docker-compose.override.yml
 .phpunit.cache/
 phpunit.xml
 phpunit.xml.dist
-.docker/
+.docker/php/php.ini
+.docker/nginx/default.conf
 node_modules/
