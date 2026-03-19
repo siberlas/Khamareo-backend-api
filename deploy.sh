@@ -57,22 +57,27 @@ docker compose -f "$COMPOSE_FILE" up -d
 echo ">>> Attente des conteneurs..."
 sleep 5
 
-# Run migrations
-echo ">>> Migrations..."
-docker compose -f "$COMPOSE_FILE" exec -T php \
-    php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+# First run: create schema instead of running migrations
+if [ "${1:-}" = "first-run" ]; then
+    echo ">>> Premier déploiement : création du schéma..."
+    docker compose -f "$COMPOSE_FILE" exec -T php \
+        php bin/console doctrine:schema:create --no-interaction
+
+    echo ">>> Marquage des migrations comme exécutées..."
+    docker compose -f "$COMPOSE_FILE" exec -T php \
+        php bin/console doctrine:migrations:version --add --all --no-interaction
+else
+    echo ">>> Migrations..."
+    docker compose -f "$COMPOSE_FILE" exec -T php \
+        php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+fi
 
 # Clear cache
 echo ">>> Cache..."
 docker compose -f "$COMPOSE_FILE" exec -T php \
     php bin/console cache:clear --env=prod --no-debug
 
-# First run
 if [ "${1:-}" = "first-run" ]; then
-    echo ">>> Premier déploiement : création du schéma..."
-    docker compose -f "$COMPOSE_FILE" exec -T php \
-        php bin/console doctrine:schema:create --no-interaction 2>/dev/null || true
-
     echo ""
     echo "=== PREMIER DÉPLOIEMENT TERMINÉ ==="
     echo "À faire :"
