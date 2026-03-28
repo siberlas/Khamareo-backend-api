@@ -96,7 +96,7 @@ if [ "${1:-}" = "first-run" ]; then
     echo ">>> Activation du mode Coming Soon..."
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T db \
         psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c \
-        "INSERT INTO app_settings (id, setting_key, setting_value) VALUES (gen_random_uuid(), 'coming_soon_enabled', 'true') ON CONFLICT (setting_key) DO UPDATE SET setting_value = 'true';"
+        "INSERT INTO app_settings (setting_key, setting_value) VALUES ('coming_soon_enabled', 'true') ON CONFLICT (setting_key) DO UPDATE SET setting_value = 'true';"
 
     echo ""
     echo "=== PREMIER DÉPLOIEMENT TERMINÉ ==="
