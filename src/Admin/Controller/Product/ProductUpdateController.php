@@ -170,6 +170,12 @@ class ProductUpdateController extends AbstractController
             if (isset($data['usage'])) {
                 $product->setUsage($data['usage']);
             }
+            if (array_key_exists('preparation', $data)) {
+                $product->setPreparation($data['preparation']);
+            }
+            if (array_key_exists('faq', $data)) {
+                $product->setFaq($data['faq']);
+            }
 
             if (isset($data['isEnabled'])) {
                 $product->setIsEnabled((bool) $data['isEnabled']);
@@ -335,6 +341,15 @@ class ProductUpdateController extends AbstractController
             }
             if ($request->request->has('usage')) {
                 $product->setUsage($request->request->get('usage'));
+            }
+            if ($request->request->has('preparation')) {
+                $product->setPreparation($request->request->get('preparation'));
+            }
+            if ($request->request->has('faq')) {
+                $faq = json_decode($request->request->get('faq'), true);
+                if (is_array($faq)) {
+                    $product->setFaq($faq);
+                }
             }
             if ($request->request->has('isEnabled')) {
                 $product->setIsEnabled(filter_var($request->request->get('isEnabled'), FILTER_VALIDATE_BOOLEAN));
@@ -699,6 +714,8 @@ class ProductUpdateController extends AbstractController
             $newProduct->setBenefits($originalProduct->getBenefits());
             $newProduct->setIngredients($originalProduct->getIngredients());
             $newProduct->setUsage($originalProduct->getUsage());
+            $newProduct->setPreparation($originalProduct->getPreparation());
+            $newProduct->setFaq($originalProduct->getFaq());
             $newProduct->setIsEnabled(false); // Désactivé par défaut
 
             // Copier les images si demandé

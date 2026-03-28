@@ -18,8 +18,8 @@ use Symfony\Component\Uid\Uuid;
 #[AsController]
 class AdminLaunchController
 {
-    private const PROMO_CODE        = 'AKWABA';
-    private const PROMO_DISCOUNT    = 10;
+    private const PROMO_PREFIX        = 'AKWAABA';
+    private const PROMO_DISCOUNT      = 10;
     private const PROMO_VALIDITY_DAYS = 30;
 
     public function __construct(
@@ -42,20 +42,31 @@ class AdminLaunchController
     #[Route('/api/admin/coming-soon/launch', name: 'admin_coming_soon_launch', methods: ['POST'])]
     public function launch(): JsonResponse
     {
-        // 1. Upsert du code promo AKWABA
         $expiresAt = new \DateTimeImmutable('+' . self::PROMO_VALIDITY_DAYS . ' days');
-        $promoCode = $this->upsertAkwabaPromoCode($expiresAt);
 
-        // 2. Collecte des emails
+        // 1. Collecte des emails
         $emails = $this->collectEmails();
 
-        // 3. Envoi des emails
+        // 2. Génération d'un code individuel par email + envoi
         $sent   = 0;
         $errors = 0;
         foreach ($emails as $email) {
+            // Vérifier si un code launch existe déjà pour cet email
+            $existing = $this->promoCodeRepo->findOneBy(['email' => $email, 'type' => 'launch']);
+            if ($existing) {
+                $promoCode = $existing;
+                $promoCode->setExpiresAt($expiresAt);
+                $promoCode->setIsActive(true);
+            } else {
+                $promoCode = $this->createLaunchPromoCode($email, $expiresAt);
+                $this->em->persist($promoCode);
+            }
+
+            $this->em->flush();
+
             $ok = $this->mailerService->sendLaunchAnnouncement(
                 $email,
-                self::PROMO_CODE,
+                $promoCode->getCode(),
                 self::PROMO_DISCOUNT,
                 $expiresAt,
                 'fr',
@@ -67,7 +78,7 @@ class AdminLaunchController
             }
         }
 
-        // 4. Désactivation du mode coming soon
+        // 3. Désactivation du mode coming soon
         $this->upsertSetting('coming_soon_enabled', 'false');
         $this->em->flush();
 
@@ -81,29 +92,19 @@ class AdminLaunchController
 
     // -------------------------------------------------------------------------
 
-    private function upsertAkwabaPromoCode(\DateTimeImmutable $expiresAt): PromoCode
+    private function createLaunchPromoCode(string $email, \DateTimeImmutable $expiresAt): PromoCode
     {
-        $existing = $this->promoCodeRepo->findOneBy(['code' => self::PROMO_CODE]);
-
-        if ($existing) {
-            // Met à jour la date d'expiration sans toucher aux autres champs
-            $existing->setExpiresAt($expiresAt);
-            $this->em->flush();
-            return $existing;
-        }
-
         $promo = new PromoCode();
-        $promo->setCode(self::PROMO_CODE);
-        $promo->setType('manual');
+        $promo->setCode(self::PROMO_PREFIX . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)));
+        $promo->setType('launch');
+        $promo->setEmail($email);
         $promo->setDiscountPercentage((string) self::PROMO_DISCOUNT);
         $promo->setEligibleCustomer('both');
-        $promo->setMaxUses(null);           // illimité
-        $promo->setMaxUsesPerEmail(1);      // 1 utilisation par email
+        $promo->setMaxUses(1);              // 1 seule utilisation
+        $promo->setMaxUsesPerEmail(1);
         $promo->setExpiresAt($expiresAt);
         $promo->setIsActive(true);
-
-        $this->em->persist($promo);
-        $this->em->flush();
+        $promo->setStackable(false);
 
         return $promo;
     }

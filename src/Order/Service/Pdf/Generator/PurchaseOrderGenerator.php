@@ -69,7 +69,7 @@ class PurchaseOrderGenerator implements PdfGeneratorInterface
     {
         $options = new Options();
         $options->set('defaultFont', 'Helvetica');
-        $options->set('isRemoteEnabled', false);
+        $options->set('isRemoteEnabled', true);
         $options->set('isHtml5ParserEnabled', true);
 
         $dompdf = new Dompdf($options);

@@ -1,14 +1,11 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>✅ Commande livrée !</h1>
-    <p>Nous espérons que tout est parfait</p>
-{% endblock %}
+{% block subject %}Commande livrée !{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
 
-    <p>Votre commande <strong style="color: #C9A96E;">#{{ order.orderNumber }}</strong> a bien été livrée. 🎉<br>
+    <p>Votre commande <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong> a bien été livrée. <br>
     Nous espérons que vos produits vous donnent entière satisfaction.</p>
 
     {% if order.items is not empty %}
@@ -22,7 +19,7 @@
                         <strong>{{ item.product ? item.product.name : (item.productName ?? 'Produit') }}</strong>
                         <br><span class="muted">Qté : {{ item.quantity }}</span>
                     </td>
-                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #C9A96E; white-space: nowrap;">
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
                         {{ (item.quantity * item.unitPrice)|format_currency('EUR', locale='fr') }}
                     </td>
                 </tr>
@@ -40,16 +37,7 @@
     </div>
 
     <div style="text-align: center; margin: 24px 0;">
-        <a href="{{ orderUrl }}" class="button">Voir ma commande &amp; laisser un avis</a>
-    </div>
-
-    <div class="card" style="background-color: #FFF8F0;">
-        <p style="margin: 0; font-size: 13px; color: #7A5C47;">
-            <strong>🔄 Droit de rétractation</strong><br>
-            Vous disposez de 14 jours à compter de la réception pour nous retourner un article.
-            Contactez-nous à <a href="mailto:support@khamareo.com" style="color: #C9A96E;">support@khamareo.com</a>
-            ou rendez-vous dans votre espace client.
-        </p>
+        <a href="{{ orderUrl }}" class="btn-primary">Voir ma commande &amp; laisser un avis</a>
     </div>
 
     <p class="muted" style="text-align: center;">

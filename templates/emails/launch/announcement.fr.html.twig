@@ -1,8 +1,6 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>🌍 Khamareo est maintenant ouvert !</h1>
-{% endblock %}
+{% block subject %}Khamareo est maintenant ouvert !{% endblock %}
 
 {% block content %}
     <p>Bonjour,</p>
@@ -25,7 +23,7 @@
             {{ discountPercentage }}% de réduction
         </p>
         <p style="font-size: 13px; color: #7A5C47; margin-top: 8px;">
-            sur votre première commande
+            sur votre prochaine commande
         </p>
     </div>
 
@@ -41,12 +39,12 @@
     </p>
 
     <div style="text-align: center; margin: 32px 0;">
-        <a href="{{ shopUrl }}" class="button">Découvrir la boutique</a>
+        <a href="{{ shopUrl }}" class="btn-primary">Découvrir la boutique</a>
     </div>
 
     <div class="highlight">
         <p>
-            <strong>💡 Comment l'utiliser&nbsp;?</strong><br>
+            <strong>Comment l'utiliser&nbsp;?</strong><br>
             Entrez le code <strong>{{ promoCode }}</strong> dans le champ "Code promo" à l'étape paiement.
             La réduction s'applique automatiquement sur les produits éligibles.
         </p>

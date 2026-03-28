@@ -31,7 +31,14 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
         $headers->set('X-Frame-Options', 'DENY');
         $headers->set('Referrer-Policy', 'no-referrer');
         $headers->set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
-        $headers->set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none';");
+
+        // CSP souple pour la documentation Swagger (HTML), strict pour les endpoints API (JSON)
+        $path = $request->getPathInfo();
+        if (str_starts_with($path, '/api/docs') || str_starts_with($path, '/api/.well-known')) {
+            $headers->set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';");
+        } else {
+            $headers->set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'; base-uri 'none';");
+        }
 
         if ($request->isSecure()) {
             $headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');

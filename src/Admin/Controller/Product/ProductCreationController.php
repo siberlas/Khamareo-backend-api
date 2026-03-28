@@ -129,6 +129,15 @@ class ProductCreationController extends AbstractController
             if ($usage = $request->request->get('usage')) {
                 $product->setUsage($usage);
             }
+            if ($preparation = $request->request->get('preparation')) {
+                $product->setPreparation($preparation);
+            }
+            if ($faqJson = $request->request->get('faq')) {
+                $faq = json_decode($faqJson, true);
+                if (is_array($faq)) {
+                    $product->setFaq($faq);
+                }
+            }
             if ($isEnabled !== null) {
                 $product->setIsEnabled(filter_var($isEnabled, FILTER_VALIDATE_BOOLEAN));
             }

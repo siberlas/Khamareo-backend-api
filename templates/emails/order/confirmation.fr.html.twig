@@ -1,9 +1,6 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>✅ Commande confirmée !</h1>
-    <p>Merci pour votre confiance</p>
-{% endblock %}
+{% block subject %}Commande confirmée !{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
@@ -11,11 +8,11 @@
     <p>Nous avons bien reçu votre commande <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong> et votre paiement a été confirmé avec succès.</p>
     
     <div class="highlight">
-        <p><strong>🎉 Votre commande est en cours de préparation</strong></p>
+        <p><strong>Votre commande est en cours de préparation</strong></p>
     </div>
     
     <div class="card">
-        <h2 style="margin-top: 0;">📦 Détails de votre commande</h2>
+        <h2 style="margin-top: 0;">Détails de votre commande</h2>
         
         <table style="margin: 24px 0;">
             <thead>
@@ -115,7 +112,7 @@
 
     {% if order.shippingAddress %}
     <div class="card">
-        <h3 style="margin-top: 0;">🚚 Informations de livraison</h3>
+        <h3 style="margin-top: 0;">Informations de livraison</h3>
 
         <div style="background-color: #FFFFFF; padding: 16px; border-left: 3px solid #D8A35D; border-radius: 6px; margin: 16px 0;">
             <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
@@ -123,7 +120,7 @@
             {{ order.shippingAddress.postalCode }} {{ order.shippingAddress.city }}<br>
             {{ order.shippingAddress.country }}
             {% if order.shippingAddress.phone %}
-            <br><span class="muted">☎️ {{ order.shippingAddress.phone }}</span>
+            <br><span class="muted">{{ order.shippingAddress.phone }}</span>
             {% endif %}
         </div>
 
@@ -136,12 +133,12 @@
     {% endif %}
     
     <div style="text-align: center; margin: 32px 0;">
-        <a href="{{ trackingUrl }}" class="button">Suivre ma commande</a>
+        <a href="{{ trackingUrl }}" class="btn-primary">Suivre ma commande</a>
     </div>
     
     <div class="highlight">
         <p>
-            <strong>📬 Prochaine étape :</strong><br>
+            <strong>Prochaine étape :</strong><br>
             Vous recevrez un email dès que votre colis sera expédié avec votre numéro de suivi.
         </p>
     </div>

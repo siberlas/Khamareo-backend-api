@@ -18,6 +18,7 @@ use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use App\Shared\Repository\CurrencyRepository;
+use App\Shared\Entity\StoreSettings;
 
 #[AsController]
 class CheckoutPaymentIntentController extends AbstractController
@@ -70,11 +71,11 @@ class CheckoutPaymentIntentController extends AbstractController
             throw new BadRequestException("Panier vide ou introuvable.");
         }
 
+        // Vérification que chaque produit a un prix
         foreach ($cart->getItems() as $item) {
-            $productPrice = $item->getProduct()->getPriceForCurrency($currencyCode);
-            if (!$productPrice) {
+            if (!$item->getProduct()->getPrice()) {
                 throw new BadRequestException(
-                    "Le produit '{$item->getProduct()->getName()}' n'a pas de prix en {$currencyCode}."
+                    "Le produit '{$item->getProduct()->getName()}' n'a pas de prix."
                 );
             }
         }
@@ -112,6 +113,17 @@ class CheckoutPaymentIntentController extends AbstractController
         $shippingCost = $rate
             ? (float) $rate->getPrice()
             : (float) ($carrierMode->getBasePrice() ?? 0);
+
+        // 4b) Livraison offerte si le seuil est atteint
+        $storeSettings = $this->em->getRepository(StoreSettings::class)->findOneBy([]);
+        $itemsSubtotalForShipping = $cart->getSubtotal();
+        if ($storeSettings
+            && $storeSettings->isFreeShippingEnabled()
+            && $storeSettings->getFreeShippingThreshold() !== null
+            && $itemsSubtotalForShipping >= (float) $storeSettings->getFreeShippingThreshold()
+        ) {
+            $shippingCost = 0;
+        }
 
         // 5) Total
         $itemsSubtotal         = $cart->getSubtotal();
@@ -165,6 +177,7 @@ class CheckoutPaymentIntentController extends AbstractController
             'itemsSubtotal'    => $itemsSubtotal,
             'discountAmount'   => $discountAmount,
             'promoCode'        => $cart->getPromoCode(),
+            'freeShipping'     => $shippingCost === 0.0,
         ]);
     }
 

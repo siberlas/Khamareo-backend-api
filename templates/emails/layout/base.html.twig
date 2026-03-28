@@ -3,113 +3,395 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Khamareo{% endblock %}</title>
+    <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:wght@400;700&display=swap" rel="stylesheet">
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
     <style>
+        /* Reset */
+        body, table, td, p, a, li { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+        table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+        img { -ms-interpolation-mode: bicubic; border: 0; outline: none; text-decoration: none; }
+
         body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
             margin: 0;
             padding: 0;
-            background-color: #f4f4f4;
+            width: 100%;
+            background-color: #F0EBE3;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
-        .container {
+
+        .email-wrapper {
+            width: 100%;
+            background-color: #F0EBE3;
+            padding: 32px 0;
+        }
+
+        .email-container {
             max-width: 600px;
             margin: 0 auto;
-            background-color: #ffffff;
+            background-color: #FFFFFF;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 24px rgba(74, 46, 32, 0.08);
         }
-        .header {
-            background-color: #C9A96E;
-            color: white;
-            padding: 30px 20px;
+
+        /* ── Header ── */
+        .email-header {
+            background-color: #3D5A3A;
+            background-image: url("https://res.cloudinary.com/dtdumh0gv/image/upload/e_make_transparent/o_15/v1774626906/adinkra-symbol_od9iow.png");
+            background-size: 50px 50px;
+            background-repeat: repeat;
+            padding: 32px 40px;
             text-align: center;
         }
-        .header h1 {
+
+        .email-logo {
+            height: 48px;
+            margin-bottom: 8px;
+        }
+
+        .email-brand {
+            font-family: 'Libre Baskerville', 'Georgia', 'Times New Roman', serif;
+            font-size: 22px;
+            font-weight: 600;
+            color: #EBD6BF;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
             margin: 0;
-            font-size: 28px;
         }
-        .header p {
-            margin: 5px 0 0;
+
+        .email-tagline {
+            font-family: 'Libre Baskerville', 'Georgia', 'Times New Roman', serif;
             font-size: 14px;
+            font-style: italic;
+            color: rgba(235, 214, 191, 0.6);
+            letter-spacing: 0.1em;
+            margin: 6px 0 0;
         }
-        .content {
-            padding: 30px 20px;
+
+        /* ── Gold separator ── */
+        .gold-bar {
+            height: 4px;
+            background: linear-gradient(to right, #3D5A3A, #D8A35D, #E4B654, #D8A35D, #3D5A3A);
         }
-        .button {
-            display: inline-block;
-            padding: 12px 30px;
-            background-color: #C9A96E;
-            color: white !important;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 20px 0;
-            font-weight: bold;
-        }
-        .button:hover {
-            background-color: #b8976a;
-        }
-        .footer {
-            background-color: #f9f9f9;
-            padding: 20px;
+
+        /* ── Subject line ── */
+        .email-subject {
+            background-color: #F9F5F0;
+            padding: 24px 40px;
             text-align: center;
-            color: #666;
-            font-size: 12px;
-            border-top: 1px solid #eee;
+            border-bottom: 1px solid #E8DFD3;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
+
+        .email-subject h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #4A2E20;
+            margin: 0;
+            line-height: 1.3;
         }
-        .price {
-            font-weight: bold;
-            color: #C9A96E;
+
+        /* ── Content ── */
+        .email-content {
+            padding: 32px 40px;
+            color: #4A2E20;
+            font-size: 15px;
+            line-height: 1.7;
         }
+
+        .email-content p {
+            margin: 0 0 16px;
+        }
+
+        .email-content h2 {
+            font-size: 17px;
+            font-weight: 700;
+            color: #4A2E20;
+            margin: 24px 0 12px;
+        }
+
+        .email-content h3 {
+            font-size: 15px;
+            font-weight: 600;
+            color: #5C7357;
+            margin: 20px 0 8px;
+        }
+
+        /* ── Button ── */
+        .btn-primary {
+            display: inline-block;
+            padding: 14px 32px;
+            background-color: #D8A35D;
+            color: #4A2E20 !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            text-align: center;
+            mso-padding-alt: 0;
+        }
+
+        .btn-secondary {
+            display: inline-block;
+            padding: 12px 28px;
+            background-color: transparent;
+            color: #5C7357 !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            border: 2px solid #5C7357;
+            text-align: center;
+        }
+
+        .btn-wrapper {
+            text-align: center;
+            margin: 28px 0;
+        }
+
+        /* ── Cards / Highlights ── */
         .highlight {
-            background-color: #FFF8EE;
-            padding: 15px 20px;
+            background-color: #F9F5F0;
+            padding: 20px 24px;
             border-left: 4px solid #D8A35D;
+            border-radius: 0 8px 8px 0;
             margin: 20px 0;
-            border-radius: 4px;
         }
+
         .card {
             background-color: #F9F5F0;
             padding: 20px 24px;
-            border-radius: 8px;
+            border-radius: 10px;
             margin: 20px 0;
+            border: 1px solid #E8DFD3;
         }
-        .divider {
-            border-top: 1px solid #E8DFD3;
+
+        .promo-card {
+            background-color: #3D5A3A;
+            padding: 24px;
+            border-radius: 10px;
+            text-align: center;
+            margin: 24px 0;
+        }
+
+        .promo-code {
+            display: inline-block;
+            background: rgba(216, 163, 93, 0.2);
+            border: 2px dashed #D8A35D;
+            border-radius: 8px;
+            padding: 12px 28px;
+            font-size: 22px;
+            font-weight: 700;
+            color: #EBD6BF;
+            letter-spacing: 0.12em;
+            margin: 12px 0;
+        }
+
+        /* ── Table (orders) ── */
+        .order-table {
+            width: 100%;
+            border-collapse: collapse;
             margin: 16px 0;
         }
+
+        .order-table th {
+            background-color: #F9F5F0;
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 11px;
+            font-weight: 600;
+            color: #7A5C47;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            border-bottom: 2px solid #E8DFD3;
+        }
+
+        .order-table td {
+            padding: 12px;
+            font-size: 14px;
+            color: #4A2E20;
+            border-bottom: 1px solid #F0EBE3;
+        }
+
+        .price {
+            font-weight: 700;
+            color: #5C7357;
+        }
+
+        /* ── Dividers ── */
+        .divider {
+            border: none;
+            border-top: 1px solid #E8DFD3;
+            margin: 24px 0;
+        }
+
+        .gold-divider {
+            border: none;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #D8A35D, transparent);
+            margin: 24px 0;
+        }
+
+        /* ── Muted text ── */
         .muted {
             color: #7A5C47;
             font-size: 13px;
         }
+
+        .small {
+            font-size: 12px;
+            color: #9A8A7A;
+        }
+
+        /* ── Footer ── */
+        .email-footer {
+            background-color: #3D5A3A;
+            background-image: url("https://res.cloudinary.com/dtdumh0gv/image/upload/e_make_transparent/o_15/v1774626906/adinkra-symbol_od9iow.png");
+            background-size: 50px 50px;
+            background-repeat: repeat;
+            padding: 28px 40px;
+            text-align: center;
+        }
+
+        .email-footer p {
+            margin: 0;
+            font-size: 12px;
+            color: rgba(235, 214, 191, 0.6);
+            line-height: 1.6;
+        }
+
+        .email-footer a {
+            color: #D8A35D;
+            text-decoration: none;
+        }
+
+        .email-footer-brand {
+            font-size: 14px;
+            font-weight: 700;
+            color: #EBD6BF;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: block;
+        }
+
+        .footer-links {
+            margin: 16px 0;
+        }
+
+        .footer-links a {
+            color: rgba(235, 214, 191, 0.7);
+            text-decoration: none;
+            font-size: 12px;
+            margin: 0 8px;
+        }
+
+        .footer-social a {
+            display: inline-block;
+            margin: 0 6px;
+            color: #D8A35D;
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        /* ── Responsive ── */
+        @media only screen and (max-width: 620px) {
+            .email-container { width: 100% !important; border-radius: 0 !important; }
+            .email-header { padding: 24px 20px !important; }
+            .email-subject { padding: 20px 20px !important; }
+            .email-content { padding: 24px 20px !important; }
+            .email-footer { padding: 24px 20px !important; }
+            .email-subject h1 { font-size: 18px !important; }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            {% block header %}
-                <h1>Khamareo</h1>
-            {% endblock %}
-        </div>
-        
-        <div class="content">
-            {% block content %}{% endblock %}
-        </div>
-        
-        <div class="footer">
-            {% block footer %}
-                <p><strong>Merci de votre confiance !</strong></p>
-                <p>L'équipe Khamareo</p>
-                <p style="margin-top: 15px;">
-                    <small>
-                        Cet email a été envoyé automatiquement, merci de ne pas y répondre.<br>
-                        Pour toute question, contactez-nous à <a href="mailto:support@khamareo.com">support@khamareo.com</a>
-                    </small>
-                </p>
-            {% endblock %}
-        </div>
+    <div class="email-wrapper">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+                <td align="center">
+                    <div class="email-container">
+
+                        <!-- Header -->
+                        <div class="email-header">
+                            {% block header %}
+                                <table role="presentation" cellpadding="0" cellspacing="0" style="margin: 0 auto;">
+                                    <tr>
+                                        <td style="vertical-align: middle; padding-right: 12px;">
+                                            <img src="https://res.cloudinary.com/dtdumh0gv/image/upload/v1774628630/logo-khamareo_t0wufe.png" alt="Khamareo" style="height: 72px; width: auto;" />
+                                        </td>
+                                        <td style="vertical-align: middle;">
+                                            <p class="email-brand" style="margin: 0;">KHAMAREO</p>
+                                        </td>
+                                    </tr>
+                                </table>
+                                <p class="email-tagline">Une vie saine au naturel</p>
+                            {% endblock %}
+                        </div>
+
+                        <!-- Gold separator -->
+                        <div class="gold-bar"></div>
+
+                        <!-- Subject -->
+                        {% block subject_block %}
+                        <div class="email-subject">
+                                                        <h1>{% block subject %}{% endblock %}</h1>
+                        </div>
+                        {% endblock %}
+
+                        <!-- Content -->
+                        <div class="email-content">
+                            {% block content %}{% endblock %}
+                        </div>
+
+                        <!-- Gold divider before footer -->
+                        <div class="gold-bar"></div>
+
+                        <!-- Footer -->
+                        <div class="email-footer">
+                            {% block footer %}
+                                <span class="email-footer-brand">KHAMAREO</span>
+
+                                <div class="footer-social">
+                                    <a href="https://instagram.com/khamareo">Instagram</a>
+                                    &nbsp;·&nbsp;
+                                    <a href="https://tiktok.com/@khamareo">TikTok</a>
+                                </div>
+
+                                <div class="footer-links">
+                                    <a href="https://khamareo.com/boutique">Boutique</a>
+                                    <a href="https://khamareo.com/blog">Blog</a>
+                                    <a href="https://khamareo.com/about">Notre histoire</a>
+                                    <a href="https://khamareo.com/contact">Contact</a>
+                                </div>
+
+                                <p style="margin-top: 16px;">
+                                    Cet e-mail a été envoyé par Khamareo.<br>
+                                    Pour toute question : <a href="mailto:akwaaba@khamareo.com">akwaaba@khamareo.com</a>
+                                </p>
+
+                                <p style="margin-top: 12px; font-size: 11px; opacity: 0.5;">
+                                    © {{ "now"|date("Y") }} Khamareo — Tous droits réservés
+                                </p>
+                            {% endblock %}
+                        </div>
+
+                    </div>
+                </td>
+            </tr>
+        </table>
     </div>
 </body>
 </html>

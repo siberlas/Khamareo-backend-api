@@ -1,9 +1,6 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>🔕 Alerte stock désactivée</h1>
-    <p>Votre alerte a bien été supprimée</p>
-{% endblock %}
+{% block subject %}Alerte stock désactivée{% endblock %}
 
 {% block content %}
     <p>Bonjour {{ user.firstName ?? 'Client' }},</p>
@@ -13,7 +10,7 @@
     <p>Vous pouvez la réactiver à tout moment depuis la page du produit :</p>
 
     <div style="text-align: center; margin: 24px 0;">
-        <a href="{{ productUrl }}" class="button">Voir le produit</a>
+        <a href="{{ productUrl }}" class="btn-primary">Voir le produit</a>
     </div>
 
     <p class="muted">

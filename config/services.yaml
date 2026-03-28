@@ -93,6 +93,27 @@ services:
     App\Shipping\Service\LabelGenerator\ColissimoLabelGenerator:
         tags: ['app.label_generator']
 
+    App\Shipping\Service\MondialRelayApiService:
+        arguments:
+            $apiUrl: '%env(MONDIAL_RELAY_API_URL)%'
+            $login: '%env(MONDIAL_RELAY_LOGIN)%'
+            $password: '%env(MONDIAL_RELAY_PASSWORD)%'
+            $customerId: '%env(MONDIAL_RELAY_CUSTOMER_ID)%'
+            $culture: '%env(MONDIAL_RELAY_CULTURE)%'
+
+    App\Shipping\Service\LabelGenerator\MondialRelayLabelGenerator:
+        arguments:
+            $senderCompany: '%env(COLISSIMO_SENDER_COMPANY)%'
+            $senderFirstname: '%env(COLISSIMO_SENDER_FIRSTNAME)%'
+            $senderLastname: '%env(COLISSIMO_SENDER_LASTNAME)%'
+            $senderAddress: '%env(COLISSIMO_SENDER_ADDRESS)%'
+            $senderZipcode: '%env(COLISSIMO_SENDER_ZIPCODE)%'
+            $senderCity: '%env(COLISSIMO_SENDER_CITY)%'
+            $senderCountry: '%env(COLISSIMO_SENDER_COUNTRY)%'
+            $senderEmail: '%env(COLISSIMO_SENDER_EMAIL)%'
+            $senderPhone: '%env(COLISSIMO_SENDER_PHONE)%'
+        tags: ['app.label_generator']
+
     App\Shipping\Service\OrderDocumentPdfService:
         arguments:
             $outputDir: '%kernel.project_dir%/var/documents'

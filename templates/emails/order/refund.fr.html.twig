@@ -1,9 +1,6 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>💸 Remboursement effectué</h1>
-    <p>Commande #{{ order.orderNumber }}</p>
-{% endblock %}
+{% block subject %}Remboursement effectué{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
@@ -36,7 +33,7 @@
                         <strong>{{ item.product ? item.product.name : (item.productName ?? 'Produit') }}</strong>
                         <br><span class="muted">Qté : {{ item.quantity }}</span>
                     </td>
-                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #C9A96E; white-space: nowrap;">
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
                         {{ (item.quantity * item.unitPrice)|format_currency('EUR', locale='fr') }}
                     </td>
                 </tr>
@@ -57,17 +54,17 @@
             </tr>
             <tr>
                 <td style="padding: 8px 0; text-align: right;"><strong style="color: #4A2E20;">Remboursé</strong></td>
-                <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #C9A96E; font-size: 16px; white-space: nowrap; padding-left: 16px;">{{ refundAmount|format_currency('EUR', locale='fr') }}</td>
+                <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #D8A35D; font-size: 16px; white-space: nowrap; padding-left: 16px;">{{ refundAmount|format_currency('EUR', locale='fr') }}</td>
             </tr>
         </table>
     </div>
     {% endif %}
 
     <div style="text-align: center; margin: 24px 0;">
-        <a href="{{ orderUrl }}" class="button">Voir ma commande</a>
+        <a href="{{ orderUrl }}" class="btn-primary">Voir ma commande</a>
     </div>
 
     <p class="muted" style="text-align: center;">
-        Des questions ? Contactez-nous à <a href="mailto:support@khamareo.com" style="color: #C9A96E;">support@khamareo.com</a>
+        Des questions ? Contactez-nous à <a href="mailto:akwaaba@khamareo.com" style="color: #D8A35D;">akwaaba@khamareo.com</a>
     </p>
 {% endblock %}

@@ -1,8 +1,6 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>🌍 Khamareo is Now Open!</h1>
-{% endblock %}
+{% block subject %}Khamareo is Now Open!{% endblock %}
 
 {% block content %}
     <p>Hello,</p>
@@ -25,7 +23,7 @@
             {{ discountPercentage }}% off
         </p>
         <p style="font-size: 13px; color: #7A5C47; margin-top: 8px;">
-            on your first order
+            on your next order
         </p>
     </div>
 
@@ -41,12 +39,12 @@
     </p>
 
     <div style="text-align: center; margin: 32px 0;">
-        <a href="{{ shopUrl }}" class="button">Discover the shop</a>
+        <a href="{{ shopUrl }}" class="btn-primary">Discover the shop</a>
     </div>
 
     <div class="highlight">
         <p>
-            <strong>💡 How to use it?</strong><br>
+            <strong>How to use it?</strong><br>
             Enter <strong>{{ promoCode }}</strong> in the "Promo code" field at checkout.
             The discount applies automatically to eligible products.
         </p>

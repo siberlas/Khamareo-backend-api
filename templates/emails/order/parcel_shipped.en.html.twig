@@ -1,0 +1,90 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Parcel {{ parcelNumber }}/{{ totalParcels }} shipped!{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p><strong>Parcel {{ parcelNumber }}/{{ totalParcels }}</strong> from your order
+    <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong> has been shipped.</p>
+
+    {% if totalParcels > 1 %}
+    <div class="card" style="text-align: center;">
+        <p style="margin: 0; font-size: 14px; color: #7A5C47;">
+            Order shipping progress
+        </p>
+        <p style="margin: 8px 0 0; font-size: 20px; font-weight: 700; color: #D8A35D;">
+            {{ parcelNumber }} / {{ totalParcels }} parcel{{ parcelNumber > 1 ? 's' : '' }} shipped
+        </p>
+    </div>
+    {% endif %}
+
+    {% if trackingNumber %}
+    <div class="highlight">
+        <p style="margin: 0 0 8px;">
+            <strong>Tracking number:</strong>
+            <span style="font-size: 17px; font-family: monospace; color: #4A2E20; letter-spacing: 1px;">{{ trackingNumber }}</span>
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="btn-wrapper">
+        <a href="{{ trackingUrl }}" class="btn-primary">Track my order</a>
+    </div>
+
+    {% if parcel.items is not empty %}
+    <div class="card">
+        <h3 style="margin-top: 0; color: #4A2E20;">Parcel {{ parcelNumber }} contents</h3>
+        <table class="order-table">
+            <tbody>
+                {% for parcelItem in parcel.items %}
+                <tr>
+                    <td style="padding: 10px 8px 10px 0;">
+                        <strong>{{ parcelItem.orderItem.product ? parcelItem.orderItem.product.name : (parcelItem.orderItem.productName ?? 'Product') }}</strong>
+                        <br><span class="muted">Qty: {{ parcelItem.quantity }}</span>
+                    </td>
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
+                        {{ (parcelItem.quantity * parcelItem.orderItem.unitPrice)|format_currency('EUR', locale='en') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# Remaining items to ship #}
+    {% if remainingItems is not empty %}
+    <div class="highlight">
+        <p style="margin: 0 0 8px;"><strong>Remaining items to be shipped:</strong></p>
+        <ul style="margin: 0; padding-left: 20px;">
+            {% for item in remainingItems %}
+            <li style="margin-bottom: 4px;">{{ item.name }} (x{{ item.quantity }})</li>
+            {% endfor %}
+        </ul>
+        <p style="margin: 8px 0 0; font-size: 13px; color: #7A5C47;">
+            These items will be sent shortly in a separate parcel. You will receive an email with the tracking number once shipped.
+        </p>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if order.shippingAddress %}
+    <div class="card">
+        {% if order.isRelayPoint %}
+        <h3 style="margin-top: 0; color: #4A2E20;">Your Relay Point</h3>
+        {% else %}
+        <h3 style="margin-top: 0; color: #4A2E20;">Delivery address</h3>
+        {% endif %}
+        <p style="margin: 0; line-height: 1.8;">
+            <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
+            {{ order.shippingAddress.streetAddress ?? order.shippingAddress.street }}<br>
+            {{ order.shippingAddress.postalCode }} {{ order.shippingAddress.city }}<br>
+            {{ order.shippingAddress.country }}
+        </p>
+    </div>
+    {% endif %}
+
+    <p class="muted" style="text-align: center;">
+        Questions? Contact us at <a href="mailto:akwaaba@khamareo.com" style="color: #D8A35D;">akwaaba@khamareo.com</a>
+    </p>
+{% endblock %}

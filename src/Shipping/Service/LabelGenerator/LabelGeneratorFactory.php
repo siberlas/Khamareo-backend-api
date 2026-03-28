@@ -65,14 +65,14 @@ class LabelGeneratorFactory
     {
         $supported = [];
         
+        $knownCodes = ['colissimo', 'mondial_relay'];
+
         foreach ($this->generators as $generator) {
-            // On suppose que chaque générateur supporte au moins un code
-            // Cette méthode est informative, pas critique
-            if ($generator->supports('colissimo')) {
-                $supported[] = 'colissimo';
+            foreach ($knownCodes as $code) {
+                if ($generator->supports($code)) {
+                    $supported[] = $code;
+                }
             }
-    
-            // Ajouter d'autres selon besoins
         }
         
         return array_unique($supported);
