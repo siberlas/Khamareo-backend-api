@@ -54,9 +54,14 @@ echo ">>> Migrations..."
 docker compose -f "$COMPOSE_FILE" exec -T php \
     php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 
+# Fix permissions on var/ before cache clear
+echo ">>> Permissions var/..."
+docker compose -f "$COMPOSE_FILE" exec -T php \
+    chown -R www-data:www-data /var/www/html/var
+
 # Clear cache
 echo ">>> Cache..."
-docker compose -f "$COMPOSE_FILE" exec -T php \
+docker compose -f "$COMPOSE_FILE" exec -T -u www-data php \
     php bin/console cache:clear --env=prod --no-debug
 
 # First run
