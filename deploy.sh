@@ -85,13 +85,28 @@ docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php
     php bin/console cache:clear --env=prod --no-debug
 
 if [ "${1:-}" = "first-run" ]; then
+    echo ">>> Création du compte admin..."
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
+        php bin/console app:create-admin \
+            "${ADMIN_EMAIL:-assi.sylvia@khamareo.com}" \
+            "${ADMIN_PASSWORD:-Gokoetsu2026*}" \
+            "Sylvia" "Assi" \
+            --env=prod --no-interaction
+
+    echo ">>> Activation du mode Coming Soon..."
+    docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T db \
+        psql -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" -c \
+        "INSERT INTO app_settings (id, setting_key, setting_value) VALUES (gen_random_uuid(), 'coming_soon_enabled', 'true') ON CONFLICT (setting_key) DO UPDATE SET setting_value = 'true';"
+
     echo ""
     echo "=== PREMIER DÉPLOIEMENT TERMINÉ ==="
+    echo "  Admin : ${ADMIN_EMAIL:-assi.sylvia@khamareo.com}"
+    echo "  Coming Soon : activé"
+    echo ""
     echo "À faire :"
-    echo "  1. Créer un admin"
-    echo "  2. Configurer le webhook Stripe : https://api.khamareo.com/api/stripe/webhook"
-    echo "  3. Configurer le DNS Cloudflare : A record api → <VPS_IP>"
-    echo "  4. SSL Cloudflare : mode Full"
+    echo "  1. Configurer le webhook Stripe : https://api.khamareo.com/api/stripe/webhook"
+    echo "  2. Configurer le DNS Cloudflare : A record api → <VPS_IP>"
+    echo "  3. SSL Cloudflare : mode Full"
 fi
 
 # Health check

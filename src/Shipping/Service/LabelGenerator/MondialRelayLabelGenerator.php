@@ -66,6 +66,10 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
             // Build recipient address
             [$recipientHouseNo, $recipientStreet] = $this->splitStreetAddress($shippingAddress->getStreetAddress());
             $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail() ?? '';
+            $recipientPhone = $shippingAddress->getPhone()
+                ?? $order->getOwner()?->getPhone()
+                ?? $order->getGuestPhone()
+                ?? '';
 
             $recipient = new MondialRelayAddressDTO(
                 title: $shippingAddress->getCivility() ?? '',
@@ -78,8 +82,8 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 postcode: $shippingAddress->getPostalCode(),
                 city: mb_substr($shippingAddress->getCity(), 0, 25),
                 countryCode: $this->resolveCountryCode($shippingAddress->getCountry()),
-                phoneNo: $shippingAddress->getPhone() ?? '',
-                mobileNo: $shippingAddress->getPhone() ?? '',
+                phoneNo: $recipientPhone,
+                mobileNo: $recipientPhone,
                 email: $recipientEmail,
             );
 

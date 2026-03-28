@@ -851,7 +851,7 @@ class MailerService
                 $this->getTemplate('emails/launch/announcement', $locale),
                 [
                     'promoCode'       => $promoCode,
-                    'discountPercent' => $discountPercent,
+                    'discountPercentage' => $discountPercent,
                     'expiresAt'       => $expiresAt,
                     'shopUrl'         => $this->frontBaseUrl . '/boutique',
                     'locale'          => $locale,
