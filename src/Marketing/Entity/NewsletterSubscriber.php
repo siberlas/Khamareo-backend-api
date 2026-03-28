@@ -71,7 +71,14 @@ class NewsletterSubscriber
     private ?\DateTimeImmutable $confirmedAt = null;
 
     #[ORM\Column(length: 64, unique: true)]
-    private string $unsubscribeToken = '';
+    private string $unsubscribeToken;
+
+    public function __construct()
+    {
+        $this->id = Uuid::v7();
+        $this->subscribedAt = new \DateTimeImmutable();
+        $this->unsubscribeToken = bin2hex(random_bytes(32));
+    }
 
     #[ORM\Column(nullable: true)]
     #[Groups(['newsletter:read'])]
@@ -89,11 +96,6 @@ class NewsletterSubscriber
 
     #[Groups(['newsletter:read'])]
     private ?\DateTimeImmutable $promoExpiresAt = null;
-
-    public function __construct()
-    {
-        $this->id = Uuid::v7();
-    }
 
     public function getId(): ?Uuid
     {
