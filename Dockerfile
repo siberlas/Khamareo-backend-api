@@ -42,6 +42,9 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 WORKDIR /var/www/html
 COPY --from=composer-stage /app .
 
+# Install Symfony assets (API Platform UI, etc.)
+RUN php bin/console assets:install public --no-interaction --env=prod 2>/dev/null || true
+
 # Create required directories and set permissions
 RUN mkdir -p var/cache var/log config/jwt \
     && chown -R www-data:www-data var/ public/ \
