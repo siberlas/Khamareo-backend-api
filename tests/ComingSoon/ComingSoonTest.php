@@ -167,7 +167,8 @@ class ComingSoonTest extends WebTestCase
 
         $this->assertResponseStatusCodeSame(201);
         $data = json_decode($this->client->getResponse()->getContent(), true);
-        $this->assertArrayHasKey('message', $data);
+        $this->assertArrayHasKey('messages', $data);
+        $this->assertFalse($data['alreadyRegistered']);
     }
 
     /** POST /api/pre-register avec email invalide → 400 */
@@ -206,7 +207,7 @@ class ComingSoonTest extends WebTestCase
         $this->assertArrayHasKey('error', $data);
     }
 
-    /** POST /api/pre-register avec un email déjà enregistré → 409 */
+    /** POST /api/pre-register avec un email déjà enregistré → 200 avec alreadyRegistered */
     public function testPreRegisterDuplicate(): void
     {
         $this->postJson('/api/pre-register', [
@@ -219,9 +220,10 @@ class ComingSoonTest extends WebTestCase
             'email'   => 'duplicate@example.com',
             'consent' => true,
         ]);
-        $this->assertResponseStatusCodeSame(409);
+        $this->assertResponseStatusCodeSame(200);
         $data = json_decode($this->client->getResponse()->getContent(), true);
-        $this->assertArrayHasKey('error', $data);
+        $this->assertTrue($data['alreadyRegistered']);
+        $this->assertArrayHasKey('messages', $data);
     }
 
     // -------------------------------------------------------------------------
@@ -377,9 +379,15 @@ class ComingSoonTest extends WebTestCase
         $this->assertFalse($statusData['coming_soon']);
     }
 
-    /** POST /api/admin/coming-soon/launch crée le code promo AKWABA en base */
+    /** POST /api/admin/coming-soon/launch crée des codes promo individuels AKWAABA-xxx en base */
     public function testLaunchCreatesAkwabaPromoCode(): void
     {
+        // Créer un pré-inscrit pour que le launch génère un code
+        $this->postJson('/api/pre-register', [
+            'email'   => 'launch-test@example.com',
+            'consent' => true,
+        ]);
+
         $token = $this->getAdminJwt();
 
         $this->client->request(
@@ -395,11 +403,13 @@ class ComingSoonTest extends WebTestCase
         /** @var EntityManagerInterface $em */
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $promoRepo = $em->getRepository(\App\Marketing\Entity\PromoCode::class);
-        $promo = $promoRepo->findOneBy(['code' => 'AKWABA']);
+        $promo = $promoRepo->findOneBy(['email' => 'launch-test@example.com', 'type' => 'launch']);
 
-        $this->assertNotNull($promo, 'Le code promo AKWABA doit être créé en base');
+        $this->assertNotNull($promo, 'Un code promo launch individuel doit être créé en base');
+        $this->assertStringStartsWith('AKWAABA-', $promo->getCode());
         $this->assertSame('10.00', $promo->getDiscountPercentage());
         $this->assertTrue($promo->isActive());
+        $this->assertSame(1, $promo->getMaxUses());
 
         // Nettoyage
         $em->remove($promo);

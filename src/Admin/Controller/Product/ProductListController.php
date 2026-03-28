@@ -291,6 +291,8 @@ class ProductListController extends AbstractController
                     'benefits' => $product->getBenefits(),
                     'ingredients' => $product->getIngredients(),
                     'usage' => $product->getUsage(),
+                    'preparation' => $product->getPreparation(),
+                    'faq' => $product->getFaq(),
                     'isEnabled' => $product->getIsEnabled(),
                     'isFeatured' => $product->getIsFeatured(),
                     'isDeleted' => $product->getIsDeleted(),

@@ -1,20 +1,46 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>✅ Order Delivered</h1>
-    <p>We hope everything is perfect</p>
-{% endblock %}
+{% block subject %}Order Delivered!{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
 
-    <p>Your order <strong>#{{ order.orderNumber }}</strong> has been delivered.</p>
+    <p>Your order <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong> has been delivered.
+    We hope you are completely satisfied with your products.</p>
+
+    {% if order.items is not empty %}
+    <div class="card">
+        <h3 style="margin-top: 0; color: #4A2E20;">What you received</h3>
+        <table class="order-table">
+            <tbody>
+                {% for item in order.items %}
+                <tr>
+                    <td style="padding: 10px 8px 10px 0;">
+                        <strong>{{ item.product ? item.product.name : (item.productName ?? 'Product') }}</strong>
+                        <br><span class="muted">Qty: {{ item.quantity }}</span>
+                    </td>
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
+                        {{ (item.quantity * item.unitPrice)|format_currency('EUR', locale='en') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
 
     <div class="highlight">
-        <p>Your feedback matters a lot to us.</p>
+        <p style="margin: 0;">
+            <strong>Your feedback matters!</strong><br>
+            Share your experience with the Khamareo community. Your feedback helps us improve our products and services.
+        </p>
     </div>
 
-    <div style="text-align: center; margin: 24px 0;">
-        <a href="{{ orderUrl }}" class="button">View my order</a>
+    <div class="btn-wrapper">
+        <a href="{{ orderUrl }}" class="btn-primary">View my order & leave a review</a>
     </div>
+
+    <p class="muted" style="text-align: center;">
+        Thank you for your trust — The Khamareo team
+    </p>
 {% endblock %}

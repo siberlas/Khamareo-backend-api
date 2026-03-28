@@ -1,52 +1,49 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>🌿 Welcome to Khamareo!</h1>
-    <p>Thank you for joining our community</p>
-{% endblock %}
+{% block subject %}Welcome to Khamareo!{% endblock %}
 
 {% block content %}
     <p>Hello {{ user.firstName }},</p>
-    
+
     <p>Welcome to the world of African wellness! We're thrilled to have you with us.</p>
-    
+
     <div class="card">
-        <h3 style="margin-top: 0; text-align: center;">✨ To Begin Your Journey</h3>
+        <h3 style="margin-top: 0; text-align: center; color: #5C7357;">To Begin Your Journey</h3>
         <p style="text-align: center; margin-bottom: 0;">
             Please confirm your email address by clicking the button below:
         </p>
     </div>
-    
-    <div style="text-align: center; margin: 32px 0;">
-        <a href="{{ confirmationUrl }}" class="button">Confirm My Account</a>
+
+    <div class="btn-wrapper">
+        <a href="{{ confirmationUrl }}" class="btn-primary">Confirm My Account</a>
     </div>
-    
-    <p class="muted" style="font-size: 13px; text-align: center;">
+
+    <p class="small" style="text-align: center;">
         If the button doesn't work, copy and paste this link into your browser:<br>
         <a href="{{ confirmationUrl }}" style="color: #D8A35D; word-break: break-all;">{{ confirmationUrl }}</a>
     </p>
-    
-    <div class="divider"></div>
-    
-    <div style="background-color: #F9F5F0; padding: 24px; border-radius: 12px; border: 2px dashed #D8A35D; margin: 32px 0; text-align: center;">
-        <h3 style="margin: 0 0 12px 0; color: #A25D3C;">🎁 Welcome Gift</h3>
+
+    <hr class="divider">
+
+    <div class="card" style="text-align: center;">
+        <h3 style="margin: 0 0 12px 0; color: #5C7357;">Welcome Gift</h3>
         <p style="margin: 0;">
-            Once your account is confirmed, you'll receive a <strong style="color: #D8A35D;">15% promo code</strong> for your first order!
+            Once your account is confirmed, you'll receive a <strong style="color: #D8A35D;">10% promo code</strong> to use on your next order!
         </p>
     </div>
 
     {% if newsletterSubscribed %}
-    <div style="background-color: #F0F5F9; padding: 24px; border-radius: 12px; border: 2px dashed #5D9ED8; margin: 32px 0; text-align: center;">
-        <h3 style="margin: 0 0 12px 0; color: #3C6FA2;">📧 Newsletter Subscription Included</h3>
+    <div class="card" style="text-align: center; border-color: #D8A35D;">
+        <h3 style="margin: 0 0 12px 0; color: #5C7357;">Newsletter Subscription Included</h3>
         <p style="margin: 0;">
-            You signed up for our newsletter. After confirming your account, your subscription will be activated and you'll also receive a <strong style="color: #5D9ED8;">bonus 10% newsletter promo code</strong>!
+            You signed up for our newsletter. After confirming your account, your subscription will be activated and you'll also receive a <strong style="color: #D8A35D;">bonus 10% newsletter promo code</strong>!
         </p>
     </div>
     {% endif %}
 
     <div class="highlight">
-        <p>
-            <strong>💡 Did You Know?</strong><br>
+        <p style="margin: 0;">
+            <strong>Did You Know?</strong><br>
             By creating your account, you get access to exclusive offers, tracked shipping, and priority access to our new products.
         </p>
     </div>

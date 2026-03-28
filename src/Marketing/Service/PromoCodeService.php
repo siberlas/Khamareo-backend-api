@@ -37,7 +37,9 @@ class PromoCodeService
         $promoCode->setType($type);
         $promoCode->setDiscountPercentage($discountPercentage);
         $promoCode->setDiscountAmount($discountAmount);
-        $promoCode->setStackable(true);
+        $promoCode->setStackable(false);
+        $promoCode->setMaxUses(1);
+        $promoCode->setMaxUsesPerEmail(1);
         $promoCode->setExpiresAt(
             (new \DateTimeImmutable())->modify("+{$validityDays} days")
         );
@@ -83,7 +85,7 @@ class PromoCodeService
             email: $email,
             type: 'newsletter',
             discountPercentage: 10.0,
-            validityDays: 30
+            validityDays: 90
         );
 
         $this->mailerService->sendPromoCodeEmail($promoCode, $locale);
@@ -122,8 +124,8 @@ class PromoCodeService
         $promoCode = $this->createPromoCode(
             email: $email,
             type: 'registration',
-            discountPercentage: 15.0,
-            validityDays: 45
+            discountPercentage: 10.0,
+            validityDays: 120
         );
 
         $this->mailerService->sendPromoCodeEmail($promoCode, $locale);

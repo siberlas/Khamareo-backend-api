@@ -7,6 +7,8 @@ use App\Shared\Entity\PreRegistration;
 use App\Shared\Repository\AppSettingsRepository;
 use App\Shared\Repository\PreRegistrationRepository;
 use App\Shared\Service\MailchimpService;
+use App\Marketing\Entity\NewsletterSubscriber;
+use App\Shared\Service\MailerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,6 +27,7 @@ class ComingSoonController
         private readonly PreRegistrationRepository $preRegRepo,
         private readonly ValidatorInterface        $validator,
         private readonly MailchimpService          $mailchimpService,
+        private readonly MailerService             $mailerService,
     ) {}
 
     /**
@@ -55,10 +58,11 @@ class ComingSoonController
     {
         $data = json_decode($request->getContent(), true) ?? [];
 
-        $email   = trim((string) ($data['email'] ?? ''));
-        $consent = (bool) ($data['consent'] ?? false);
+        $email      = trim((string) ($data['email'] ?? ''));
+        $consent    = (bool) ($data['consent'] ?? false);
+        $newsletter = (bool) ($data['newsletter'] ?? false);
 
-        // Validation
+        // Validation email
         $emailErrors = $this->validator->validate($email, [
             new Assert\NotBlank(['message' => 'L\'adresse e-mail est requise.']),
             new Assert\Email(['message' => 'L\'adresse e-mail est invalide.']),
@@ -79,32 +83,125 @@ class ComingSoonController
             );
         }
 
-        // Déduplication
-        if ($this->preRegRepo->findByEmail($email)) {
-            return new JsonResponse(
-                ['error' => 'Cette adresse e-mail est déjà enregistrée.'],
-                Response::HTTP_CONFLICT
-            );
+        $messages = [];
+        $alreadyRegistered = false;
+        $newsletterStatus = null; // null, 'subscribed', 'pending_confirmation', 'already_confirmed'
+
+        // 1. Vérifier si déjà pré-inscrit pour le lancement
+        $existingPreReg = $this->preRegRepo->findByEmail($email);
+        if ($existingPreReg) {
+            $alreadyRegistered = true;
+            $messages[] = 'Vous êtes déjà inscrit(e) pour l\'ouverture. Vous serez prévenu(e) et recevrez votre code promo dès le lancement !';
+        } else {
+            $preReg = new PreRegistration();
+            $preReg->setEmail($email);
+            $preReg->setConsentGiven(true);
+            $preReg->setIpAddress($request->getClientIp());
+            $this->em->persist($preReg);
+            $messages[] = 'Inscription confirmée ! Vous serez prévenu(e) et recevrez votre code promo dès le lancement.';
         }
 
-        $preReg = new PreRegistration();
-        $preReg->setEmail($email);
-        $preReg->setConsentGiven(true);
-        $preReg->setIpAddress($request->getClientIp());
+        // 2. Gérer la newsletter si demandée
+        if ($newsletter) {
+            $existingSubscriber = $this->em->getRepository(NewsletterSubscriber::class)
+                ->findOneBy(['email' => $email]);
 
-        $this->em->persist($preReg);
+            if ($existingSubscriber) {
+                if ($existingSubscriber->isConfirmed()) {
+                    $newsletterStatus = 'already_confirmed';
+                    $messages[] = 'Vous êtes déjà inscrit(e) à notre newsletter.';
+                } else {
+                    $newsletterStatus = 'pending_confirmation';
+                    $messages[] = 'Votre inscription à la newsletter est en attente de confirmation. Vérifiez vos e-mails (et vos spams).';
+                }
+            } else {
+                $subscriber = new NewsletterSubscriber();
+                $subscriber->setEmail($email);
+                $token = bin2hex(random_bytes(32));
+                $subscriber->setConfirmationToken($token);
+                $subscriber->setConfirmationSentAt(new \DateTimeImmutable());
+                $this->em->persist($subscriber);
+
+                $newsletterStatus = 'subscribed';
+                $messages[] = 'Inscription à la newsletter effectuée ! Un e-mail de confirmation vous a été envoyé.';
+
+                // Envoyer l'email de confirmation après flush
+                $this->em->flush();
+
+                try {
+                    $backendUrl = $_ENV['BACKEND_BASE_URL'] ?? $_ENV['API_BASE_URL'] ?? 'https://api.khamareo.com';
+                    $confirmUrl = $backendUrl . '/api/newsletter/confirm?token=' . $token;
+                    $unsubscribeUrl = $backendUrl . '/api/newsletter/unsubscribe?token=' . $subscriber->getUnsubscribeToken();
+                    $this->mailerService->sendNewsletterConfirmationEmail($subscriber, $confirmUrl, $unsubscribeUrl);
+                } catch (\Throwable) {
+                    // Email non envoyé, non bloquant
+                }
+
+                // Ajout silencieux à Mailchimp
+                try {
+                    $this->mailchimpService->addMember($email);
+                } catch (\Throwable) {}
+
+                return new JsonResponse([
+                    'alreadyRegistered' => $alreadyRegistered,
+                    'newsletterStatus' => $newsletterStatus,
+                    'messages' => $messages,
+                ], $alreadyRegistered ? Response::HTTP_OK : Response::HTTP_CREATED);
+            }
+        }
+
         $this->em->flush();
 
-        // Ajout silencieux à Mailchimp (échec non bloquant)
-        try {
-            $this->mailchimpService->addMember($email);
-        } catch (\Throwable) {
-            // Mailchimp non configuré ou erreur réseau : on continue
+        // Ajout silencieux à Mailchimp (même sans newsletter)
+        if (!$alreadyRegistered) {
+            try {
+                $this->mailchimpService->addMember($email);
+            } catch (\Throwable) {}
         }
 
-        return new JsonResponse(
-            ['message' => 'Inscription enregistrée avec succès.'],
-            Response::HTTP_CREATED
-        );
+        return new JsonResponse([
+            'alreadyRegistered' => $alreadyRegistered,
+            'newsletterStatus' => $newsletterStatus,
+            'messages' => $messages,
+        ], $alreadyRegistered ? Response::HTTP_OK : Response::HTTP_CREATED);
+    }
+
+    /**
+     * POST /api/pre-register/resend-newsletter
+     * Renvoyer l'email de confirmation newsletter.
+     */
+    #[Route('/api/pre-register/resend-newsletter', name: 'api_pre_register_resend_newsletter', methods: ['POST'])]
+    public function resendNewsletterConfirmation(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true) ?? [];
+        $email = trim((string) ($data['email'] ?? ''));
+
+        $subscriber = $this->em->getRepository(NewsletterSubscriber::class)
+            ->findOneBy(['email' => $email]);
+
+        if (!$subscriber) {
+            return new JsonResponse(['error' => 'Aucune inscription newsletter trouvée.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if ($subscriber->isConfirmed()) {
+            return new JsonResponse(['message' => 'Votre newsletter est déjà confirmée.'], Response::HTTP_OK);
+        }
+
+        // Nouveau token
+        $token = bin2hex(random_bytes(32));
+        $subscriber->setConfirmationToken($token);
+        $subscriber->setConfirmationSentAt(new \DateTimeImmutable());
+        $this->em->flush();
+
+        try {
+            $backendUrl = $_ENV['BACKEND_BASE_URL'] ?? $_ENV['API_BASE_URL'] ?? 'https://api.khamareo.com';
+            $confirmUrl = $backendUrl . '/api/newsletter/confirm?token=' . $token;
+            $unsubscribeUrl = $backendUrl . '/api/newsletter/unsubscribe?token=' . $subscriber->getUnsubscribeToken();
+            $this->mailerService->sendNewsletterConfirmationEmail($subscriber, $confirmUrl, $unsubscribeUrl);
+        } catch (\Throwable) {
+            return new JsonResponse(['error' => 'Erreur lors de l\'envoi. Réessayez.'], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+
+        return new JsonResponse(['message' => 'E-mail de confirmation renvoyé avec succès.'], Response::HTTP_OK);
     }
 }

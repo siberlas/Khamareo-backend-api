@@ -1,9 +1,6 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>🔔 Alerte stock activée</h1>
-    <p>Nous vous préviendrons dès qu’il sera disponible</p>
-{% endblock %}
+{% block subject %}Alerte stock activée{% endblock %}
 
 {% block content %}
     <p>Bonjour {{ user.firstName ?? 'Client' }},</p>

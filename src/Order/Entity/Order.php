@@ -518,7 +518,7 @@ class Order
 
     public function canEditParcels(): bool
     {
-        return in_array($this->status, [OrderStatus::PENDING, OrderStatus::PAID, OrderStatus::PREPARING], true);
+        return in_array($this->status, [OrderStatus::PENDING, OrderStatus::PAID, OrderStatus::PREPARING, OrderStatus::SHIPPED], true);
     }
 
     public function isParcelsConfirmed(): bool { return $this->parcelsConfirmed; }

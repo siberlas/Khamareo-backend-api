@@ -41,7 +41,7 @@ class PromoCode
 
     #[ORM\Column(type: 'string', length: 50)]
     #[Groups(['promo:read', 'promo:write'])]
-    #[Assert\Choice(choices: ['newsletter', 'first_order', 'registration', 'manual'])]
+    #[Assert\Choice(choices: ['newsletter', 'first_order', 'registration', 'launch', 'manual'])]
     private ?string $type = null;
 
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]

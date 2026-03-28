@@ -53,6 +53,7 @@ final class ProductPriceProvider implements ProviderInterface
 
     private function applyPriceForCurrency(Product $product, string $currencyCode, ?Currency $currency): void
     {
+        // Tente d'utiliser product_price si disponible, sinon garde product.price
         $productPrice = $product->getPriceForCurrency($currencyCode);
 
         if (!$productPrice) {
@@ -62,6 +63,10 @@ final class ProductPriceProvider implements ProviderInterface
         if ($productPrice) {
             $product->setPrice($productPrice->getPrice());
             $product->setOriginalPrice($productPrice->getOriginalPrice());
+        }
+
+        // Toujours setter la devise
+        if ($currency) {
             $product->setCurrency($currency);
         }
     }

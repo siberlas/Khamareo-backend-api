@@ -39,7 +39,7 @@ class ResetPasswordController
         $requestedAt = $user->getResetPasswordRequestedAt();
         $now = new \DateTime();
 
-        if (!$requestedAt || $requestedAt->modify('+30 minutes') < $now) {
+        if (!$requestedAt || $requestedAt->modify('+1 hour') < $now) {
             return new JsonResponse(['error' => 'Le lien de réinitialisation a expiré'], 400);
         }
 

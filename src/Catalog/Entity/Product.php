@@ -128,6 +128,14 @@ class Product
     private ?string $usage = null;
 
     #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $preparation = null;
+
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $faq = null;
+
+    #[Groups(['product:read', 'product:write'])]
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     private ?float $originalPrice = null;
 
@@ -283,6 +291,12 @@ class Product
 
     public function getUsage(): ?string { return $this->usage; }
     public function setUsage(?string $usage): static { $this->usage = $usage; return $this; }
+
+    public function getPreparation(): ?string { return $this->preparation; }
+    public function setPreparation(?string $preparation): static { $this->preparation = $preparation; return $this; }
+
+    public function getFaq(): ?array { return $this->faq; }
+    public function setFaq(?array $faq): static { $this->faq = $faq; return $this; }
 
     public function getOriginalPrice(): ?float { return $this->originalPrice; }
     public function setOriginalPrice(?float $originalPrice): static { $this->originalPrice = $originalPrice; return $this; }

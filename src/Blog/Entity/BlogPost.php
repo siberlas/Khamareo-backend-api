@@ -44,6 +44,7 @@ use App\User\Entity\User;
     'status' => 'exact',             // Filtre exact sur le status
     'slug' => 'exact',               // Filtre exact sur le slug
     'category' => 'exact',           // Filtre par catégorie (ID)
+    'category.slug' => 'exact',      // Filtre par slug de catégorie
     'author' => 'exact',             // Filtre par auteur (ID)
     'authorName' => 'partial',       // Recherche partielle sur le nom d'auteur
 ])]

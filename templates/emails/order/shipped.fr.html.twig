@@ -1,26 +1,23 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>🚚 Votre colis est en route !</h1>
-    <p>Commande #{{ order.orderNumber }} expédiée</p>
-{% endblock %}
+{% block subject %}Votre colis est en route !{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
 
-    <p>Votre commande <strong style="color: #C9A96E;">#{{ order.orderNumber }}</strong> a été expédiée.
+    <p>Votre commande <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong> a été expédiée.
     Votre colis est maintenant entre les mains du transporteur.</p>
 
     {# ── Numéro de suivi ──────────────────────────────────────── #}
     {% if trackingNumber %}
     <div class="highlight">
         <p style="margin: 0 0 8px;">
-            <strong>📬 Numéro de suivi :</strong>
+            <strong>Numéro de suivi :</strong>
             <span style="font-size: 17px; font-family: monospace; color: #4A2E20; letter-spacing: 1px;">{{ trackingNumber }}</span>
         </p>
         {% if carrierTrackingUrl %}
         <p style="margin: 0;">
-            <a href="{{ carrierTrackingUrl }}" style="color: #C9A96E; font-weight: 600;">
+            <a href="{{ carrierTrackingUrl }}" style="color: #D8A35D; font-weight: 600;">
                 Suivre mon colis sur le site {{ order.carrier ? order.carrier.name : 'du transporteur' }} →
             </a>
         </p>
@@ -31,20 +28,20 @@
     {# ── Délai de livraison ───────────────────────────────────── #}
     {% if deliveryDelay %}
     <p style="text-align: center; color: #7A5C47; font-size: 14px; margin: 16px 0;">
-        ⏱ <strong>Délai de livraison estimé :</strong> {{ deliveryDelay }}
+        <strong>Délai de livraison estimé :</strong> {{ deliveryDelay }}
         {% if deliveryNote %}<br><span style="font-size: 12px; opacity: 0.75;">{{ deliveryNote }}</span>{% endif %}
     </p>
     {% endif %}
 
     <div style="text-align: center; margin: 24px 0;">
-        <a href="{{ trackingUrl }}" class="button">Suivre ma commande</a>
+        <a href="{{ trackingUrl }}" class="btn-primary">Suivre ma commande</a>
     </div>
 
     {# ── Adresse / Point relais ───────────────────────────────── #}
     {% if order.shippingAddress %}
     <div class="card">
         {% if order.isRelayPoint %}
-        <h3 style="margin-top: 0; color: #4A2E20;">📍 Votre Point Relais</h3>
+        <h3 style="margin-top: 0; color: #4A2E20;">Votre Point Relais</h3>
         <p style="margin: 0 0 8px; font-size: 13px;">
             <span class="tag">{{ order.carrier ? order.carrier.name : (order.relayCarrier ?? 'Point Relais') }}</span>
         </p>
@@ -61,11 +58,11 @@
             {{ order.shippingAddress.country }}
         </p>
         <p style="margin-top: 10px; margin-bottom: 0; font-size: 12px; color: #7A5C47;">
-            💡 Pensez à vous munir d'une pièce d'identité pour retirer votre colis.
+            Pensez à vous munir d'une pièce d'identité pour retirer votre colis.
             Il sera disponible sous 24–48 h à partir de la réception de cet email.
         </p>
         {% else %}
-        <h3 style="margin-top: 0; color: #4A2E20;">📍 Adresse de livraison</h3>
+        <h3 style="margin-top: 0; color: #4A2E20;">Adresse de livraison</h3>
         <p style="margin: 0; line-height: 1.8;">
             <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
             {{ order.shippingAddress.streetAddress ?? order.shippingAddress.street }}<br>
@@ -94,7 +91,7 @@
                         <strong>{{ item.product ? item.product.name : (item.productName ?? 'Produit') }}</strong>
                         <br><span class="muted">Qté : {{ item.quantity }}</span>
                     </td>
-                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #C9A96E; white-space: nowrap;">
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
                         {{ (item.quantity * item.unitPrice)|format_currency('EUR', locale='fr') }}
                     </td>
                 </tr>
@@ -105,6 +102,6 @@
     {% endif %}
 
     <p class="muted" style="text-align: center;">
-        Des questions ? Contactez-nous à <a href="mailto:support@khamareo.com" style="color: #C9A96E;">support@khamareo.com</a>
+        Des questions ? Contactez-nous à <a href="mailto:akwaaba@khamareo.com" style="color: #D8A35D;">akwaaba@khamareo.com</a>
     </p>
 {% endblock %}

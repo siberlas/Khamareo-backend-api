@@ -932,7 +932,7 @@ class ParcelController extends AbstractController
                 'parcel_number' => $parcel->getParcelNumber(),
             ]);
 
-            // 2. Vérifier si TOUS les colis sont expédiés
+            // 2. Vérifier si TOUS les colis sont expédiés ET tous les articles sont couverts
             $allShipped = true;
             foreach ($order->getParcels() as $p) {
                 if ($p->getStatus() !== 'shipped') {
@@ -941,8 +941,31 @@ class ParcelController extends AbstractController
                 }
             }
 
-            // 3. Si tous expédiés : mettre à jour la commande
+            // Vérifier qu'il ne reste pas d'articles non assignés à un colis
+            $hasRemainingItems = false;
             if ($allShipped) {
+                $allocatedByOrderItemId = [];
+                foreach ($order->getParcels() as $p) {
+                    foreach ($p->getItems() as $parcelItem) {
+                        $oi = $parcelItem->getOrderItem();
+                        if ($oi) {
+                            $oid = $oi->getId()->toRfc4122();
+                            $allocatedByOrderItemId[$oid] = ($allocatedByOrderItemId[$oid] ?? 0) + (int) $parcelItem->getQuantity();
+                        }
+                    }
+                }
+                foreach ($order->getItems() as $orderItem) {
+                    $oid = $orderItem->getId()->toRfc4122();
+                    $allocated = (int) ($allocatedByOrderItemId[$oid] ?? 0);
+                    if ($allocated < (int) $orderItem->getQuantity()) {
+                        $hasRemainingItems = true;
+                        break;
+                    }
+                }
+            }
+
+            // 3. Si tous expédiés ET tous les articles couverts : mettre à jour la commande
+            if ($allShipped && !$hasRemainingItems) {
                 $order->setStatus(OrderStatus::SHIPPED);
                 $order->setShippedAt(new \DateTimeImmutable());
 
@@ -953,16 +976,15 @@ class ParcelController extends AbstractController
 
             $this->em->flush();
 
-            // Envoyer l'email d'expédition si tous les colis sont expédiés
-            if ($allShipped) {
-                try {
-                    $this->mailerService->sendShippingNotification($order);
-                } catch (\Throwable $e) {
-                    $this->logger->error('Failed to send shipping email', [
-                        'order_id' => $order->getId()->toRfc4122(),
-                        'error' => $e->getMessage(),
-                    ]);
-                }
+            // Envoyer l'email d'expédition pour CE colis (toujours par colis)
+            try {
+                $this->mailerService->sendParcelShippedNotification($order, $parcel);
+            } catch (\Throwable $e) {
+                $this->logger->error('Failed to send shipping email', [
+                    'order_id' => $order->getId()->toRfc4122(),
+                    'parcel_number' => $parcel->getParcelNumber(),
+                    'error' => $e->getMessage(),
+                ]);
             }
 
             $message = sprintf('Colis #%d marqué comme expédié', $parcel->getParcelNumber());

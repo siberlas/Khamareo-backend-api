@@ -8,6 +8,7 @@ use App\Marketing\Entity\PromoCode;
 use App\User\Entity\User;
 use App\Contact\Entity\ContactMessage;
 use App\Marketing\Entity\StockAlert;
+use App\Shipping\Entity\Parcel;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Mailer\MailerInterface;
@@ -19,52 +20,56 @@ class MailerService
     // Map centralisée de tous les sujets d'emails FR/EN
     private const EMAIL_SUBJECTS = [
         'registration' => [
-            'fr' => '🌿 Confirmez votre inscription - Khamareo',
-            'en' => '🌿 Confirm Your Registration - Khamareo'
+            'fr' => 'Confirmez votre inscription - Khamareo',
+            'en' => 'Confirm Your Registration - Khamareo'
         ],
         'password_reset' => [
-            'fr' => '🔐 Réinitialisation de votre mot de passe - Khamareo',
-            'en' => '🔐 Reset Your Password - Khamareo'
+            'fr' => 'Réinitialisation de votre mot de passe - Khamareo',
+            'en' => 'Reset Your Password - Khamareo'
         ],
         'promo_code' => [
-            'fr' => '🎁 Votre code promo Khamareo',
-            'en' => '🎁 Your Khamareo Promo Code'
+            'fr' => 'Votre code promo Khamareo',
+            'en' => 'Your Khamareo Promo Code'
         ],
         'order_confirmation' => [
-            'fr' => '✅ Commande confirmée #{orderNumber} - Khamareo',
-            'en' => '✅ Order Confirmed #{orderNumber} - Khamareo'
+            'fr' => 'Commande confirmée #{orderNumber} - Khamareo',
+            'en' => 'Order Confirmed #{orderNumber} - Khamareo'
         ],
         'contact_notification' => [
-            'fr' => '📧 Nouveau message de contact - {subject}',
-            'en' => '📧 New Contact Message - {subject}'
+            'fr' => 'Nouveau message de contact - {subject}',
+            'en' => 'New Contact Message - {subject}'
         ],
         'contact_confirmation' => [
-            'fr' => '✉️ Message reçu - Khamareo',
-            'en' => '✉️ Message Received - Khamareo'
+            'fr' => 'Message reçu - Khamareo',
+            'en' => 'Message Received - Khamareo'
         ],
         'stock_alert' => [
-            'fr' => '🎉 {productName} est de nouveau en stock !',
-            'en' => '🎉 {productName} is Back in Stock!'
+            'fr' => '{productName} est de nouveau en stock ! - Khamareo',
+            'en' => '{productName} is Back in Stock! - Khamareo'
         ],
         'order_preparing' => [
-            'fr' => '📦 Votre commande #{orderNumber} est en préparation - Khamareo',
-            'en' => '📦 Your Order #{orderNumber} is Being Prepared - Khamareo'
+            'fr' => 'Votre commande #{orderNumber} est en préparation - Khamareo',
+            'en' => 'Your Order #{orderNumber} is Being Prepared - Khamareo'
         ],
         'order_shipped' => [
-            'fr' => '🚚 Votre commande #{orderNumber} est en route ! - Khamareo',
-            'en' => '🚚 Your Order #{orderNumber} is on its Way! - Khamareo'
+            'fr' => 'Votre commande #{orderNumber} est en route ! - Khamareo',
+            'en' => 'Your Order #{orderNumber} is on its Way! - Khamareo'
+        ],
+        'parcel_shipped' => [
+            'fr' => 'Colis {parcelNumber}/{totalParcels} expédié — Commande #{orderNumber} - Khamareo',
+            'en' => 'Parcel {parcelNumber}/{totalParcels} shipped — Order #{orderNumber} - Khamareo'
         ],
         'order_delivered' => [
-            'fr' => '✅ Votre commande #{orderNumber} a été livrée - Khamareo',
-            'en' => '✅ Your Order #{orderNumber} has been Delivered - Khamareo'
+            'fr' => 'Votre commande #{orderNumber} a été livrée - Khamareo',
+            'en' => 'Your Order #{orderNumber} has been Delivered - Khamareo'
         ],
         'newsletter_confirmation' => [
-            'fr' => '📬 Confirmez votre inscription à la newsletter - Khamareo',
-            'en' => '📬 Confirm Your Newsletter Subscription - Khamareo'
+            'fr' => 'Confirmez votre inscription à la newsletter - Khamareo',
+            'en' => 'Confirm Your Newsletter Subscription - Khamareo'
         ],
         'order_refund' => [
-            'fr' => '💸 Remboursement effectué #{orderNumber} - Khamareo',
-            'en' => '💸 Refund Processed #{orderNumber} - Khamareo'
+            'fr' => 'Remboursement effectué #{orderNumber} - Khamareo',
+            'en' => 'Refund Processed #{orderNumber} - Khamareo'
         ],
     ];
 
@@ -338,7 +343,7 @@ class MailerService
                     'order' => $order,
                     'greeting' => $greetings[$locale],
                     'itemsTotal' => $itemsTotal,
-                    'trackingUrl' => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'trackingUrl' => $this->frontBaseUrl . '/order-confirmation/' . $order->getOrderNumber(),
                     'locale' => $locale,
                 ]
             );
@@ -388,7 +393,7 @@ class MailerService
 
             $email = (new Email())
                 ->from($this->fromEmail)
-                ->to('contact@khamareo.com')
+                ->to($this->fromEmail)
                 ->replyTo($message->getEmail())
                 ->subject($this->getSubject('contact_notification', 'fr', [
                     'subject' => $message->getSubject()
@@ -512,7 +517,7 @@ class MailerService
                     'dispatchDelay' => null,
                     'deliveryDelay' => null,
                     'deliveryNote'  => null,
-                    'orderUrl'      => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'orderUrl'      => $this->frontBaseUrl . '/order-confirmation/' . $order->getOrderNumber(),
                     'locale'        => $locale,
                 ]
             );
@@ -570,7 +575,7 @@ class MailerService
                     'carrierTrackingUrl' => null,
                     'deliveryDelay'      => null,
                     'deliveryNote'       => null,
-                    'trackingUrl'        => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'trackingUrl'        => $this->frontBaseUrl . '/order-confirmation/' . $order->getOrderNumber(),
                     'locale'             => $locale,
                 ]
             );
@@ -599,6 +604,95 @@ class MailerService
     }
 
     /**
+     * Notifie le client qu'un colis individuel a été expédié
+     */
+    public function sendParcelShippedNotification(Order $order, Parcel $parcel): void
+    {
+        try {
+            $locale = $this->getEmailLocale(null, $order);
+
+            $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail();
+            if (!$recipientEmail) {
+                return;
+            }
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : "Bonjour",
+                'en' => $firstName ? "Hello {$firstName}" : "Hello",
+            ];
+
+            $totalParcels = $order->getParcels()->count();
+
+            // Calculer les articles restants non encore assignés à un colis expédié
+            $allocatedByOrderItemId = [];
+            foreach ($order->getParcels() as $p) {
+                if ($p->getStatus() === 'shipped') {
+                    foreach ($p->getItems() as $parcelItem) {
+                        $oi = $parcelItem->getOrderItem();
+                        if ($oi) {
+                            $oid = $oi->getId()->toRfc4122();
+                            $allocatedByOrderItemId[$oid] = ($allocatedByOrderItemId[$oid] ?? 0) + (int) $parcelItem->getQuantity();
+                        }
+                    }
+                }
+            }
+            $remainingItems = [];
+            foreach ($order->getItems() as $orderItem) {
+                $oid = $orderItem->getId()->toRfc4122();
+                $allocated = (int) ($allocatedByOrderItemId[$oid] ?? 0);
+                $remaining = (int) $orderItem->getQuantity() - $allocated;
+                if ($remaining > 0) {
+                    $remainingItems[] = [
+                        'name' => $orderItem->getProduct()?->getName() ?? 'Produit',
+                        'quantity' => $remaining,
+                    ];
+                }
+            }
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/parcel_shipped', $locale),
+                [
+                    'order'              => $order,
+                    'parcel'             => $parcel,
+                    'greeting'           => $greetings[$locale],
+                    'trackingNumber'     => $parcel->getTrackingNumber(),
+                    'parcelNumber'       => $parcel->getParcelNumber(),
+                    'totalParcels'       => $totalParcels,
+                    'remainingItems'     => $remainingItems,
+                    'trackingUrl'        => $this->frontBaseUrl . '/order-confirmation/' . $order->getOrderNumber(),
+                    'locale'             => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('parcel_shipped', $locale, [
+                    'orderNumber'  => $order->getOrderNumber(),
+                    'parcelNumber' => (string) $parcel->getParcelNumber(),
+                    'totalParcels' => (string) $totalParcels,
+                ]))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Parcel shipped notification sent', [
+                'order_number'   => $order->getOrderNumber(),
+                'parcel_number'  => $parcel->getParcelNumber(),
+                'email'          => $recipientEmail,
+                'tracking_number' => $parcel->getTrackingNumber(),
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send parcel shipped notification', [
+                'order_number'  => $order->getOrderNumber(),
+                'parcel_number' => $parcel->getParcelNumber(),
+                'error'         => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Notifie le client que sa commande a été livrée
      */
     public function sendDeliveryNotification(Order $order): void
@@ -622,7 +716,7 @@ class MailerService
                 [
                     'order'    => $order,
                     'greeting' => $greetings[$locale],
-                    'orderUrl' => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'orderUrl' => $this->frontBaseUrl . '/order-confirmation/' . $order->getOrderNumber(),
                     'locale'   => $locale,
                 ]
             );
@@ -713,7 +807,7 @@ class MailerService
                     'greeting'     => $greetings[$locale],
                     'refundAmount' => $amount,
                     'refundId'     => $refundId,
-                    'orderUrl'     => $this->frontBaseUrl . '/orders/' . $order->getOrderNumber(),
+                    'orderUrl'     => $this->frontBaseUrl . '/order-confirmation/' . $order->getOrderNumber(),
                     'locale'       => $locale,
                 ]
             );
@@ -739,6 +833,51 @@ class MailerService
                 'order_number' => $order->getOrderNumber(),
                 'error'        => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Envoie l'email d'annonce de lancement avec le code promo individuel
+     */
+    public function sendLaunchAnnouncement(
+        string $recipientEmail,
+        string $promoCode,
+        int $discountPercent,
+        \DateTimeImmutable $expiresAt,
+        string $locale = 'fr'
+    ): bool {
+        try {
+            $html = $this->twig->render(
+                $this->getTemplate('emails/launch/announcement', $locale),
+                [
+                    'promoCode'       => $promoCode,
+                    'discountPercent' => $discountPercent,
+                    'expiresAt'       => $expiresAt,
+                    'shopUrl'         => $this->frontBaseUrl . '/boutique',
+                    'locale'          => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject('Khamareo est maintenant ouvert !')
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Launch announcement sent', [
+                'email'      => $recipientEmail,
+                'promo_code' => $promoCode,
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send launch announcement', [
+                'email' => $recipientEmail,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
         }
     }
 }

@@ -20,6 +20,7 @@ security:
             pattern: ^/api/auth
             stateless: true
             provider: app_user_provider
+            user_checker: App\Security\UserVerifiedChecker
             json_login:
                 check_path: /api/auth
                 username_path: email
@@ -27,18 +28,19 @@ security:
                 success_handler: lexik_jwt_authentication.handler.authentication_success
                 failure_handler: lexik_jwt_authentication.handler.authentication_failure
 
-        # Point d'entrée login JWT (admin)
-        admin_login:
-            pattern: ^/waraba-l19/login
-            stateless: true
+        # Firewall admin (portail waraba-l19) — stateful (session)
+        admin:
+            pattern: ^/waraba-l19
+            stateless: false
             provider: app_user_provider
+            user_checker: App\Security\AdminUserChecker
+            entry_point: App\Security\AdminEntryPoint
             json_login:
                 check_path: /waraba-l19/login
                 username_path: email
                 password_path: password
-                success_handler: lexik_jwt_authentication.handler.authentication_success
-                failure_handler: lexik_jwt_authentication.handler.authentication_failure
-                
+                success_handler: App\Security\AdminLoginSuccessHandler
+                failure_handler: App\Security\AdminLoginFailureHandler
 
         api:
             pattern: ^/api
@@ -51,6 +53,10 @@ security:
             lazy: true
        
     access_control:
+
+        # Admin portal (waraba-l19)
+        - { path: ^/waraba-l19/login$, roles: PUBLIC_ACCESS }
+        - { path: ^/waraba-l19, roles: IS_AUTHENTICATED_FULLY }
 
         # Healthcheck (public – Docker / monitoring)
         - { path: ^/api/health$, roles: PUBLIC_ACCESS }
@@ -82,9 +88,12 @@ security:
         - { path: ^/api/shipping_rates, roles: PUBLIC_ACCESS }
         - { path: ^/api/shipping/options, roles: PUBLIC_ACCESS }
         - { path: ^/api/menu, roles: PUBLIC_ACCESS }
+        - { path: ^/api/search, roles: PUBLIC_ACCESS }
         - { path: ^/api/public, roles: PUBLIC_ACCESS }
         - { path: ^/api/token/refresh, roles: PUBLIC_ACCESS }
         - { path: ^/api/status, roles: PUBLIC_ACCESS }
+        - { path: ^/api/pre-register, roles: PUBLIC_ACCESS }
+        - { path: ^/api/address/autocomplete, roles: PUBLIC_ACCESS }
 
         # ============================================================
         # PANIER INVITÉ (PUBLIC) ✅ AJOUTÉ

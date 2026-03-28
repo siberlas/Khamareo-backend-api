@@ -67,12 +67,14 @@ class NewsletterSubscriber
     private ?string $confirmationToken = null;
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['newsletter:read'])]
     private ?\DateTimeImmutable $confirmedAt = null;
 
     #[ORM\Column(length: 64, unique: true)]
     private string $unsubscribeToken = '';
 
     #[ORM\Column(nullable: true)]
+    #[Groups(['newsletter:read'])]
     private ?\DateTimeImmutable $confirmationSentAt = null;
 
     // Propriété transiente pour le code promo (non stockée en BDD)

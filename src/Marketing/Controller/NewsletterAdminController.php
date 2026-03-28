@@ -51,7 +51,8 @@ class NewsletterAdminController extends AbstractController
         $this->em->flush();
 
         $confirmUrl = $this->backendUrl . '/api/newsletter/confirm?token=' . $token;
-        $this->mailerService->sendNewsletterConfirmationEmail($subscriber, $confirmUrl);
+        $unsubscribeUrl = $this->backendUrl . '/api/newsletter/unsubscribe?token=' . $token;
+        $this->mailerService->sendNewsletterConfirmationEmail($subscriber, $confirmUrl, $unsubscribeUrl);
 
         return $this->json([
             'message' => 'Email de confirmation renvoyé à ' . $subscriber->getEmail(),

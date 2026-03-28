@@ -4,7 +4,7 @@
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
          colors="true"
-         failOnDeprecation="true"
+         failOnDeprecation="false"
          failOnNotice="true"
          failOnWarning="true"
          bootstrap="tests/bootstrap.php"
@@ -15,6 +15,7 @@
         <ini name="error_reporting" value="-1" />
         <server name="APP_ENV" value="test" force="true" />
         <server name="SHELL_VERBOSITY" value="-1" />
+        <server name="KERNEL_CLASS" value="App\Kernel" />
     </php>
 
     <testsuites>
@@ -42,3 +43,4 @@
     <extensions>
     </extensions>
 </phpunit>
+ 

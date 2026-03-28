@@ -1,26 +1,23 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block header %}
-    <h1>🚚 Your parcel is on its way!</h1>
-    <p>Order #{{ order.orderNumber }} shipped</p>
-{% endblock %}
+{% block subject %}Your parcel is on its way!{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
 
-    <p>Your order <strong style="color: #C9A96E;">#{{ order.orderNumber }}</strong> has been shipped.
+    <p>Your order <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong> has been shipped.
     Your parcel is now in the carrier's hands.</p>
 
     {# ── Tracking number ──────────────────────────────────────── #}
     {% if trackingNumber %}
     <div class="highlight">
         <p style="margin: 0 0 8px;">
-            <strong>📬 Tracking number:</strong>
+            <strong>Tracking number:</strong>
             <span style="font-size: 17px; font-family: monospace; color: #4A2E20; letter-spacing: 1px;">{{ trackingNumber }}</span>
         </p>
         {% if carrierTrackingUrl %}
         <p style="margin: 0;">
-            <a href="{{ carrierTrackingUrl }}" style="color: #C9A96E; font-weight: 600;">
+            <a href="{{ carrierTrackingUrl }}" style="color: #D8A35D; font-weight: 600;">
                 Track my parcel on {{ order.carrier ? order.carrier.name : "carrier's website" }} →
             </a>
         </p>
@@ -31,20 +28,20 @@
     {# ── Estimated delivery ───────────────────────────────────── #}
     {% if deliveryDelay %}
     <p style="text-align: center; color: #7A5C47; font-size: 14px; margin: 16px 0;">
-        ⏱ <strong>Estimated delivery time:</strong> {{ deliveryDelay }}
+        <strong>Estimated delivery time:</strong> {{ deliveryDelay }}
         {% if deliveryNote %}<br><span style="font-size: 12px; opacity: 0.75;">{{ deliveryNote }}</span>{% endif %}
     </p>
     {% endif %}
 
     <div style="text-align: center; margin: 24px 0;">
-        <a href="{{ trackingUrl }}" class="button">Track my order</a>
+        <a href="{{ trackingUrl }}" class="btn-primary">Track my order</a>
     </div>
 
     {# ── Address / Pickup point ───────────────────────────────── #}
     {% if order.shippingAddress %}
     <div class="card">
         {% if order.isRelayPoint %}
-        <h3 style="margin-top: 0; color: #4A2E20;">📍 Your Pickup Point</h3>
+        <h3 style="margin-top: 0; color: #4A2E20;">Your Pickup Point</h3>
         <p style="margin: 0 0 8px; font-size: 13px;">
             <span class="tag">{{ order.carrier ? order.carrier.name : (order.relayCarrier ?? 'Pickup Point') }}</span>
         </p>
@@ -61,11 +58,11 @@
             {{ order.shippingAddress.country }}
         </p>
         <p style="margin-top: 10px; margin-bottom: 0; font-size: 12px; color: #7A5C47;">
-            💡 Please bring a photo ID to collect your parcel.
+            Please bring a photo ID to collect your parcel.
             It will be available within 24–48 hours of receiving this email.
         </p>
         {% else %}
-        <h3 style="margin-top: 0; color: #4A2E20;">📍 Delivery address</h3>
+        <h3 style="margin-top: 0; color: #4A2E20;">Delivery address</h3>
         <p style="margin: 0; line-height: 1.8;">
             <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
             {{ order.shippingAddress.streetAddress ?? order.shippingAddress.street }}<br>
@@ -94,7 +91,7 @@
                         <strong>{{ item.product ? item.product.name : (item.productName ?? 'Product') }}</strong>
                         <br><span class="muted">Qty: {{ item.quantity }}</span>
                     </td>
-                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #C9A96E; white-space: nowrap;">
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
                         {{ (item.quantity * item.unitPrice)|format_currency('EUR') }}
                     </td>
                 </tr>
@@ -105,6 +102,6 @@
     {% endif %}
 
     <p class="muted" style="text-align: center;">
-        Questions? Contact us at <a href="mailto:support@khamareo.com" style="color: #C9A96E;">support@khamareo.com</a>
+        Questions? Contact us at <a href="mailto:akwaaba@khamareo.com" style="color: #D8A35D;">akwaaba@khamareo.com</a>
     </p>
 {% endblock %}
