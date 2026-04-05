@@ -43,9 +43,13 @@ class ComingSoonController
         $enabled    = $enabledSetting?->getSettingValue() === 'true';
         $launchDate = $launchDateSetting?->getSettingValue() ?: null;
 
+        $preRegClosedSetting = $this->settingsRepo->findByKey('pre_registration_closed');
+        $preRegClosed = $preRegClosedSetting?->getSettingValue() === 'true';
+
         return new JsonResponse([
-            'coming_soon' => $enabled,
-            'launch_date' => $launchDate,
+            'coming_soon'             => $enabled,
+            'launch_date'             => $launchDate,
+            'pre_registration_closed' => $preRegClosed,
         ]);
     }
 
@@ -56,6 +60,15 @@ class ComingSoonController
     #[Route('/api/pre-register', name: 'api_pre_register', methods: ['POST'])]
     public function preRegister(Request $request): JsonResponse
     {
+        // Vérifier si les pré-inscriptions sont fermées (préparation de lancement en cours)
+        $preRegClosedSetting = $this->settingsRepo->findByKey('pre_registration_closed');
+        if ($preRegClosedSetting?->getSettingValue() === 'true') {
+            return new JsonResponse(
+                ['error' => 'Les pré-inscriptions sont terminées. Le lancement est imminent !'],
+                Response::HTTP_GONE
+            );
+        }
+
         $data = json_decode($request->getContent(), true) ?? [];
 
         $email      = trim((string) ($data['email'] ?? ''));

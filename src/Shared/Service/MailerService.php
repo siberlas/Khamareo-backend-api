@@ -839,29 +839,38 @@ class MailerService
     /**
      * Envoie l'email d'annonce de lancement avec le code promo individuel
      */
+    /**
+     * Envoie l'email d'annonce de lancement avec le code promo individuel.
+     *
+     * @return array{success: bool, error: string|null}
+     */
     public function sendLaunchAnnouncement(
         string $recipientEmail,
         string $promoCode,
         int $discountPercent,
         \DateTimeImmutable $expiresAt,
+        ?\DateTimeImmutable $launchDate = null,
         string $locale = 'fr'
-    ): bool {
+    ): array {
         try {
             $html = $this->twig->render(
                 $this->getTemplate('emails/launch/announcement', $locale),
                 [
-                    'promoCode'       => $promoCode,
+                    'promoCode'          => $promoCode,
                     'discountPercentage' => $discountPercent,
-                    'expiresAt'       => $expiresAt,
-                    'shopUrl'         => $this->frontBaseUrl . '/boutique',
-                    'locale'          => $locale,
+                    'expiresAt'          => $expiresAt,
+                    'launchDate'         => $launchDate,
+                    'shopUrl'            => $this->frontBaseUrl . '/boutique',
+                    'locale'             => $locale,
                 ]
             );
 
             $email = (new Email())
                 ->from($this->fromEmail)
                 ->to($recipientEmail)
-                ->subject('Khamareo est maintenant ouvert !')
+                ->subject($launchDate
+                    ? 'Khamareo ouvre ses portes le ' . $launchDate->format('d/m/Y') . ' !'
+                    : 'Khamareo est maintenant ouvert !')
                 ->html($html);
 
             $this->mailer->send($email);
@@ -871,13 +880,13 @@ class MailerService
                 'promo_code' => $promoCode,
             ]);
 
-            return true;
+            return ['success' => true, 'error' => null];
         } catch (\Exception $e) {
             $this->logger->error('Failed to send launch announcement', [
                 'email' => $recipientEmail,
                 'error' => $e->getMessage(),
             ]);
-            return false;
+            return ['success' => false, 'error' => $e->getMessage()];
         }
     }
 }

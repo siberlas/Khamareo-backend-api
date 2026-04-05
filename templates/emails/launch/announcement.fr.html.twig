@@ -1,13 +1,18 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block subject %}Khamareo est maintenant ouvert !{% endblock %}
+{% block subject %}Khamareo ouvre ses portes {{ launchDate ? 'le ' ~ launchDate|date('d/m/Y') : 'bientôt' }} !{% endblock %}
 
 {% block content %}
     <p>Bonjour,</p>
 
     <p>
-        Vous avez été parmi les premiers à nous rejoindre — et aujourd'hui, c'est enfin le grand jour&nbsp;!
-        La beauté africaine authentique est maintenant accessible à tous sur <strong>Khamareo</strong>.
+        Vous avez été parmi les premiers à nous rejoindre — et le grand jour approche&nbsp;!
+        {% if launchDate %}
+            <strong>Khamareo ouvre ses portes le {{ launchDate|date('d/m/Y') }}</strong>.
+        {% else %}
+            <strong>Khamareo</strong> ouvre très bientôt.
+        {% endif %}
+        La beauté africaine authentique sera enfin accessible à tous.
     </p>
 
     <p>Pour vous remercier de votre confiance, nous vous offrons un code promo exclusif, réservé aux premiers inscrits&nbsp;:</p>
@@ -27,15 +32,28 @@
         </p>
     </div>
 
+    {% if launchDate %}
+    <div class="card" style="background-color: #FFF8F0; border: 1px solid #E8DFD3; border-radius: 8px; padding: 20px; margin: 24px 0;">
+        <p style="text-align: center; margin: 0;">
+            <span class="muted" style="font-size: 13px;">Ouverture de la boutique</span><br>
+            <strong style="font-size: 22px; color: #4A2E20;">{{ launchDate|date('d/m/Y') }}</strong>
+        </p>
+    </div>
+    {% endif %}
+
     <div class="card">
         <p style="text-align: center; margin: 0;">
-            <span class="muted">Offre valable jusqu'au</span><br>
+            <span class="muted">Code valable jusqu'au</span><br>
             <strong style="font-size: 18px; color: #D8A35D;">{{ expiresAt|date('d/m/Y') }}</strong>
         </p>
     </div>
 
     <p style="margin-top: 24px;">
-        Utilisez le code <strong>{{ promoCode }}</strong> lors de votre commande pour profiter de votre réduction sur notre sélection de produits naturels africains.
+        {% if launchDate %}
+            Dès le {{ launchDate|date('d/m/Y') }}, utilisez le code <strong>{{ promoCode }}</strong> lors de votre commande pour profiter de votre réduction sur notre sélection de produits naturels africains.
+        {% else %}
+            Utilisez le code <strong>{{ promoCode }}</strong> lors de votre commande pour profiter de votre réduction sur notre sélection de produits naturels africains.
+        {% endif %}
     </p>
 
     <div style="text-align: center; margin: 32px 0;">
