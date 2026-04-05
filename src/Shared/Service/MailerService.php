@@ -850,7 +850,8 @@ class MailerService
         int $discountPercent,
         \DateTimeImmutable $expiresAt,
         ?\DateTimeImmutable $launchDate = null,
-        string $locale = 'fr'
+        string $locale = 'fr',
+        bool $isNewsletter = false,
     ): array {
         try {
             $html = $this->twig->render(
@@ -860,6 +861,7 @@ class MailerService
                     'discountPercentage' => $discountPercent,
                     'expiresAt'          => $expiresAt,
                     'launchDate'         => $launchDate,
+                    'isNewsletter'       => $isNewsletter,
                     'shopUrl'            => $this->frontBaseUrl . '/boutique',
                     'locale'             => $locale,
                 ]

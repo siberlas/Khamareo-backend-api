@@ -74,6 +74,7 @@ class SendLaunchBatchCommand extends Command
                 $item->getLaunchDate()->modify('+30 days'),
                 $item->getLaunchDate(),
                 'fr',
+                $item->isNewsletter(),
             );
 
             if ($result['success']) {

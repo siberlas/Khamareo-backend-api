@@ -68,6 +68,15 @@
         </p>
     </div>
 
+    {% if isNewsletter is defined and isNewsletter %}
+    <div style="background-color: #F9F5F0; border: 1px solid #E8DFD3; border-radius: 8px; padding: 16px; margin: 24px 0; text-align: center;">
+        <p style="margin: 0; font-size: 13px; color: #4A2E20;">
+            You are also subscribed to our newsletter.
+            You will receive our latest products, wellness tips and exclusive offers first.
+        </p>
+    </div>
+    {% endif %}
+
     <p class="muted" style="text-align:center; margin-top:32px; font-size:11px; border-top:1px solid #E8DFD3; padding-top:16px;">
         You are receiving this email because you pre-registered on Khamareo.
     </p>

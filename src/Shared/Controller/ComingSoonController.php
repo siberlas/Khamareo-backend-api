@@ -28,6 +28,7 @@ class ComingSoonController
         private readonly ValidatorInterface        $validator,
         private readonly MailchimpService          $mailchimpService,
         private readonly MailerService             $mailerService,
+        private readonly string                    $backendUrl,
     ) {}
 
     /**
@@ -142,9 +143,8 @@ class ComingSoonController
                 $this->em->flush();
 
                 try {
-                    $backendUrl = $_ENV['BACKEND_BASE_URL'] ?? $_ENV['API_BASE_URL'] ?? 'https://api.khamareo.com';
-                    $confirmUrl = $backendUrl . '/api/newsletter/confirm?token=' . $token;
-                    $unsubscribeUrl = $backendUrl . '/api/newsletter/unsubscribe?token=' . $subscriber->getUnsubscribeToken();
+                    $confirmUrl = $this->backendUrl . '/api/newsletter/confirm?token=' . $token;
+                    $unsubscribeUrl = $this->backendUrl . '/api/newsletter/unsubscribe?token=' . $subscriber->getUnsubscribeToken();
                     $this->mailerService->sendNewsletterConfirmationEmail($subscriber, $confirmUrl, $unsubscribeUrl);
                 } catch (\Throwable) {
                     // Email non envoyé, non bloquant

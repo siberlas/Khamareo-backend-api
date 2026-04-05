@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controller;
 
+use App\Marketing\Entity\NewsletterSubscriber;
 use App\Marketing\Entity\PromoCode;
 use App\Marketing\Repository\PromoCodeRepository;
 use App\Shared\Entity\AppSettings;
@@ -96,6 +97,15 @@ class AdminLaunchController
 
         $expiresAt = $launchDate->modify('+' . self::PROMO_VALIDITY_DAYS . ' days');
 
+        // Récupérer les emails confirmés newsletter pour les marquer
+        $newsletterRepo = $this->em->getRepository(NewsletterSubscriber::class);
+        $newsletterEmails = [];
+        foreach ($newsletterRepo->findAll() as $sub) {
+            if ($sub->isConfirmed()) {
+                $newsletterEmails[strtolower($sub->getEmail())] = true;
+            }
+        }
+
         // Générer les codes promo + remplir la queue
         $queued = 0;
         foreach ($emails as $email) {
@@ -115,6 +125,7 @@ class AdminLaunchController
             $queueItem->setEmail($email);
             $queueItem->setPromoCode($promoCode->getCode());
             $queueItem->setLaunchDate($launchDate);
+            $queueItem->setIsNewsletter(isset($newsletterEmails[strtolower($email)]));
             $this->em->persist($queueItem);
 
             ++$queued;
@@ -277,6 +288,7 @@ class AdminLaunchController
                 $item->getLaunchDate()->modify('+' . self::PROMO_VALIDITY_DAYS . ' days'),
                 $item->getLaunchDate(),
                 'fr',
+                $item->isNewsletter(),
             );
 
             if ($result['success']) {

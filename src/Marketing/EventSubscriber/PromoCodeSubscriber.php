@@ -4,6 +4,7 @@ namespace App\Marketing\EventSubscriber;
 
 use App\Marketing\Entity\NewsletterSubscriber;
 use App\Marketing\Service\PromoCodeService;
+use App\Shared\Repository\AppSettingsRepository;
 use Doctrine\Common\EventSubscriber;
 use Doctrine\ORM\Events;
 use Doctrine\Persistence\Event\LifecycleEventArgs;
@@ -13,6 +14,7 @@ class PromoCodeSubscriber implements EventSubscriber
 {
     public function __construct(
         private PromoCodeService $promoCodeService,
+        private AppSettingsRepository $settingsRepo,
         private LoggerInterface $logger
     ) {}
 
@@ -27,8 +29,14 @@ class PromoCodeSubscriber implements EventSubscriber
     {
         $entity = $args->getObject();
 
-        // Inscription newsletter
+        // Inscription newsletter : envoyer le promo uniquement si le site est ouvert.
+        // Pendant le coming soon, le promo est inclus dans le batch de lancement.
         if ($entity instanceof NewsletterSubscriber) {
+            $comingSoon = $this->settingsRepo->findByKey('coming_soon_enabled');
+            if ($comingSoon?->getSettingValue() === 'true') {
+                return; // En mode coming soon, pas de promo auto
+            }
+
             try {
                 $this->promoCodeService->handleNewsletterSubscription(
                     $entity->getEmail()
@@ -40,8 +48,5 @@ class PromoCodeSubscriber implements EventSubscriber
                 ]);
             }
         }
-
-        // Vous pouvez ajouter d'autres conditions ici
-        // Par exemple : if ($entity instanceof Order && $entity->isFirstOrder())
     }
 }

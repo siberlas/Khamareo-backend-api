@@ -38,6 +38,9 @@ class LaunchEmailQueue
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $sentAt = null;
 
+    #[ORM\Column(type: 'boolean')]
+    private bool $isNewsletter = false;
+
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $errorMessage = null;
 
@@ -65,6 +68,9 @@ class LaunchEmailQueue
 
     public function getSentAt(): ?\DateTimeImmutable { return $this->sentAt; }
     public function setSentAt(?\DateTimeImmutable $sentAt): self { $this->sentAt = $sentAt; return $this; }
+
+    public function isNewsletter(): bool { return $this->isNewsletter; }
+    public function setIsNewsletter(bool $isNewsletter): self { $this->isNewsletter = $isNewsletter; return $this; }
 
     public function getErrorMessage(): ?string { return $this->errorMessage; }
     public function setErrorMessage(?string $errorMessage): self { $this->errorMessage = $errorMessage; return $this; }

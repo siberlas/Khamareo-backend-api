@@ -5,6 +5,7 @@ use Symfony\Component\HttpKernel\Attribute\AsController;
 
 use App\Marketing\Repository\NewsletterSubscriberRepository;
 use App\Marketing\Service\PromoCodeService;
+use App\Shared\Repository\AppSettingsRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
@@ -25,6 +26,7 @@ class NewsletterConfirmController extends AbstractController
         private NewsletterSubscriberRepository $repository,
         private EntityManagerInterface         $em,
         private PromoCodeService               $promoCodeService,
+        private AppSettingsRepository          $settingsRepo,
         private string                         $frontBaseUrl,
     ) {}
 
@@ -52,14 +54,18 @@ class NewsletterConfirmController extends AbstractController
         $subscriber->setConfirmationToken(null);
         $this->em->flush();
 
-        // Créer et envoyer le code promo de bienvenue (avec lien de désabonnement)
-        // handleNewsletterSubscription retourne null si l'email a déjà bénéficié d'un promo (ré-abonnement)
+        // Envoyer le code promo uniquement si le site est ouvert.
+        // Pendant le coming soon, le promo est inclus dans le batch de lancement.
+        $comingSoon = $this->settingsRepo->findByKey('coming_soon_enabled');
         $promoSent = false;
-        try {
-            $result = $this->promoCodeService->handleNewsletterSubscription($subscriber->getEmail());
-            $promoSent = ($result !== null);
-        } catch (\Exception) {
-            // Ne pas bloquer la confirmation si le promo échoue
+
+        if ($comingSoon?->getSettingValue() !== 'true') {
+            try {
+                $result = $this->promoCodeService->handleNewsletterSubscription($subscriber->getEmail());
+                $promoSent = ($result !== null);
+            } catch (\Exception) {
+                // Ne pas bloquer la confirmation si le promo échoue
+            }
         }
 
         $suffix = $promoSent ? '' : '?promo=0';
