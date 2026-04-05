@@ -5,25 +5,18 @@ namespace App\Marketing\EventSubscriber;
 use App\Marketing\Entity\NewsletterSubscriber;
 use App\Marketing\Service\PromoCodeService;
 use App\Shared\Repository\AppSettingsRepository;
-use Doctrine\Common\EventSubscriber;
-use Doctrine\ORM\Events;
+use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\Persistence\Event\LifecycleEventArgs;
 use Psr\Log\LoggerInterface;
 
-class PromoCodeSubscriber implements EventSubscriber
+#[AsDoctrineListener(event: 'postPersist')]
+class PromoCodeSubscriber
 {
     public function __construct(
         private PromoCodeService $promoCodeService,
         private AppSettingsRepository $settingsRepo,
         private LoggerInterface $logger
     ) {}
-
-    public function getSubscribedEvents(): array
-    {
-        return [
-            Events::postPersist,
-        ];
-    }
 
     public function postPersist(LifecycleEventArgs $args): void
     {

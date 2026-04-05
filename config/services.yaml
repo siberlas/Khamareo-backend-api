@@ -38,9 +38,7 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
-    App\Payment\EventSubscriber\PaymentStatusSubscriber:
-        tags:
-            - { name: doctrine.event_subscriber }
+    # PaymentStatusSubscriber utilise #[AsDoctrineListener] directement
     App\User\State\UserPasswordHasher:
         bind:
             $processor: '@api_platform.doctrine.orm.state.persist_processor'
