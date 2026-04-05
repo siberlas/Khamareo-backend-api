@@ -123,6 +123,7 @@ final class GuestCartAddressProcessor implements ProcessorInterface
             ->setPostalCode($data->postalCode)
             ->setCity($data->city)
             ->setCountry($data->country)
+            ->setState($data->state)
             ->setIsDefault(true)
             ->setLabel('Adresse de livraison');
 

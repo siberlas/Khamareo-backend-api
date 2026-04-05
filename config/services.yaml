@@ -219,6 +219,7 @@ services:
                 country: '%env(COLISSIMO_SENDER_COUNTRY)%'
                 email: '%env(COLISSIMO_SENDER_EMAIL)%'
                 phone: '%env(COLISSIMO_SENDER_PHONE)%'
+                eori: '%env(COLISSIMO_SENDER_EORI)%'
             $productCodes:
                 fr: '%env(COLISSIMO_PRODUCT_CODE_FR)%'
                 om: '%env(COLISSIMO_PRODUCT_CODE_OM)%'
