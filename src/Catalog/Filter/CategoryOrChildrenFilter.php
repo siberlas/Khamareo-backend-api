@@ -26,24 +26,26 @@ class CategoryOrChildrenFilter extends AbstractFilter
         $alias = $queryBuilder->getRootAliases()[0];
         $param = $queryNameGenerator->generateParameterName($property);
 
-        // Produits dont :
-        // - la catégorie principale correspond OU son parent correspond
-        // - OU une catégorie secondaire correspond OU son parent correspond
+        // Catégorie principale ou son parent
         $queryBuilder
             ->leftJoin(sprintf('%s.category', $alias), 'c')
-            ->leftJoin('c.parent', 'p')
-            ->leftJoin(sprintf('%s.categories', $alias), 'sc')
-            ->leftJoin('sc.parent', 'scp')
+            ->leftJoin('c.parent', 'p');
+
+        // Catégorie secondaire ou son parent — via sous-requête pour éviter les doublons
+        $subQuery = $queryBuilder->getEntityManager()->createQueryBuilder()
+            ->select('IDENTITY(sc_product.id)')
+            ->from($resourceClass, 'sc_product')
+            ->innerJoin('sc_product.categories', 'sc_cat')
+            ->leftJoin('sc_cat.parent', 'sc_parent')
+            ->where('sc_cat.slug = :' . $param . ' OR sc_parent.slug = :' . $param);
+
+        $queryBuilder
             ->andWhere(
                 'c.slug = :' . $param .
                 ' OR p.slug = :' . $param .
-                ' OR sc.slug = :' . $param .
-                ' OR scp.slug = :' . $param
+                ' OR ' . $alias . '.id IN (' . $subQuery->getDQL() . ')'
             )
             ->setParameter($param, $value);
-
-        // Éviter les doublons — utiliser GROUP BY sur l'ID au lieu de DISTINCT (incompatible avec json columns)
-        $queryBuilder->groupBy(sprintf('%s.id', $alias));
     }
 
     public function getDescription(string $resourceClass): array
@@ -54,7 +56,7 @@ class CategoryOrChildrenFilter extends AbstractFilter
                 'type' => Type::BUILTIN_TYPE_STRING,
                 'required' => false,
                 'swagger' => [
-                    'description' => 'Filtre les produits par catégorie ou sous-catégorie (slug) — cherche dans la catégorie principale et les catégories secondaires',
+                    'description' => 'Filtre les produits par catégorie ou sous-catégorie (slug)',
                 ],
             ],
         ];
