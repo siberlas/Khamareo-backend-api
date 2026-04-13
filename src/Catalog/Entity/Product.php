@@ -100,6 +100,13 @@ class Product
     #[ORM\JoinColumn(nullable: false)]
     private ?Category $category = null;
 
+    /** Catégories secondaires (le produit apparaît aussi dans ces catégories) */
+    #[ORM\ManyToMany(targetEntity: Category::class)]
+    #[ORM\JoinTable(name: 'product_categories')]
+    #[Groups(['product:read', 'product:write'])]
+    #[MaxDepth(1)]
+    private Collection $categories;
+
     #[Groups(['product:read', 'product:write'])]
     #[ORM\Column(nullable: true)]
     private ?int $reviewsCount = null;
@@ -188,11 +195,11 @@ class Product
     public function __construct()
     {
         $this->id = Uuid::v7();
+        $this->categories = new ArrayCollection();
         $this->relatedProducts = new ArrayCollection();
         $this->reviews = new ArrayCollection();
         $this->prices = new ArrayCollection();
         $this->productMedias = new ArrayCollection();
-
     }
 
     public function getId(): ?Uuid
@@ -244,6 +251,39 @@ class Product
 
     public function getCategory(): ?Category { return $this->category; }
     public function setCategory(?Category $category): static { $this->category = $category; return $this; }
+
+    /** @return Collection<int, Category> */
+    public function getCategories(): Collection { return $this->categories; }
+
+    public function addCategory(Category $category): static
+    {
+        if (!$this->categories->contains($category)) {
+            $this->categories->add($category);
+        }
+        return $this;
+    }
+
+    public function removeCategory(Category $category): static
+    {
+        $this->categories->removeElement($category);
+        return $this;
+    }
+
+    /** Retourne toutes les catégories (principale + secondaires) sans doublon */
+    #[Groups(['product:read'])]
+    public function getAllCategories(): array
+    {
+        $all = [];
+        if ($this->category) {
+            $all[] = $this->category;
+        }
+        foreach ($this->categories as $cat) {
+            if (!$this->category || $cat->getId() !== $this->category->getId()) {
+                $all[] = $cat;
+            }
+        }
+        return $all;
+    }
 
     public function getReviewsCount(): ?int { return $this->reviewsCount; }
     public function setReviewsCount(?int $reviewsCount): self { $this->reviewsCount = $reviewsCount; return $this; }

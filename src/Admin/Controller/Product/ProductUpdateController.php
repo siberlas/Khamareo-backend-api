@@ -120,6 +120,25 @@ class ProductUpdateController extends AbstractController
                 $product->setCategory($category);
             }
 
+            // Catégories secondaires
+            if (isset($data['secondaryCategoryIds']) && is_array($data['secondaryCategoryIds'])) {
+                // Vider les catégories secondaires existantes
+                foreach ($product->getCategories()->toArray() as $existingCat) {
+                    $product->removeCategory($existingCat);
+                }
+                // Ajouter la catégorie principale
+                if ($product->getCategory()) {
+                    $product->addCategory($product->getCategory());
+                }
+                // Ajouter les secondaires
+                foreach ($data['secondaryCategoryIds'] as $catId) {
+                    $cat = $this->categoryRepository->find($catId);
+                    if ($cat) {
+                        $product->addCategory($cat);
+                    }
+                }
+            }
+
             if (isset($data['description'])) {
                 $product->setDescription($data['description']);
             }
@@ -311,6 +330,26 @@ class ProductUpdateController extends AbstractController
                     return $this->json(['success' => false, 'error' => 'Catégorie introuvable'], 404);
                 }
                 $product->setCategory($category);
+            }
+
+            // Catégories secondaires (multipart : JSON string)
+            if ($request->request->has('secondaryCategoryIds')) {
+                $secondaryIds = $request->request->get('secondaryCategoryIds');
+                if (is_string($secondaryIds)) {
+                    $secondaryIds = json_decode($secondaryIds, true) ?? [];
+                }
+                foreach ($product->getCategories()->toArray() as $existingCat) {
+                    $product->removeCategory($existingCat);
+                }
+                if ($product->getCategory()) {
+                    $product->addCategory($product->getCategory());
+                }
+                foreach ($secondaryIds as $catId) {
+                    $cat = $this->categoryRepository->find($catId);
+                    if ($cat) {
+                        $product->addCategory($cat);
+                    }
+                }
             }
 
             if ($request->request->has('description')) {

@@ -127,22 +127,30 @@ class ProductCatalogController extends AbstractController
         $categoryFilter = '';
         if ($categorySlug) {
             // Récupérer la catégorie + tous ses descendants via CTE
+            // Puis chercher dans la catégorie principale ET les catégories secondaires
             $categoryFilter = <<<SQL
-AND p.category_id IN (
-    WITH RECURSIVE category_descendants AS (
-        -- Catégorie de départ
-        SELECT c.id
-        FROM category c
-        WHERE c.slug = :categorySlug
-        
-        UNION ALL
-        
-        -- Tous les enfants récursifs
-        SELECT child.id
-        FROM category child
-        INNER JOIN category_descendants cd ON child.parent_id = cd.id
+AND (
+    p.category_id IN (
+        WITH RECURSIVE category_descendants AS (
+            SELECT c.id FROM category c WHERE c.slug = :categorySlug
+            UNION ALL
+            SELECT child.id FROM category child
+            INNER JOIN category_descendants cd ON child.parent_id = cd.id
+        )
+        SELECT id FROM category_descendants
     )
-    SELECT id FROM category_descendants
+    OR p.id IN (
+        SELECT pc.product_id FROM product_categories pc
+        WHERE pc.category_id IN (
+            WITH RECURSIVE category_descendants2 AS (
+                SELECT c2.id FROM category c2 WHERE c2.slug = :categorySlug
+                UNION ALL
+                SELECT child2.id FROM category child2
+                INNER JOIN category_descendants2 cd2 ON child2.parent_id = cd2.id
+            )
+            SELECT id FROM category_descendants2
+        )
+    )
 )
 SQL;
             $parameters['categorySlug'] = $categorySlug;

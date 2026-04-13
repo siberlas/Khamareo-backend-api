@@ -328,9 +328,9 @@ class ColissimoApiService
             'mobileNumber' => $customerData['phone'],
         ];
 
-        // État/Province obligatoire pour US et CA
-        if (in_array($countryCode, ['US', 'CA'], true) && $address->getState()) {
-            $addresseeAddress['stateOrProvinceCode'] = strtoupper(substr($address->getState(), 0, 2));
+        // État/Province obligatoire pour US et CA (Colissimo : champ line3)
+        if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
+            $addresseeAddress['line3'] = strtoupper($address->getState());
         }
 
         if ($customerData['companyName'] !== null) {
@@ -376,14 +376,6 @@ class ColissimoApiService
                 ],
                 'addressee' => [
                     'address' => $addresseeAddress,
-                ],
-            ],
-            'fields' => [
-                'customField' => [
-                    [
-                        'key' => 'EORI',
-                        'value' => $this->senderInfo['eori'] ?? '',
-                    ],
                 ],
             ],
         ];
@@ -653,7 +645,7 @@ class ColissimoApiService
 
         $countryCode = $addresseeAddress['countryCode'];
         if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
-            $addresseeAddress['stateOrProvinceCode'] = strtoupper(substr($address->getState(), 0, 2));
+            $addresseeAddress['line3'] = strtoupper($address->getState());
         }
 
         $this->logger->info('OM weight calculation', [

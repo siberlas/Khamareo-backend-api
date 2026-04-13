@@ -26,12 +26,24 @@ class CategoryOrChildrenFilter extends AbstractFilter
         $alias = $queryBuilder->getRootAliases()[0];
         $param = $queryNameGenerator->generateParameterName($property);
 
-        // produits dont la catégorie correspond OU dont la sous-catégorie a ce parent
+        // Produits dont :
+        // - la catégorie principale correspond OU son parent correspond
+        // - OU une catégorie secondaire correspond OU son parent correspond
         $queryBuilder
             ->leftJoin(sprintf('%s.category', $alias), 'c')
             ->leftJoin('c.parent', 'p')
-            ->andWhere('c.slug = :'.$param.' OR p.slug = :'.$param)
+            ->leftJoin(sprintf('%s.categories', $alias), 'sc')
+            ->leftJoin('sc.parent', 'scp')
+            ->andWhere(
+                'c.slug = :' . $param .
+                ' OR p.slug = :' . $param .
+                ' OR sc.slug = :' . $param .
+                ' OR scp.slug = :' . $param
+            )
             ->setParameter($param, $value);
+
+        // Éviter les doublons — utiliser GROUP BY sur l'ID au lieu de DISTINCT (incompatible avec json columns)
+        $queryBuilder->groupBy(sprintf('%s.id', $alias));
     }
 
     public function getDescription(string $resourceClass): array
@@ -42,7 +54,7 @@ class CategoryOrChildrenFilter extends AbstractFilter
                 'type' => Type::BUILTIN_TYPE_STRING,
                 'required' => false,
                 'swagger' => [
-                    'description' => 'Filtre les produits par catégorie ou sous-catégorie (slug)',
+                    'description' => 'Filtre les produits par catégorie ou sous-catégorie (slug) — cherche dans la catégorie principale et les catégories secondaires',
                 ],
             ],
         ];

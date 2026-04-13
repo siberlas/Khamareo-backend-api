@@ -214,7 +214,8 @@ class ProductListController extends AbstractController
             // Récupérer le produit avec eager loading
             $product = $this->productRepository->createQueryBuilder('p')
                 ->leftJoin('p.category', 'c')->addSelect('c')
-                ->leftJoin('c.parent', 'cp')->addSelect('cp') // Parent de la catégorie aussi
+                ->leftJoin('c.parent', 'cp')->addSelect('cp')
+                ->leftJoin('p.categories', 'sc')->addSelect('sc')
                 ->leftJoin('p.badge', 'b')->addSelect('b')
                 ->leftJoin('p.productMedias', 'pm')->addSelect('pm')
                 ->leftJoin('pm.media', 'm')->addSelect('m')
@@ -300,6 +301,11 @@ class ProductListController extends AbstractController
                     'reviewsCount' => $product->getReviewsCount(),
                     'relatedProducts' => $product->getRelatedProducts(),
                     'category' => $categoryData,
+                    'categories' => array_map(fn($cat) => [
+                        'id' => $cat->getId()->toRfc4122(),
+                        'name' => $cat->getName(),
+                        'slug' => $cat->getSlug(),
+                    ], $product->getCategories()->toArray()),
                     'badge' => $product->getBadge() ? [
                         'id' => $product->getBadge()->getId()->toRfc4122(),
                         'label' => $product->getBadge()->getLabel(),

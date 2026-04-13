@@ -66,10 +66,6 @@ final class GuestCartAddressInput
     #[Groups(['guest-user'])]
     public ?string $country = null;
 
-    #[Assert\Length(max: 10)]
-    #[Groups(['guest-user'])]
-    public ?string $state = null;
-
     // ✅ NOUVEAU : Consentement RGPD
     #[Assert\IsTrue(message: 'Vous devez accepter les conditions générales pour continuer.')]
     #[Groups(['guest-user'])]

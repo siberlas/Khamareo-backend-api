@@ -205,7 +205,6 @@ class CheckoutPaymentIntentController extends AbstractController
                 ->setPostalCode($input['postalCode'] ?? '')
                 ->setCity($input['city'] ?? '')
                 ->setCountry($input['country'] ?? 'FR')
-                ->setState($input['state'] ?? null)
                 ->setPhone($input['phone'] ?? null)
                 ->setOwner(null)
                 ->setIsDefault(false);

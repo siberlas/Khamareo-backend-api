@@ -96,6 +96,22 @@ class ProductCreationController extends AbstractController
             $product->setSlug($slug);
             
             $product->setCategory($category);
+            $product->addCategory($category); // Aussi dans la table pivot
+
+            // Catégories secondaires
+            if ($request->request->has('secondaryCategoryIds')) {
+                $secondaryIds = $request->request->get('secondaryCategoryIds');
+                if (is_string($secondaryIds)) {
+                    $secondaryIds = json_decode($secondaryIds, true) ?? [];
+                }
+                foreach ($secondaryIds as $catId) {
+                    $cat = $this->categoryRepository->find($catId);
+                    if ($cat) {
+                        $product->addCategory($cat);
+                    }
+                }
+            }
+
             $product->setDescription($request->request->get('description'));
             $product->setPrice((float) $price);
             $product->setStock((int) $stock);

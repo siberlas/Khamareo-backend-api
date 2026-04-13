@@ -122,8 +122,7 @@ class CheckoutController extends AbstractController
             ->setCivility($billingSource->getCivility())
             ->setFirstName($billingSource->getFirstName())
             ->setLastName($billingSource->getLastName())
-            ->setPhone($billingSource->getPhone())
-            ->setState($billingSource->getState());
+            ->setPhone($billingSource->getPhone());
 
         // Champs business
         $billingSnapshot
@@ -150,8 +149,7 @@ class CheckoutController extends AbstractController
             ->setCivility($deliverySource->getCivility())
             ->setFirstName($deliverySource->getFirstName())
             ->setLastName($deliverySource->getLastName())
-            ->setPhone($deliverySource->getPhone())
-            ->setState($deliverySource->getState());
+            ->setPhone($deliverySource->getPhone());
 
         // Champs business
         $shippingSnapshot
@@ -449,7 +447,6 @@ class CheckoutController extends AbstractController
                 ->setPostalCode($input['postalCode'] ?? '')
                 ->setCity($input['city'] ?? '')
                 ->setCountry($input['country'] ?? 'FR')
-                ->setState($input['state'] ?? null)
                 ->setPhone($input['phone'] ?? null)
                 ->setOwner(null) // snapshot détaché
                 ->setIsDefault(false);
