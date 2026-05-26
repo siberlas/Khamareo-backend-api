@@ -571,14 +571,12 @@ class ProductCreationController extends AbstractController
             $this->em->flush();
 
             // Supprimer de Cloudinary
+            $cloudinaryDeleted = false;
             if ($cloudinaryPublicId) {
-                $deleteResult = $this->cloudinaryService->deleteAsset(
-                    $cloudinaryPublicId,
-                    'image',
-                    true // invalidate CDN
-                );
+                $deleteResult = $this->cloudinaryService->deleteImageByPublicId($cloudinaryPublicId);
+                $cloudinaryDeleted = !empty($deleteResult['success']);
 
-                if (empty($deleteResult['success'])) {
+                if (!$cloudinaryDeleted) {
                     $this->logger->warning('Cloudinary image deletion failed', [
                         'publicId' => $cloudinaryPublicId,
                         'error' => $deleteResult['error'] ?? 'unknown',
@@ -590,7 +588,7 @@ class ProductCreationController extends AbstractController
             $this->logger->info('Product image removed', [
                 'product_slug' => $slug,
                 'product_media_id' => $productMediaId,
-                'cloudinary_deleted' => !empty($deleteResult['success']),
+                'cloudinary_deleted' => $cloudinaryDeleted,
             ]);
 
             return $this->json([
@@ -598,7 +596,7 @@ class ProductCreationController extends AbstractController
                 'message' => 'Image supprimée avec succès'
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->logger->error('Remove image failed', [
                 'slug' => $slug,
                 'product_media_id' => $productMediaId,
