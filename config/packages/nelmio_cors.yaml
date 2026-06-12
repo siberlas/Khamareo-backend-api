@@ -15,3 +15,10 @@ nelmio_cors:
             allow_headers: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Accept', 'Accept-Language', 'Cache-Control', 'X-Requested-With']
             allow_credentials: true
             max_age: 3600
+        '^/waraba-l19':
+            origin_regex: true
+            allow_origin: ['%env(CORS_ALLOW_ORIGIN)%']
+            allow_methods: ['GET', 'OPTIONS', 'POST']
+            allow_headers: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Accept', 'Accept-Language', 'Cache-Control', 'X-Requested-With']
+            allow_credentials: true
+            max_age: 3600
