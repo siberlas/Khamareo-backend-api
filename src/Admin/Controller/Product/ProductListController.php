@@ -58,7 +58,7 @@ class ProductListController extends AbstractController
             $qb = $this->productRepository->createQueryBuilder('p')
                 ->leftJoin('p.category', 'c')->addSelect('c')
                 ->leftJoin('p.badge', 'b')->addSelect('b')
-                ->leftJoin('p.productMedias', 'pm')->addSelect('pm')
+                ->leftJoin('p.productMedias', 'pm', 'WITH', 'pm.isPrimary = true')->addSelect('pm')
                 ->leftJoin('pm.media', 'm')->addSelect('m')
                 ->where('p.isDeleted = false');
 
@@ -102,6 +102,27 @@ class ProductListController extends AbstractController
                 ->select('COUNT(DISTINCT p.id)')
                 ->getQuery()
                 ->getSingleScalarResult();
+
+            // Compter actifs/désactivés sans filtre isEnabled (pour les badges onglets)
+            $baseCountQb = $this->productRepository->createQueryBuilder('p')
+                ->where('p.isDeleted = false');
+            if ($search) {
+                $baseCountQb->andWhere(
+                    $baseCountQb->expr()->orX(
+                        $baseCountQb->expr()->like('p.name', ':search'),
+                        $baseCountQb->expr()->like('p.slug', ':search')
+                    )
+                )->setParameter('search', '%' . $search . '%');
+            }
+            if ($categoryId) {
+                try {
+                    $categoryUuid = \Symfony\Component\Uid\Uuid::fromString($categoryId);
+                    $baseCountQb->andWhere('p.category = :categoryId')
+                                ->setParameter('categoryId', $categoryUuid);
+                } catch (\Exception $e) {}
+            }
+            $totalActive   = (int) (clone $baseCountQb)->select('COUNT(p.id)')->andWhere('p.isEnabled = true')->getQuery()->getSingleScalarResult();
+            $totalDisabled = (int) (clone $baseCountQb)->select('COUNT(p.id)')->andWhere('p.isEnabled = false')->getQuery()->getSingleScalarResult();
 
             // ✅ TRI PARAMÉTRABLE
             $orderBy = $request->query->get('orderBy', 'createdAt'); // name, price, createdAt, stock
@@ -167,6 +188,8 @@ class ProductListController extends AbstractController
                     'itemsPerPage' => $itemsPerPage,
                     'totalItems' => $totalItems,
                     'totalPages' => (int) ceil($totalItems / $itemsPerPage),
+                    'totalActive' => $totalActive,
+                    'totalDisabled' => $totalDisabled,
                 ],
                 'filters' => [
                     'search' => $search,

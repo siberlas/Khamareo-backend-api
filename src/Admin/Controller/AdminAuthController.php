@@ -3,6 +3,7 @@
 namespace App\Admin\Controller;
 
 use App\User\Entity\User;
+use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,6 +13,10 @@ use Symfony\Component\Routing\Annotation\Route;
 #[AsController]
 class AdminAuthController extends AbstractController
 {
+    public function __construct(
+        private readonly JWTTokenManagerInterface $jwtManager,
+    ) {}
+
     /**
      * Cette route est interceptée par le firewall json_login.
      * Elle ne sera jamais exécutée directement.
@@ -32,6 +37,10 @@ class AdminAuthController extends AbstractController
         throw new \LogicException('Cette route est gérée par le firewall Symfony.');
     }
 
+    /**
+     * Récupère la session admin active et retourne un JWT frais.
+     * Utilisé par le frontend pour restaurer la session après rechargement.
+     */
     #[Route('/waraba-l19/me', name: 'admin_me', methods: ['GET'])]
     public function me(): JsonResponse
     {
@@ -47,6 +56,7 @@ class AdminAuthController extends AbstractController
             'firstName' => $user->getFirstName(),
             'lastName'  => $user->getLastName(),
             'roles'     => $user->getRoles(),
+            'token'     => $this->jwtManager->create($user),
         ]);
     }
 }
