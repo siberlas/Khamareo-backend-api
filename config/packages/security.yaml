@@ -68,6 +68,7 @@ security:
         - { path: ^/api/payment/webhook/stripe, roles: PUBLIC_ACCESS }
 
         # ✅ Routes publiques (authentification)
+        - { path: ^/api/auth/google, roles: PUBLIC_ACCESS }  # Google OAuth
         - { path: ^/api/auth$, roles: PUBLIC_ACCESS }
         - { path: ^/api/users$, roles: PUBLIC_ACCESS, methods: [POST] }  # Inscription
         - { path: ^/api/confirm, roles: PUBLIC_ACCESS }  # Confirmation email

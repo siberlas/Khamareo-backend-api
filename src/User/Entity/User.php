@@ -196,6 +196,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[Groups(['user:read', 'user:write'])]
     private string $preferredLanguage = 'fr';
 
+    #[ORM\Column(length: 255, nullable: true, unique: true)]
+    private ?string $googleId = null;
+
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
@@ -645,4 +648,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->preferredLanguage = $preferredLanguage;
         return $this;
     }
+
+    public function getGoogleId(): ?string { return $this->googleId; }
+    public function setGoogleId(?string $googleId): self { $this->googleId = $googleId; return $this; }
 }
