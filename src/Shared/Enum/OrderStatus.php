@@ -31,7 +31,7 @@ enum OrderStatus: string
             self::DELIVERED => 'Livrée',
             self::CANCELLED => 'Annulée',
             self::REFUNDED => 'Remboursée',
-            self::FAILED => 'failed',
+            self::FAILED => 'Échoué',
         };
     }
 

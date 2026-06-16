@@ -41,6 +41,9 @@ security:
                 password_path: password
                 success_handler: App\Security\AdminLoginSuccessHandler
                 failure_handler: App\Security\AdminLoginFailureHandler
+            login_throttling:
+                max_attempts: 5
+                interval: '15 minutes'
 
         api:
             pattern: ^/api

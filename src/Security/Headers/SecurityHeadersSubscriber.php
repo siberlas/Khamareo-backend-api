@@ -22,7 +22,8 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
         $request = $event->getRequest();
         $response = $event->getResponse();
 
-        if (!str_starts_with($request->getPathInfo(), '/api')) {
+        $path = $request->getPathInfo();
+        if (!str_starts_with($path, '/api') && !str_starts_with($path, '/waraba-l19')) {
             return;
         }
 
@@ -33,7 +34,6 @@ class SecurityHeadersSubscriber implements EventSubscriberInterface
         $headers->set('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
 
         // CSP souple pour la documentation Swagger (HTML), strict pour les endpoints API (JSON)
-        $path = $request->getPathInfo();
         if (str_starts_with($path, '/api/docs') || str_starts_with($path, '/api/.well-known')) {
             $headers->set('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none';");
         } else {

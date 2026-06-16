@@ -1,0 +1,8 @@
+nelmio_cors:
+    defaults:
+        allow_headers: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Accept', 'Accept-Language', 'Cache-Control', 'X-Requested-With']
+    paths:
+        '^/api':
+            allow_headers: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Accept', 'Accept-Language', 'Cache-Control', 'X-Requested-With']
+        '^/waraba-l19':
+            allow_headers: ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', 'Accept', 'Accept-Language', 'Cache-Control', 'X-Requested-With']
