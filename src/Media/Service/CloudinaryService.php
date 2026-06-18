@@ -369,16 +369,31 @@ class CloudinaryService
     }
 
     /**
+     * Supprime un asset Cloudinary par public_id (API unifiée appelée par les controllers admin).
+     *
+     * @param string $publicId    Public ID de l'asset
+     * @param string $resourceType Type ('image', 'video', 'raw')
+     * @param bool   $invalidate  Invalide le cache CDN
+     */
+    public function deleteAsset(string $publicId, string $resourceType = 'image', bool $invalidate = true): array
+    {
+        return $this->deleteImageByPublicId($publicId, $resourceType, $invalidate);
+    }
+
+    /**
      * Supprime une image par public_id (alternative)
-     * 
-     * @param string $publicId Public ID
+     *
+     * @param string $publicId     Public ID
+     * @param string $resourceType Type de ressource
+     * @param bool   $invalidate   Invalide le cache CDN
      * @return array Résultat
      */
-    public function deleteImageByPublicId(string $publicId): array
+    public function deleteImageByPublicId(string $publicId, string $resourceType = 'image', bool $invalidate = true): array
     {
         try {
             $result = $this->cloudinary->uploadApi()->destroy($publicId, [
-                'invalidate' => true
+                'resource_type' => $resourceType,
+                'invalidate'    => $invalidate,
             ]);
 
             $success = $result['result'] === 'ok';

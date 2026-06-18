@@ -606,6 +606,16 @@ class StripePaymentProvider implements PaymentProviderInterface
             );
 
         } catch (InvalidRequestException $e) {
+            // PI introuvable = créé en mode test alors qu'on est en live (ou inversement)
+            if ($e->getStripeCode() === 'resource_missing') {
+                $this->logger->warning('⚠️ PaymentIntent introuvable sur ce mode Stripe, création d\'un nouveau', [
+                    'payment_intent_id' => $existingPiId,
+                    'cart_id' => $cart->getId(),
+                    'stripe_error_code' => $e->getStripeCode(),
+                ]);
+                return null;
+            }
+
             $this->logger->error('❌ Erreur validation lors mise à jour PaymentIntent', [
                 'payment_intent_id' => $existingPiId,
                 'cart_id' => $cart->getId(),
