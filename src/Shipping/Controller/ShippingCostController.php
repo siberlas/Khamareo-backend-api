@@ -7,6 +7,7 @@ use App\User\Entity\Address;
 use App\Catalog\Repository\ProductRepository;
 use App\Cart\Service\CartWeightCalculator;
 use App\Shipping\Service\ShippingRateCalculator;
+use App\Shipping\Service\ShippingZoneMapper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -24,9 +25,10 @@ final class ShippingCostController extends AbstractController
         private EntityManagerInterface $em,
         private ShippingRateCalculator $rateCalculator,
         private CartWeightCalculator $weightCalculator,
-        private ProductRepository $productRepository, // pour charger les produits du payload
+        private ProductRepository $productRepository,
         private CartRepository $cartRepository,
         private Security $security,
+        private ShippingZoneMapper $zoneMapper,
     ) {}
 
     #[Route('/api/shipping_methods/{id}/calculate', name: 'shipping_calculate', methods: ['POST'])]
@@ -72,7 +74,7 @@ final class ShippingCostController extends AbstractController
             fn(string $slug) => $this->productRepository->findOneBy(['slug' => $slug])
         );
 
-        $zone = $this->mapCountryToZone($country);
+        $zone = $this->zoneMapper->mapCountryToZone($country);
 
         // Récupère le tarif + coût
         $rate = $this->rateCalculator->resolveRate($shippingMethod, $zone, $totalWeight);
@@ -124,11 +126,4 @@ final class ShippingCostController extends AbstractController
         ]);
     }
 
-    private function mapCountryToZone(string $country): string
-    {
-        $up = strtoupper(trim($country));
-        if ($up === 'FR' || $up === 'FRANCE') return 'FR';
-        $eu = ['BE','LU','NL','DE','ES','PT','IT','IE','AT','CZ','DK','EE','FI','GR','HR','HU','LT','LV','MT','PL','RO','SE','SI','SK','BG'];
-        return in_array($up, $eu, true) ? 'EU' : 'INTL';
-    }
 }

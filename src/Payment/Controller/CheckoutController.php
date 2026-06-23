@@ -265,6 +265,7 @@ class CheckoutController extends AbstractController
             ->setStatus(OrderStatus::PENDING)
             ->setCarrier($carrierMode->getCarrier())
             ->setShippingMode($carrierMode->getShippingMode())
+            ->setCarrierMode($carrierMode)
             ->setBillingAddress($billingSnapshot)
             ->setShippingAddress($shippingSnapshot)
             ->setShippingCost($shippingCost)

@@ -511,8 +511,41 @@ class ProductUpdateController extends AbstractController
                 'gallery_names' => array_map(fn(UploadedFile $f) => $f->getClientOriginalName(), $galleryImages),
             ]);
 
+            // ----------------------------
+            // 3b) Suppression images galerie existantes
+            // ----------------------------
+            $removeImageIds = $request->request->all('removeImageIds[]');
+            if (empty($removeImageIds)) {
+                $removeImageIds = $request->request->all('removeImageIds');
+            }
+
+            $galleryUploadErrors = [];
+
+            foreach ($removeImageIds as $mediaUuid) {
+                if (!is_string($mediaUuid) || $mediaUuid === '') {
+                    continue;
+                }
+                foreach ($product->getProductMedias()->toArray() as $pm) {
+                    if ($pm->isPrimary()) {
+                        continue; // ne jamais supprimer la principale ici
+                    }
+                    $media = $pm->getMedia();
+                    if ($media->getId()?->toRfc4122() !== $mediaUuid) {
+                        continue;
+                    }
+                    $publicId = $media->getCloudinaryPublicId();
+                    if ($publicId) {
+                        $this->cloudinaryService->deleteAsset($publicId, 'image', true);
+                    }
+                    $product->removeProductMedia($pm);
+                    $this->em->remove($pm);
+                    $this->em->remove($media);
+                    break;
+                }
+            }
+
             if (count($galleryImages) > 0) {
-                // ✅ displayOrder: on part après le max actuel
+                // displayOrder: on part après le max actuel
                 $maxOrder = 0;
                 foreach ($product->getProductMedias()->toArray() as $pm) {
                     $maxOrder = max($maxOrder, (int) $pm->getDisplayOrder());
@@ -523,12 +556,13 @@ class ProductUpdateController extends AbstractController
                     $upload = $this->uploadAndCreateMedia($file);
 
                     if (!($upload['success'] ?? false)) {
-                        // Choix: on skip mais on log
+                        $errorMsg = $upload['error'] ?? 'unknown';
                         $this->logger->error('Gallery upload failed', [
                             'product_id' => $product->getId()->toRfc4122(),
                             'file' => $file->getClientOriginalName(),
-                            'error' => $upload['error'] ?? 'unknown',
+                            'error' => $errorMsg,
                         ]);
+                        $galleryUploadErrors[] = sprintf('%s : %s', $file->getClientOriginalName(), $errorMsg);
                         continue;
                     }
 
@@ -597,7 +631,7 @@ class ProductUpdateController extends AbstractController
                 }
             }
 
-            return $this->json([
+            $responseData = [
                 'success' => true,
                 'product' => [
                     'id' => $product->getId()->toRfc4122(),
@@ -610,7 +644,14 @@ class ProductUpdateController extends AbstractController
                     'imagesCount' => $product->getProductMedias()->count(),
                 ],
                 'message' => 'Produit mis à jour avec succès',
-            ]);
+            ];
+
+            if (!empty($galleryUploadErrors)) {
+                $responseData['warnings'] = $galleryUploadErrors;
+                $responseData['message'] = 'Produit mis à jour, mais certaines images galerie n\'ont pas pu être téléchargées : ' . implode(', ', $galleryUploadErrors);
+            }
+
+            return $this->json($responseData);
 
         } catch (\Throwable $e) {
             $this->logger->error('Product update with images failed', [

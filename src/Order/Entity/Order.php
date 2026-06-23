@@ -202,6 +202,11 @@ class Order
     #[Groups(['order:read'])]
     private ?\App\Shipping\Entity\Carrier $carrier = null;
 
+    #[ORM\ManyToOne(targetEntity: \App\Shipping\Entity\CarrierMode::class)]
+    #[ORM\JoinColumn(name: 'carrier_mode_id', nullable: true)]
+    #[Groups(['order:read'])]
+    private ?\App\Shipping\Entity\CarrierMode $carrierMode = null;
+
     #[ORM\OneToMany(mappedBy: 'customerOrder', targetEntity: OrderItem::class, cascade: ['persist'], orphanRemoval: true)]
     #[Groups(['order:read','order:write'])]
     private Collection $items;
@@ -364,6 +369,9 @@ class Order
 
     public function getCarrier(): ?\App\Shipping\Entity\Carrier { return $this->carrier; }
     public function setCarrier(?\App\Shipping\Entity\Carrier $carrier): static { $this->carrier = $carrier; return $this; }
+
+    public function getCarrierMode(): ?\App\Shipping\Entity\CarrierMode { return $this->carrierMode; }
+    public function setCarrierMode(?\App\Shipping\Entity\CarrierMode $carrierMode): static { $this->carrierMode = $carrierMode; return $this; }
 
     public function getTrackingNumber(): ?string { return $this->trackingNumber; }
     public function setTrackingNumber(?string $trackingNumber): static { $this->trackingNumber = $trackingNumber; return $this; }
