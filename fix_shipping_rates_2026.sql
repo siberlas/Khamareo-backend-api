@@ -37,7 +37,7 @@ BEGIN
   FROM carrier_mode cm
   JOIN carrier c ON cm.carrier_id = c.id
   JOIN shipping_mode sm ON cm.shipping_mode_id = sm.id
-  WHERE c.code = 'mondialrelay' AND sm.code = 'point_relais'
+  WHERE c.code = 'mondialrelay' AND sm.code = 'relay_point'
     AND cm.supported_zones::text = '["FR"]';
 
   SELECT cm.id INTO cm_lk
@@ -51,7 +51,7 @@ BEGIN
   FROM carrier_mode cm
   JOIN carrier c ON cm.carrier_id = c.id
   JOIN shipping_mode sm ON cm.shipping_mode_id = sm.id
-  WHERE c.code = 'mondialrelay' AND sm.code = 'domicile'
+  WHERE c.code = 'mondialrelay' AND sm.code = 'home'
     AND cm.supported_zones::text = '["FR"]';
 
   -- ---- Point Relais FR ----
