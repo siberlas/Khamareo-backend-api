@@ -14,6 +14,7 @@ class ShippingRateCalculator
     public function __construct(
         private ShippingRateRepository $shippingRateRepository,
         private CarrierModeRepository $carrierModeRepository,
+        private ShippingZoneMapper $zoneMapper,
     ) {}
 
     /**
@@ -25,9 +26,10 @@ class ShippingRateCalculator
 
         if ($carrierMode) {
             $address = $order->getShippingAddress();
-            $zone = $this->mapCountryToZone((string) ($address?->getCountry() ?? 'FR'));
+            $countryCode = (string) ($address?->getCountry() ?? 'FR');
+            $zone = $this->zoneMapper->mapCountryToZone($countryCode);
             $weightGrams = $this->getTotalWeightGramsFromOrder($order);
-            $rate = $this->shippingRateRepository->findBestRate($carrierMode, $zone, $weightGrams);
+            $rate = $this->shippingRateRepository->findBestRate($carrierMode, $zone, $weightGrams, $countryCode);
             if ($rate) {
                 return (float) $rate->getPrice();
             }
@@ -42,9 +44,9 @@ class ShippingRateCalculator
     /**
      * Calcule depuis un CarrierMode, une zone et un poids en grammes.
      */
-    public function calculateFromCarrierMode(CarrierMode $carrierMode, string $zone, int $weightGrams): float
+    public function calculateFromCarrierMode(CarrierMode $carrierMode, string $zone, int $weightGrams, ?string $countryCode = null): float
     {
-        $rate = $this->shippingRateRepository->findBestRate($carrierMode, $zone, $weightGrams);
+        $rate = $this->shippingRateRepository->findBestRate($carrierMode, $zone, $weightGrams, $countryCode);
         if ($rate) {
             return (float) $rate->getPrice();
         }
@@ -69,6 +71,12 @@ class ShippingRateCalculator
 
     private function resolveCarrierModeFromOrder(Order $order): ?CarrierMode
     {
+        // Priorité : le mode exact sélectionné par le client au checkout
+        if ($order->getCarrierMode()) {
+            return $order->getCarrierMode();
+        }
+
+        // Fallback legacy : on déduit depuis le Carrier (ordres créés avant migration)
         $carrier = $order->getCarrier();
         if (!$carrier) {
             return null;
@@ -76,6 +84,8 @@ class ShippingRateCalculator
         $modes = $this->carrierModeRepository->findBy(['carrier' => $carrier, 'isActive' => true]);
         return $modes[0] ?? null;
     }
+
+    private const DEFAULT_PRODUCT_WEIGHT_GRAMS = 500;
 
     private function getTotalWeightGramsFromOrder(Order $order): int
     {
@@ -85,22 +95,18 @@ class ShippingRateCalculator
             if (!$p) {
                 continue;
             }
+            $qty = (int) $item->getQuantity();
             if ($p->getWeightGrams() !== null) {
-                $total += $p->getWeightGrams() * (int) $item->getQuantity();
+                $total += $p->getWeightGrams() * $qty;
             } elseif ($p->getWeight() !== null) {
-                $total += (int) round($p->getWeight() * 1000) * (int) $item->getQuantity();
+                $total += (int) round($p->getWeight() * 1000) * $qty;
+            } else {
+                // Produit sans poids configuré : fallback 500g par unité
+                $total += self::DEFAULT_PRODUCT_WEIGHT_GRAMS * $qty;
             }
         }
-        return $total;
+        // Sécurité : si le panier est vide ou tous les produits supprimés
+        return max($total, self::DEFAULT_PRODUCT_WEIGHT_GRAMS);
     }
 
-    private function mapCountryToZone(string $country): string
-    {
-        $up = strtoupper(trim($country));
-        if ($up === 'FR' || $up === 'FRANCE') {
-            return 'FR';
-        }
-        $eu = ['BE','LU','NL','DE','ES','PT','IT','IE','AT','CZ','DK','EE','FI','GR','HR','HU','LT','LV','MT','PL','RO','SE','SI','SK','BG'];
-        return in_array($up, $eu, true) ? 'EU' : 'INTL';
-    }
 }

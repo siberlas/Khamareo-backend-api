@@ -10,6 +10,8 @@ class CartWeightCalculator
     /**
      * Calcule le poids total d’un panier (en kg).
      */
+    private const DEFAULT_WEIGHT_KG = 0.5;
+
     public function getTotalWeightFromCart(Cart $cart): float
     {
         $total = 0.0;
@@ -21,12 +23,12 @@ class CartWeightCalculator
             }
             $weight = $product->getWeight() !== null
                 ? (float) $product->getWeight()
-                : ($product->getWeightGrams() !== null ? $product->getWeightGrams() / 1000.0 : 0.0);
+                : ($product->getWeightGrams() !== null ? $product->getWeightGrams() / 1000.0 : self::DEFAULT_WEIGHT_KG);
             $qty = (int) $item->getQuantity();
             $total += $weight * $qty;
         }
 
-        return round($total, 3);
+        return round(max($total, self::DEFAULT_WEIGHT_KG), 3);
     }
 
     /**

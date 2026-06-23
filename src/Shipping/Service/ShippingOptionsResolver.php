@@ -24,6 +24,7 @@ class ShippingOptionsResolver
         private CarrierModeRepository $carrierModeRepository,
         private ShippingRateRepository $shippingRateRepository,
         private CacheInterface $shippingCache,
+        private ShippingZoneMapper $zoneMapper,
     ) {}
 
     /**
@@ -45,7 +46,7 @@ class ShippingOptionsResolver
      */
     public function getAvailableOptions(string $countryCode, int $weightGrams): array
     {
-        $zone   = $this->mapCountryToZone($countryCode);
+        $zone   = $this->zoneMapper->mapCountryToZone($countryCode);
         $bucket = $this->weightBucket($weightGrams);
         $key    = sprintf('shipping.options.%s.%d', $zone, $bucket);
 
@@ -77,7 +78,8 @@ class ShippingOptionsResolver
             $shippingRate = $this->shippingRateRepository->findBestRate(
                 $carrierMode,
                 $zone,
-                $weightGrams
+                $weightGrams,
+                $countryCode
             );
 
             // Prix = tarif trouvé OU prix de base du CarrierMode
@@ -130,58 +132,6 @@ class ShippingOptionsResolver
             }
         }
         return $weightGrams; // poids hors tranches connues
-    }
-
-    /**
-     * Mapper un code pays vers une zone tarifaire
-     */
-    private function mapCountryToZone(string $countryCode): string
-    {
-        $up = strtoupper(trim($countryCode));
-
-        // France métropolitaine + Monaco + Andorre
-        if (in_array($up, ['FR', 'MC', 'AD'], true)) {
-            return 'FR';
-        }
-
-        // OM1
-        $om1 = ['GP', 'MQ', 'GF', 'RE', 'YT', 'PM', 'MF', 'BL'];
-        if (in_array($up, $om1, true)) {
-            return 'OM1';
-        }
-
-        // OM2
-        $om2 = ['NC', 'PF', 'WF', 'TF'];
-        if (in_array($up, $om2, true)) {
-            return 'OM2';
-        }
-
-        // Union Européenne
-        $eu = [
-            'AT','BE','BG','HR','CY','CZ','DK','EE','FI','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'
-        ];
-        if (in_array($up, $eu, true)) {
-            return 'EU';
-        }
-
-        // Suisse
-        if ($up === 'CH') {
-            return 'CH';
-        }
-
-        // Royaume-Uni (GB)
-        if ($up === 'GB') {
-            return 'UK';
-        }
-
-        // Zone B
-        $zoneB = ['NO','MA','DZ','TN','LY','EG','AL','BA','MK','ME','RS','XK','MD','UA','BY','GE','AM','AZ'];
-        if (in_array($up, $zoneB, true)) {
-            return 'B';
-        }
-
-        // Reste du monde
-        return 'C';
     }
 
     /**

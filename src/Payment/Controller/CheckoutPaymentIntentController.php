@@ -4,10 +4,10 @@ namespace App\Payment\Controller;
 
 use App\Cart\Entity\Cart;
 use App\User\Entity\Address;
-use App\Shipping\Entity\CarrierMode;
 use App\Shipping\Repository\ShippingRateRepository;
 use App\Shipping\Repository\CarrierModeRepository;
 use App\Cart\Service\CartWeightCalculator;
+use App\Shipping\Service\ShippingZoneMapper;
 use App\Payment\Provider\StripePaymentProvider;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -31,6 +31,7 @@ class CheckoutPaymentIntentController extends AbstractController
         private readonly CarrierModeRepository   $carrierModeRepository,
         private readonly StripePaymentProvider   $stripeProvider,
         private readonly CurrencyRepository      $currencyRepository,
+        private readonly ShippingZoneMapper      $zoneMapper,
     ) {}
 
     #[Route('/api/checkout/payment-intent', name: 'checkout_payment_intent', methods: ['POST'])]
@@ -93,7 +94,7 @@ class CheckoutPaymentIntentController extends AbstractController
         // 4) Calcul du coût de livraison
         $weightKg    = $this->weightCalculator->getTotalWeightFromCart($cart);
         $weightGrams = (int) round($weightKg * 1000);
-        $zone        = $this->mapCountryToZone($deliveryAddress->getCountry());
+        $zone        = $this->zoneMapper->mapCountryToZone($deliveryAddress->getCountry());
 
         $rate = $shippingRateId ? $this->rateRepository->find((int) $shippingRateId) : null;
 
@@ -106,8 +107,10 @@ class CheckoutPaymentIntentController extends AbstractController
             $rate = null;
         }
 
+        $countryCode = $deliveryAddress->getCountry();
+
         if (!$rate) {
-            $rate = $this->rateRepository->findBestRate($carrierMode, $zone, $weightGrams);
+            $rate = $this->rateRepository->findBestRate($carrierMode, $zone, $weightGrams, $countryCode);
         }
 
         $shippingCost = $rate
@@ -230,13 +233,4 @@ class CheckoutPaymentIntentController extends AbstractController
         throw new BadRequestException("Impossible d'extraire l'ID de l'IRI : $iri");
     }
 
-    private function mapCountryToZone(string $country): string
-    {
-        $up = strtoupper(trim($country));
-        if ($up === 'FR' || $up === 'FRANCE') {
-            return 'FR';
-        }
-        $eu = ['BE','LU','NL','DE','ES','PT','IT','IE','AT','CZ','DK','EE','FI','GR','HR','HU','LT','LV','MT','PL','RO','SE','SI','SK','BG'];
-        return in_array($up, $eu, true) ? 'EU' : 'INTL';
-    }
 }

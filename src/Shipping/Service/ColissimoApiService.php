@@ -30,7 +30,7 @@ class ColissimoApiService
             DestinationZone::FRANCE_METRO      => $this->productCodes['fr']     ?? 'DOM',
             DestinationZone::OUTRE_MER         => $this->productCodes['om']     ?? 'COM',
             DestinationZone::UNION_EUROPEENNE  => $this->productCodes['eu']     ?? 'DOS',
-            DestinationZone::EUROPE_HORS_UE    => $this->productCodes['eu_out'] ?? 'DOM',
+            DestinationZone::EUROPE_HORS_UE    => $this->productCodes['eu_out'] ?? 'COLD',
             DestinationZone::INTERNATIONAL     => $this->productCodes['intl']   ?? 'COLI',
         };
     }

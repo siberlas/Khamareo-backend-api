@@ -62,7 +62,7 @@ enum DestinationZone: string
             self::FRANCE_METRO     => 'DOM',
             self::OUTRE_MER        => 'COM',
             self::UNION_EUROPEENNE => 'DOS',
-            self::EUROPE_HORS_UE   => 'DOM',
+            self::EUROPE_HORS_UE   => 'COLD',
             self::INTERNATIONAL    => 'COLI',
         };
     }
