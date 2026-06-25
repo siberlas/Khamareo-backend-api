@@ -163,18 +163,18 @@ class ColissimoApiService
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
 
         $addresseeAddress = [
-            'lastName' => $customerData['lastName'],
-            'firstName' => $customerData['firstName'],
-            'line2' => $address->getStreetAddress(),
+            'lastName' => $this->normalizeAddressField($customerData['lastName']),
+            'firstName' => $this->normalizeAddressField($customerData['firstName']),
+            'line2' => $this->normalizeAddressField($address->getStreetAddress()),
             'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
-            'city' => $address->getCity(),
+            'city' => $this->normalizeAddressField($address->getCity()),
             'countryCode' => 'FR',
             'email' => $customerData['email'],
             'mobileNumber' => $customerData['phone'],
         ];
 
         if ($customerData['companyName'] !== null) {
-            $addresseeAddress['companyName'] = $customerData['companyName'];
+            $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
 
         return [
@@ -218,8 +218,11 @@ class ColissimoApiService
     {
         $order = $parcel->getOrder();
         $payload = $this->buildOMParcelPayload($parcel, $zone);
+        $productCode = $payload['letter']['service']['productCode'] ?? '?';
 
-        $this->logger->info('Colissimo OM parcel payload', [
+        $this->logger->info('Colissimo parcel payload', [
+            'product_code' => $productCode,
+            'zone' => $zone->value,
             'payload' => json_encode($payload, JSON_PRETTY_PRINT),
         ]);
 
@@ -240,7 +243,7 @@ class ColissimoApiService
                 $pdf  = $this->extractPdfFromMultipart($content);
 
                 if ($json && isset($json['messages'][0]['type']) && $json['messages'][0]['type'] === 'ERROR') {
-                    $msg = $json['messages'][0]['messageContent'] ?? 'Erreur Colissimo OM';
+                    $msg = $json['messages'][0]['messageContent'] ?? "Erreur Colissimo [$productCode]";
                     throw new \RuntimeException($msg);
                 }
 
@@ -257,7 +260,7 @@ class ColissimoApiService
                     ];
                 }
 
-                throw new \RuntimeException('Réponse multipart OM sans PDF exploitable.');
+                throw new \RuntimeException("Réponse multipart [$productCode] sans PDF exploitable.");
             }
 
             $data = $response->toArray(false);
@@ -270,12 +273,14 @@ class ColissimoApiService
                 'rawData' => $data,
             ];
         } catch (\Exception $e) {
-            $this->logger->error('Colissimo OM parcel label generation failed', [
+            $this->logger->error('Colissimo parcel label generation failed', [
                 'error' => $e->getMessage(),
+                'product_code' => $productCode,
+                'zone' => $zone->value,
                 'parcel_id' => $parcel->getId()->toRfc4122(),
             ]);
 
-            throw new \RuntimeException('Erreur génération étiquette OM: ' . $e->getMessage());
+            throw new \RuntimeException("Erreur génération étiquette [$productCode]: " . $e->getMessage());
         }
     }
 
@@ -318,11 +323,11 @@ class ColissimoApiService
         $countryCode = $this->resolveAddresseeCountryCode($order);
 
         $addresseeAddress = [
-            'lastName' => $customerData['lastName'],
-            'firstName' => $customerData['firstName'],
-            'line2' => $address->getStreetAddress(),
+            'lastName' => $this->normalizeAddressField($customerData['lastName']),
+            'firstName' => $this->normalizeAddressField($customerData['firstName']),
+            'line2' => $this->normalizeAddressField($address->getStreetAddress()),
             'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
-            'city' => $address->getCity(),
+            'city' => $this->normalizeAddressField($address->getCity()),
             'countryCode' => $countryCode,
             'email' => $customerData['email'],
             'mobileNumber' => $customerData['phone'],
@@ -334,7 +339,7 @@ class ColissimoApiService
         }
 
         if ($customerData['companyName'] !== null) {
-            $addresseeAddress['companyName'] = $customerData['companyName'];
+            $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
 
         return [
@@ -467,18 +472,18 @@ class ColissimoApiService
         $parcelWeightKg = $this->finalParcelWeightKg($totalWeightGrams / 1000);
 
         $addresseeAddress = [
-            'lastName' => $customerData['lastName'],
-            'firstName' => $customerData['firstName'],
-            'line2' => $address->getStreetAddress(),
+            'lastName' => $this->normalizeAddressField($customerData['lastName']),
+            'firstName' => $this->normalizeAddressField($customerData['firstName']),
+            'line2' => $this->normalizeAddressField($address->getStreetAddress()),
             'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
-            'city' => $address->getCity(),
+            'city' => $this->normalizeAddressField($address->getCity()),
             'countryCode' => 'FR',
             'email' => $customerData['email'],
             'mobileNumber' => $customerData['phone'],
         ];
 
         if ($customerData['companyName'] !== null) {
-            $addresseeAddress['companyName'] = $customerData['companyName'];
+            $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
 
         return [
@@ -525,8 +530,11 @@ class ColissimoApiService
     private function generateOMLabel(Order $order, DestinationZone $zone = DestinationZone::OUTRE_MER): array
     {
         $payload = $this->buildOMPayload($order, $zone);
+        $productCode = $payload['letter']['service']['productCode'] ?? '?';
 
-        $this->logger->info('Colissimo OM REST payload', [
+        $this->logger->info('Colissimo REST payload', [
+            'product_code' => $productCode,
+            'zone' => $zone->value,
             'payload' => json_encode($payload, JSON_PRETTY_PRINT),
         ]);
 
@@ -549,7 +557,7 @@ class ColissimoApiService
 
                 // Erreur Colissimo dans jsonInfos
                 if ($json && isset($json['messages'][0]['type']) && $json['messages'][0]['type'] === 'ERROR') {
-                    $msg = $json['messages'][0]['messageContent'] ?? 'Erreur Colissimo OM';
+                    $msg = $json['messages'][0]['messageContent'] ?? "Erreur Colissimo [$productCode]";
                     throw new \RuntimeException($msg);
                 }
 
@@ -560,32 +568,32 @@ class ColissimoApiService
                             ?? $json['labelV2Response']['parcelNumber']
                             ?? $order->getOrderNumber(),
                         'labelPdf' => base64_encode($pdf),
-                        'provider' => 'Colissimo OM',
+                        'provider' => "Colissimo $productCode",
                         'rawData' => $json ?: ['pdfExtracted' => true],
                     ];
                 }
 
-                throw new \RuntimeException('Réponse multipart OM sans PDF exploitable.');
+                throw new \RuntimeException("Réponse multipart [$productCode] sans PDF exploitable.");
             }
 
-            // JSON classique
             $data = $response->toArray(false);
 
-            // Certains environnements renvoient directement un base64 dans labelResponse.label
             return [
                 'success' => true,
                 'trackingNumber' => $data['labelResponse']['parcelNumber'] ?? $data['labelV2Response']['parcelNumber'] ?? $order->getOrderNumber(),
                 'labelPdf' => $data['labelResponse']['label'] ?? $data['labelV2Response']['label'] ?? null,
-                'provider' => 'Colissimo OM',
+                'provider' => "Colissimo $productCode",
                 'rawData' => $data,
             ];
         } catch (\Exception $e) {
-            $this->logger->error('Colissimo OM label generation failed', [
+            $this->logger->error('Colissimo label generation failed', [
                 'error' => $e->getMessage(),
+                'product_code' => $productCode,
+                'zone' => $zone->value,
                 'order' => $order->getOrderNumber(),
             ]);
 
-            throw new \RuntimeException('Erreur génération étiquette OM: ' . $e->getMessage());
+            throw new \RuntimeException("Erreur génération étiquette [$productCode]: " . $e->getMessage());
         }
     }
 
@@ -629,18 +637,18 @@ class ColissimoApiService
         $parcelWeightKg = $this->finalParcelWeightKg($sumArticlesKg);
 
         $addresseeAddress = [
-            'lastName' => $customerData['lastName'],
-            'firstName' => $customerData['firstName'],
-            'line2' => $address->getStreetAddress(),
+            'lastName' => $this->normalizeAddressField($customerData['lastName']),
+            'firstName' => $this->normalizeAddressField($customerData['firstName']),
+            'line2' => $this->normalizeAddressField($address->getStreetAddress()),
             'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
-            'city' => $address->getCity(),
+            'city' => $this->normalizeAddressField($address->getCity()),
             'countryCode' => $this->resolveAddresseeCountryCode($order),
             'email' => $customerData['email'],
             'mobileNumber' => $customerData['phone'],
         ];
 
         if ($customerData['companyName'] !== null) {
-            $addresseeAddress['companyName'] = $customerData['companyName'];
+            $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
 
         $countryCode = $addresseeAddress['countryCode'];
@@ -762,9 +770,44 @@ class ColissimoApiService
 
     private function normalizePostalCode(?string $postalCode): string
     {
-        $postalCode = (string) $postalCode;
-        $postalCode = strtoupper(trim($postalCode));
-        return str_replace([' ', "\t", "\n", "\r"], '', $postalCode);
+        $postalCode = strtoupper(trim((string) $postalCode));
+        // Codes postaux purement numériques (FR, BE, DE, ES, IT…) : supprimer les espaces internes
+        // Codes postaux alphanumériques (GB "CV34 4AB", CA "A1A 1A1", NL "1234 AB"…) : conserver l'espace interne
+        if (preg_match('/^\d[\d\s]*\d$/', $postalCode) || preg_match('/^\d{5}$/', str_replace(' ', '', $postalCode))) {
+            return preg_replace('/\s+/', '', $postalCode) ?? $postalCode;
+        }
+        // Supprimer uniquement les sauts de ligne et tabulations, pas les espaces internes
+        return preg_replace('/[\t\n\r]/', '', $postalCode) ?? $postalCode;
+    }
+
+    /**
+     * Translitère les caractères Unicode vers ASCII pour l'API Colissimo.
+     * Ex: "Matāʻutu" → "Matautu", "Réunion" → "Reunion"
+     */
+    private function normalizeAddressField(?string $value): string
+    {
+        if ($value === null || $value === '') {
+            return '';
+        }
+        // Remplace les caractères spéciaux polynésiens/océaniens avant NFD
+        $value = strtr($value, [
+            'ʻ' => '',  // U+02BB okina (hawaïen/polynésien)
+            'ʼ' => '',  // U+02BC lettre modificatrice
+            'ʾ' => '',  // U+02BE
+            'ʿ' => '',  // U+02BF
+            'ā' => 'a', 'Ā' => 'A',
+            'ē' => 'e', 'Ē' => 'E',
+            'ī' => 'i', 'Ī' => 'I',
+            'ō' => 'o', 'Ō' => 'O',
+            'ū' => 'u', 'Ū' => 'U',
+        ]);
+        // Normalise en forme NFD puis supprime les diacritiques
+        $normalized = \Normalizer::normalize($value, \Normalizer::FORM_D) ?: $value;
+        $normalized = preg_replace('/\p{Mn}/u', '', $normalized) ?? $normalized;
+        // Translitère les caractères non-ASCII restants
+        $normalized = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $normalized) ?: $normalized;
+        // Supprime tout caractère non imprimable et trim
+        return trim(preg_replace('/[^\x20-\x7E]/', '', $normalized) ?? $normalized);
     }
 
     private function resolveCountryCodeFromPostalCode(string $postalCode): ?string

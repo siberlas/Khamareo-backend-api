@@ -8,12 +8,15 @@ use Psr\Log\LoggerInterface;
 
 class DestinationClassifier
 {
+    // Pays couverts par le produit Colissimo DOS (Europe) selon contrat.
+    // GB inclus : contrat Colissimo qui couvre UK sous DOS (même produit que l'UE).
     private const EU_COUNTRIES = [
         'AT','BE','BG','HR','CY','CZ','DK','EE','FI','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE',
+        'GB',
     ];
 
     private const EUROPE_NON_EU = [
-        'CH','GB',
+        'CH',
     ];
 
     private const ZONE_B_COUNTRIES = [
@@ -34,8 +37,9 @@ class DestinationClassifier
 
         // 1) Si on a un countryCode valide, il est PRIORITAIRE.
         if ($countryCode) {
-            // FR/MC/AD => on peut raffiner par CP (OM vs FR metro)
-            if (in_array($countryCode, ['FR', 'MC', 'AD'], true)) {
+            // FR uniquement : raffiner par CP pour détecter DOM-TOM
+            // MC et AD exclus : leurs CP ressemblent à des CP français
+            if ($countryCode === 'FR') {
                 if ($postalCode) {
                     $zoneByPostal = $this->classifyFrenchPostalCode($postalCode);
                     if ($zoneByPostal) {
@@ -46,6 +50,10 @@ class DestinationClassifier
                         return $zoneByPostal;
                     }
                 }
+                return DestinationZone::FRANCE_METRO;
+            }
+
+            if ($countryCode === 'AD') {
                 return DestinationZone::FRANCE_METRO;
             }
 

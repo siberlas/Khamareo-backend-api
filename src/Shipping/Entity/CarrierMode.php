@@ -103,6 +103,15 @@ class CarrierMode
     #[Groups(['carrierMode:read', 'carrierMode:write'])]
     private ?string $colissimoProductCodeKey = null;
 
+    /**
+     * Restriction géographique au sein d'une zone.
+     * Null = disponible pour tous les pays de la zone.
+     * Ex: ["BE","ES","PT","LU","IT","PL","NL"] pour Mondial Relay Point Relais EU.
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    #[Groups(['carrierMode:read', 'carrierMode:write'])]
+    private ?array $allowedCountries = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['carrierMode:read'])]
     private ?\DateTimeImmutable $createdAt = null;
@@ -198,6 +207,21 @@ class CarrierMode
     {
         $this->colissimoProductCodeKey = $colissimoProductCodeKey;
         return $this;
+    }
+
+    public function getAllowedCountries(): ?array { return $this->allowedCountries; }
+    public function setAllowedCountries(?array $allowedCountries): self
+    {
+        $this->allowedCountries = $allowedCountries;
+        return $this;
+    }
+
+    public function isAllowedForCountry(string $countryCode): bool
+    {
+        if ($this->allowedCountries === null) {
+            return true;
+        }
+        return in_array(strtoupper($countryCode), $this->allowedCountries, true);
     }
 
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }

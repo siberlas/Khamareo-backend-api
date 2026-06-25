@@ -205,10 +205,20 @@ class OrderManagementController extends AbstractController
                 ], 404);
             }
 
-            if ($order->getShippedAt() || $order->isParcelsConfirmed() || $order->getParcels()->count() > 0) {
+            // Bloquer uniquement si la commande est expédiée, les colis confirmés,
+            // ou si au moins un colis a une étiquette générée (status = 'labeled').
+            // Les colis en brouillon (status = 'pending') n'empêchent pas la modification d'adresse.
+            $hasLabeledParcel = false;
+            foreach ($order->getParcels() as $parcel) {
+                if ($parcel->getStatus() === 'labeled') {
+                    $hasLabeledParcel = true;
+                    break;
+                }
+            }
+            if ($order->getShippedAt() || $order->isParcelsConfirmed() || $hasLabeledParcel) {
                 return $this->json([
                     'success' => false,
-                    'error' => 'Impossible de modifier les adresses après création des colis ou expédition'
+                    'error' => 'Impossible de modifier les adresses après génération des étiquettes ou expédition'
                 ], 400);
             }
 
