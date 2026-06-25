@@ -25,7 +25,7 @@ class AdresseApiService
         ];
 
         try {
-            $response = $this->http->request('GET', $url, ['query' => $params]);
+            $response = $this->http->request('GET', $url, ['query' => $params, 'timeout' => 5]);
             $data = $response->toArray();
         } catch (\Throwable $e) {
             $this->logger->error('Adresse API request failed', ['exception' => $e->getMessage(), 'query' => $query]);
@@ -66,7 +66,7 @@ class AdresseApiService
         ];
 
         try {
-            $response = $this->http->request('GET', $url, ['query' => $params]);
+            $response = $this->http->request('GET', $url, ['query' => $params, 'timeout' => 5]);
             $data = $response->toArray();
             $feature = $data['features'][0] ?? null;
 
@@ -129,7 +129,7 @@ class AdresseApiService
 
         foreach ($queries as $params) {
             try {
-                $response = $this->http->request('GET', $url, ['query' => $params]);
+                $response = $this->http->request('GET', $url, ['query' => $params, 'timeout' => 5]);
                 $data = $response->toArray();
             } catch (\Throwable $e) {
                 $this->logger->error('Adresse API street search failed', [

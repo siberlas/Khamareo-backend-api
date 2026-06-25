@@ -501,7 +501,10 @@ class AddressValidationService
                 'source' => 'mapbox',
                 'normalized' => [
                     'street' => $street,
-                    'postalCode' => $match['postalCode'] ?? $match['postcode'] ?? $postalCode,
+                    // Pour les adresses internationales, conserver le code postal saisi par l'utilisateur.
+                    // Mapbox renvoie souvent seulement le code de secteur (ex: "WK09" au lieu de "CV34 4AB")
+                    // ce qui rendrait l'adresse invalide pour les APIs des transporteurs (Colissimo, etc.).
+                    'postalCode' => $postalCode,
                     'city' => $match['city'] ?? $city,
                     'lat' => $match['lat'] ?? null,
                     'lon' => $match['lon'] ?? null,

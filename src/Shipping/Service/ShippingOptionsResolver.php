@@ -48,7 +48,8 @@ class ShippingOptionsResolver
     {
         $zone   = $this->zoneMapper->mapCountryToZone($countryCode);
         $bucket = $this->weightBucket($weightGrams);
-        $key    = sprintf('shipping.options.%s.%d', $zone, $bucket);
+        // La clé inclut le pays car certains carrier_modes ont des restrictions par pays (ex: Mondial Relay EU)
+        $key    = sprintf('shipping.options.%s.%s.%d', $zone, strtoupper($countryCode), $bucket);
 
         return $this->shippingCache->get($key, function (ItemInterface $item) use ($countryCode, $weightGrams, $zone) {
             return $this->resolveOptions($countryCode, $weightGrams, $zone);
@@ -63,13 +64,18 @@ class ShippingOptionsResolver
         $carrierModes = $this->carrierModeRepository->findByZone($zone);
 
 
-        // 3. Filtrer par poids (capacité du transporteur)
+        // 3. Filtrer par poids et restriction géographique
         $availableOptions = [];
         foreach ($carrierModes as $carrierMode) {
             $carrier = $carrierMode->getCarrier();
-            
+
+            // Restriction par pays (ex: Mondial Relay Point Relais EU → BE, ES, PT, LU, IT, PL, NL uniquement)
+            if (!$carrierMode->isAllowedForCountry($countryCode)) {
+                continue;
+            }
+
             // Vérifier que le carrier peut gérer ce poids
-            if ($weightGrams < $carrier->getMinWeightGrams() || 
+            if ($weightGrams < $carrier->getMinWeightGrams() ||
                 $weightGrams > $carrier->getMaxWeightGrams()) {
                 continue;
             }
@@ -143,8 +149,9 @@ class ShippingOptionsResolver
         if ($country && strlen($country) === 2) {
             $country = strtoupper($country);
 
-            // Pour FR/MC/AD, on peut raffiner via code postal
-            if (in_array($country, ['FR', 'MC', 'AD'], true) && $postalCode) {
+            // FR uniquement : raffiner via CP pour détecter les DOM-TOM (97xxx, 98xxx)
+            // MC et AD exclus : leurs CP ressemblent à des CP français mais ils ont leur propre code pays
+            if ($country === 'FR' && $postalCode) {
                 $deduced = $this->deduceCountryFromPostalCode($postalCode);
                 if ($deduced) {
                     return $deduced;
