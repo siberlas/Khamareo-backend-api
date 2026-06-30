@@ -213,6 +213,7 @@ class CheckoutPaymentIntentController extends AbstractController
                 ->setIsDefault(false);
 
             if (!empty($input['isRelayPoint'])) {
+                $snapshot->setAddressKind('relay');
                 $snapshot->setIsRelayPoint(true);
                 $snapshot->setRelayPointId($input['relayPointId'] ?? null);
                 $snapshot->setRelayCarrier($input['relayCarrier'] ?? null);
