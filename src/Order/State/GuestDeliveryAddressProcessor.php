@@ -7,9 +7,9 @@ use ApiPlatform\State\ProcessorInterface;
 use App\Order\Dto\GuestDeliveryAddressInput;
 use App\Cart\Entity\Cart;
 use App\User\Entity\Address;
-use App\Shipping\Service\AddressValidationService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Psr\Log\LoggerInterface;
 use App\Shared\Service\PhoneNumberService;
@@ -20,7 +20,6 @@ final class GuestDeliveryAddressProcessor implements ProcessorInterface
         private EntityManagerInterface $em,
         private RequestStack $requestStack,
         private LoggerInterface $logger,
-        private AddressValidationService $validationService,
         private PhoneNumberService $phoneNumberService
     ) {}
 
@@ -88,91 +87,34 @@ final class GuestDeliveryAddressProcessor implements ProcessorInterface
                 ->setRelayCarrier($data->relayCarrier);
         }
 
-        if ($data->addressKind !== 'relay') {
-            $this->logger->info('🔍 [GUEST DELIVERY ADDRESS VALIDATION] Début de validation', [
-                'type' => 'guest_user',
-                'street' => $data->streetAddress,
-                'postalCode' => $data->postalCode,
-                'city' => $data->city,
-                'country' => $data->country,
-                'state' => $data->state,
-                'guest_email' => $user->getEmail(),
-            ]);
-
-            $validationResult = $this->validationService->validateAddress(
-                street: $data->streetAddress,
-                postalCode: $data->postalCode,
-                city: $data->city,
-                country: $data->country,
-                strict: false
-            );
-
-            if (!$validationResult['valid']) {
-                $this->logger->warning('❌ [GUEST DELIVERY ADDRESS VALIDATION] Adresse INVALIDE', [
-                    'type' => 'guest_user',
-                    'message' => $validationResult['message'],
-                    'street' => $data->streetAddress,
-                    'guest_email' => $user->getEmail(),
-                ]);
-                throw new BadRequestException(
-                    sprintf('Invalid delivery address: %s', $validationResult['message'])
-                );
-            }
-
-            $this->logger->info('✅ [GUEST DELIVERY ADDRESS VALIDATION] Score validation acceptable', [
-                'type' => 'guest_user',
-                'source' => $validationResult['source'],
-                'message' => $validationResult['message'],
-            ]);
-
-            if (!empty($validationResult['normalized'])) {
-                $normalized = $validationResult['normalized'];
-
-                if (isset($normalized['lat']) && $normalized['lat'] !== null) {
-                    $deliveryAddress->setLatitude((float) $normalized['lat']);
-                }
-                if (isset($normalized['lon']) && $normalized['lon'] !== null) {
-                    $deliveryAddress->setLongitude((float) $normalized['lon']);
-                }
-                if (!empty($normalized['street'])) {
-                    $deliveryAddress->setStreetAddress($normalized['street']);
-                }
-
-                $this->logger->info('✅ [GUEST DELIVERY ADDRESS VALIDATION] Données normalisées appliquées', [
-                    'lat' => $normalized['lat'] ?? null,
-                    'lon' => $normalized['lon'] ?? null,
-                    'street' => $normalized['street'] ?? null,
-                    'state' => $data->state,
-                ]);
-            }
-
-            if ($data->state !== null) {
-                $deliveryAddress->setState($data->state);
-            }
-        } else {
-            $this->logger->info('ℹ️ [GUEST DELIVERY ADDRESS VALIDATION] Adresse point relais - validation ignorée', [
-                'type' => 'guest_user',
-                'relayPointId' => $data->relayPointId,
-                'relayCarrier' => $data->relayCarrier,
-                'guest_email' => $user->getEmail(),
-            ]);
-        }
+        // La validation (géocodage + coordonnées + geocodingVerified) est gérée
+        // par AddressValidationListener (prePersist/preUpdate). Ne pas modifier
+        // street/city/postalCode ici : l'adresse saisie est toujours conservée.
 
         $this->em->persist($deliveryAddress);
         $this->em->flush();
+
+        $addressVerified = $deliveryAddress->getGeocodingVerified();
+        $warnings = [];
+        if ($addressVerified === false) {
+            $warnings[] = 'address_unverified';
+        }
 
         $this->logger->info('✅ Adresse de livraison invité enregistrée avec succès', [
             'user_id' => $user->getId(),
             'cart_id' => $cart->getId(),
             'delivery_address_id' => $deliveryAddress->getId(),
+            'address_verified' => $addressVerified,
         ]);
 
-        return [
+        return new JsonResponse([
             'success' => true,
             'message' => 'Adresse de livraison invitée enregistrée avec succès.',
             'user' => '/api/users/' . $user->getId(),
             'deliveryAddress' => '/api/addresses/' . $deliveryAddress->getId(),
             'cart' => '/api/carts/' . $cart->getId(),
-        ];
+            'warnings' => $warnings,
+            'addressVerified' => $addressVerified,
+        ]);
     }
 }

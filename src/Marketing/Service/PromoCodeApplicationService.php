@@ -225,6 +225,52 @@ class PromoCodeApplicationService
     }
 
     /**
+     * Recalcule les montants de réduction en % quand le sous-total du panier change.
+     * Les codes à montant fixe ne sont pas modifiés.
+     * Retourne true si des valeurs ont changé.
+     */
+    public function recalculatePercentageDiscounts(Cart $cart): bool
+    {
+        $data = $cart->getPromoCodesData();
+        if (empty($data)) {
+            return false;
+        }
+
+        $subtotal = $cart->getSubtotal();
+        if ($subtotal <= 0) {
+            return false;
+        }
+
+        $changed = false;
+        foreach ($data as &$item) {
+            $promoCode = $this->promoCodeRepository->findOneBy(['code' => $item['code']]);
+            if (!$promoCode || !$promoCode->getDiscountPercentage()) {
+                continue;
+            }
+
+            $newDiscount = round(($subtotal * (float) $promoCode->getDiscountPercentage()) / 100, 2);
+
+            if ($promoCode->getMaxDiscountAmount() !== null) {
+                $newDiscount = min($newDiscount, (float) $promoCode->getMaxDiscountAmount());
+            }
+            $newDiscount = min($newDiscount, $subtotal);
+
+            if (abs(($item['discount'] ?? 0) - $newDiscount) > 0.001) {
+                $item['discount'] = $newDiscount;
+                $changed = true;
+            }
+        }
+        unset($item);
+
+        if ($changed) {
+            $cart->setPromoCodesData($data);
+            $this->rebuildCartFields($cart);
+        }
+
+        return $changed;
+    }
+
+    /**
      * Reconstruit promoCode (dernier code) et discountAmount (somme) depuis promoCodesData.
      */
     private function rebuildCartFields(Cart $cart): void
@@ -282,7 +328,6 @@ class PromoCodeApplicationService
             $this->logger->critical('🔥 Erreur base de données lors marquage promo comme utilisé', [
                 'promo_code' => $promoCode->getCode(),
                 'error' => $e->getMessage(),
-                'sql_state' => $e->getSQLState()
             ]);
 
             throw new \RuntimeException('Erreur lors du marquage du code promo', 0, $e);
@@ -336,7 +381,6 @@ class PromoCodeApplicationService
             $this->logger->critical('🔥 Erreur base de données lors annulation promo', [
                 'promo_code' => $promoCode->getCode(),
                 'error' => $e->getMessage(),
-                'sql_state' => $e->getSQLState()
             ]);
 
             throw new \RuntimeException('Erreur lors de l\'annulation du code promo', 0, $e);

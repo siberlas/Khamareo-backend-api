@@ -11,6 +11,7 @@ use App\User\Entity\User;
 use App\Shared\Exception\AccountExistsException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Psr\Log\LoggerInterface;
@@ -137,14 +138,24 @@ final class GuestCartAddressProcessor implements ProcessorInterface
         // 7️⃣ Sauvegarder
         $this->em->flush();
 
+        $addressVerified = $deliveryAddress->getGeocodingVerified();
+
         $this->logger->info('✅ Adresse invité enregistrée avec succès', [
             'user_id' => $user->getId(),
             'cart_id' => $cart->getId(),
             'guest_expires_at' => $user->getGuestExpiresAt()?->format('Y-m-d H:i:s'),
+            'address_verified' => $addressVerified,
         ]);
 
         // 8️⃣ Réponse
-        return [
+        $warnings = [];
+        if ($addressVerified === false) {
+            $warnings[] = 'address_unverified';
+        }
+
+        // Retourner une JsonResponse brute pour éviter la sérialisation Hydra d'API Platform
+        // qui emballe les tableaux PHP en Collection { member: [...] } et perd les clés
+        return new JsonResponse([
             'success' => true,
             'message' => 'Adresse invité enregistrée avec succès.',
             'user' => '/api/users/' . $user->getId(),
@@ -152,6 +163,8 @@ final class GuestCartAddressProcessor implements ProcessorInterface
             'billingAddress' => '/api/addresses/' . $billingAddress->getId(),
             'cart' => '/api/carts/' . $cart->getId(),
             'guestExpiresAt' => $user->getGuestExpiresAt()?->format('c'),
-        ];
+            'warnings' => $warnings,
+            'addressVerified' => $addressVerified,
+        ]);
     }
 }
