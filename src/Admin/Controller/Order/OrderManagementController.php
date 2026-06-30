@@ -68,14 +68,6 @@ class OrderManagementController extends AbstractController
                 ], 404);
             }
 
-            // Vérifier si la commande peut être modifiée
-            if ($order->getStatus()->isFinal()) {
-                return $this->json([
-                    'success' => false,
-                    'error' => 'Impossible de modifier une commande dans un état final'
-                ], 400);
-            }
-
             // Décoder les données
             $data = json_decode($request->getContent(), true);
 
@@ -91,6 +83,14 @@ class OrderManagementController extends AbstractController
                 $order->setIsTest((bool) $data['isTest']);
                 $this->em->flush();
                 return $this->json(['success' => true, 'isTest' => $order->isTest()]);
+            }
+
+            // Vérifier si la commande peut être modifiée
+            if ($order->getStatus()->isFinal()) {
+                return $this->json([
+                    'success' => false,
+                    'error' => 'Impossible de modifier une commande dans un état final'
+                ], 400);
             }
 
             // Mettre à jour le statut
