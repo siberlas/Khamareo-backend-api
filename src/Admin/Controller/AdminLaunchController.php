@@ -5,7 +5,6 @@ namespace App\Admin\Controller;
 use App\Marketing\Entity\NewsletterSubscriber;
 use App\Marketing\Entity\PromoCode;
 use App\Marketing\Repository\PromoCodeRepository;
-use App\Shared\Entity\AppSettings;
 use App\Shared\Entity\LaunchEmailQueue;
 use App\Shared\Repository\AppSettingsRepository;
 use App\Shared\Repository\LaunchEmailQueueRepository;
@@ -216,8 +215,8 @@ class AdminLaunchController
         $conn->executeStatement("DELETE FROM launch_email_queue");
         $conn->executeStatement("DELETE FROM promo_code WHERE type = 'launch'");
         $conn->executeStatement(
-            "INSERT INTO app_settings (setting_key, setting_value, updated_at)
-             VALUES ('launch_preparation_status', 'idle', NOW())
+            "INSERT INTO app_settings (id, setting_key, setting_value, updated_at)
+             VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM app_settings), 'launch_preparation_status', 'idle', NOW())
              ON CONFLICT (setting_key) DO UPDATE SET setting_value = 'idle', updated_at = NOW()"
         );
 
