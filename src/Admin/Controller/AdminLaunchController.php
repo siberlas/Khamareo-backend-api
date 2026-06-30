@@ -205,6 +205,24 @@ class AdminLaunchController
     }
 
     /**
+     * DELETE /api/admin/coming-soon/reset-preparation
+     *
+     * Remet la queue et les codes launch à zéro pour relancer prepare-launch.
+     */
+    #[Route('/api/admin/coming-soon/reset-preparation', name: 'admin_coming_soon_reset_preparation', methods: ['DELETE'])]
+    public function resetPreparation(): JsonResponse
+    {
+        $conn = $this->em->getConnection();
+        $conn->executeStatement("DELETE FROM launch_email_queue");
+        $conn->executeStatement("DELETE FROM promo_code WHERE type = 'launch'");
+
+        $this->upsertSetting('launch_preparation_status', 'idle');
+        $this->em->flush();
+
+        return new JsonResponse(['reset' => true]);
+    }
+
+    /**
      * POST /api/admin/coming-soon/open-site
      */
     #[Route('/api/admin/coming-soon/open-site', name: 'admin_coming_soon_open_site', methods: ['POST'])]
@@ -228,10 +246,27 @@ class AdminLaunchController
 
     // -------------------------------------------------------------------------
 
+    /** @var array<string, true> */
+    private array $generatedCodes = [];
+
+    private function generateUniqueCode(): string
+    {
+        do {
+            $code = self::PROMO_PREFIX . '-' . strtoupper(substr(bin2hex(random_bytes(5)), 0, 8));
+        } while (
+            isset($this->generatedCodes[$code]) ||
+            $this->promoCodeRepo->findOneBy(['code' => $code]) !== null
+        );
+
+        $this->generatedCodes[$code] = true;
+
+        return $code;
+    }
+
     private function createLaunchPromoCode(string $email, \DateTimeImmutable $expiresAt): PromoCode
     {
         $promo = new PromoCode();
-        $promo->setCode(self::PROMO_PREFIX . '-' . strtoupper(substr(bin2hex(random_bytes(3)), 0, 6)));
+        $promo->setCode($this->generateUniqueCode());
         $promo->setType('launch');
         $promo->setEmail($email);
         $promo->setDiscountPercentage((string) self::PROMO_DISCOUNT);
