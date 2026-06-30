@@ -28,7 +28,7 @@ class CartWeightCalculator
             $total += $weight * $qty;
         }
 
-        return round(max($total, self::DEFAULT_WEIGHT_KG), 3);
+        return round($total > 0 ? $total : self::DEFAULT_WEIGHT_KG, 3);
     }
 
     /**
