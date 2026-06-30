@@ -16,6 +16,7 @@ use Doctrine\Common\Collections\Collection;
 use Symfony\Component\Serializer\Annotation\MaxDepth;
 use App\Catalog\Filter\CategoryOrChildrenFilter;
 use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Doctrine\Orm\Filter\BooleanFilter;
 use ApiPlatform\Metadata\Delete;
 use ApiPlatform\Metadata\Patch;
 use ApiPlatform\Metadata\Post;
@@ -49,6 +50,7 @@ use App\Media\Entity\Media;
     'name' => 'ipartial',
     'description' => 'ipartial',
 ])]
+#[ApiFilter(BooleanFilter::class, properties: ['isEnabled', 'isFeatured', 'isDeleted'])]
 class Product
 {
     #[ORM\Id]

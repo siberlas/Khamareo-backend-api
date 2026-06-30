@@ -11,6 +11,8 @@ Use ApiPlatform\Metadata\Post;
 Use ApiPlatform\Metadata\Patch;
 Use ApiPlatform\Metadata\Delete;
 use App\Cart\State\CartItemProcessor;
+use App\Cart\State\CartItemUpdateProcessor;
+use App\Cart\State\CartItemDeleteProcessor;
 use App\Catalog\Entity\Product;
 
 #[ORM\Entity(repositoryClass: CartItemRepository::class)]
@@ -24,10 +26,12 @@ use App\Catalog\Entity\Product;
             processor: CartItemProcessor::class
         ),
         new Patch(
-            security: "is_granted('PUBLIC_ACCESS')"
+            security: "is_granted('PUBLIC_ACCESS')",
+            processor: CartItemUpdateProcessor::class
         ),
         new Delete(
-            security: "is_granted('PUBLIC_ACCESS')"
+            security: "is_granted('PUBLIC_ACCESS')",
+            processor: CartItemDeleteProcessor::class
         )
     ]
 )]

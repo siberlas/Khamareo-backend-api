@@ -104,19 +104,16 @@ class AddressValidationListener
             );
         }
 
-        // Si une adresse normalisée est disponible, on l'utilise
+        // Déduire si l'adresse a été vérifiée par le géocodeur.
+        // source = null → acceptée sans vérification → non vérifiée.
+        $geocodingVerified = $result['source'] !== null;
+        $entity->setGeocodingVerified($geocodingVerified);
+
+        // Si une adresse normalisée est disponible, on n'applique que les coordonnées.
+        // La rue, le code postal et la ville saisies par l'utilisateur sont TOUJOURS conservées.
         if (isset($result['normalized']) && $result['normalized']) {
             $normalized = $result['normalized'];
-            
-            if (isset($normalized['street'])) {
-                $entity->setStreetAddress($normalized['street']);
-            }
-            if (isset($normalized['city'])) {
-                $entity->setCity($normalized['city']);
-            }
-            if (isset($normalized['postalCode'])) {
-                $entity->setPostalCode($normalized['postalCode']);
-            }
+
             if (isset($normalized['lat'])) {
                 $entity->setLatitude($normalized['lat']);
             }
@@ -124,14 +121,25 @@ class AddressValidationListener
                 $entity->setLongitude($normalized['lon']);
             }
 
-            $this->logger->info('✏️ [ADDRESS VALIDATION] Adresse NORMALISÉE', [
+            $this->logger->info('✏️ [ADDRESS VALIDATION] Coordonnées mises à jour', [
                 'type' => 'connected_user',
                 'source' => $result['source'],
-                'normalized' => $normalized,
+                'geocoding_verified' => $geocodingVerified,
+                'lat' => $normalized['lat'] ?? null,
+                'lon' => $normalized['lon'] ?? null,
             ]);
         }
 
-        $this->logger->info('✅ [ADDRESS VALIDATION] Adresse VALIDE - SAUVEGARDÉE', [
+        if (!$geocodingVerified) {
+            $this->logger->warning('⚠️ [ADDRESS VALIDATION] Adresse non vérifiée par géocodeur — conservée telle quelle', [
+                'street' => $entity->getStreetAddress(),
+                'postalCode' => $entity->getPostalCode(),
+                'city' => $entity->getCity(),
+                'country' => $entity->getCountry(),
+            ]);
+        }
+
+        $this->logger->info('✅ [ADDRESS VALIDATION] Adresse SAUVEGARDÉE', [
             'type' => 'connected_user',
             'source' => $result['source'],
             'message' => $result['message'],

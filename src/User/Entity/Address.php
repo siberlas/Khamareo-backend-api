@@ -170,6 +170,10 @@ class Address
     #[Groups(['address:read', 'address:write'])]
     private ?float $longitude = null;
 
+    #[ORM\Column(type: 'boolean', nullable: true)]
+    #[Groups(['address:read', 'order:read', 'order:admin:read'])]
+    private ?bool $geocodingVerified = null;
+
     // ===================================
     // Owner & metadata
     // ===================================
@@ -250,6 +254,10 @@ class Address
 
     public function getLongitude(): ?float { return $this->longitude; }
     public function setLongitude(?float $longitude): self { $this->longitude = $longitude; return $this; }
+
+    public function getGeocodingVerified(): ?bool { return $this->geocodingVerified; }
+    public function setGeocodingVerified(?bool $verified): self { $this->geocodingVerified = $verified; return $this; }
+    public function isAddressVerified(): bool { return $this->geocodingVerified === true; }
 
     public function getOwner(): ?User { return $this->owner; }
     public function setOwner(?User $owner): self { $this->owner = $owner; return $this; }

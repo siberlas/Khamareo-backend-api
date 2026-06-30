@@ -143,6 +143,7 @@ class OrderDetailsController extends AbstractController
                     'postalCode' => $shippingAddress->getPostalCode(),
                     'country' => $shippingAddress->getCountry(),
                     'phone' => $shippingAddress->getPhone(),
+                    'geocodingVerified' => $shippingAddress->getGeocodingVerified(),
                 ];
             }
 

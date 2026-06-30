@@ -257,12 +257,21 @@ class AddressValidationService
                     }
                 }
 
-                // Vérifier correspondance minimale de la rue : au moins un token de 3+ lettres présent
+                // Vérifier correspondance minimale de la rue : au moins un token SIGNIFICATIF (pas un mot générique)
+                $genericStreetWords = [
+                    'rue','avenue','av','boulevard','bd','chemin','route','impasse','place','allee','allée',
+                    'lotissement','cours','quai','square','cite','cité','passage','voie','faubourg','des','de',
+                    'du','les','la','le','l','d','en','sur','sous','par','aux','au'
+                ];
                 $streetTokenMatch = false;
                 if ($streetProvided && $significantStreetTokens >= 2) {
                     $tokens = preg_split('/[^\p{L}0-9]+/u', $street, -1, PREG_SPLIT_NO_EMPTY);
                     foreach ($tokens as $token) {
                         if (mb_strlen($token) < 3) {
+                            continue;
+                        }
+                        // Ignorer les mots génériques (rue, avenue...) : présents dans tout label Adresse API
+                        if (in_array(mb_strtolower($token), $genericStreetWords, true)) {
                             continue;
                         }
                         if (stripos($matchLabel, $token) !== false) {
@@ -311,30 +320,30 @@ class AddressValidationService
                                     'message' => 'Adresse validée',
                                     'source' => 'adresse',
                                     'normalized' => [
-                                        'street' => $matchLabel,
-                                        'postalCode' => $match['postalCode'] ?? $match['postcode'] ?? $postalCode,
-                                        'city' => $match['city'] ?? $city,
+                                        'street' => $street,
+                                        'postalCode' => $postalCode,
+                                        'city' => $city,
                                         'lat' => $match['lat'] ?? null,
                                         'lon' => $match['lon'] ?? null,
                                     ],
                                 ];
                             }
 
-                            // Score acceptable (0.4-0.7) - log warning mais accepter (avec validation match)
+                            // Score modéré (0.4-0.7) - accepter mais marquer comme non vérifiée (warning admin)
                             if ($score >= 0.4) {
-                                $this->logger->warning('⚠️ [ADRESSE API] Address with low score (fallback accepted)', [
+                                $this->logger->warning('⚠️ [ADRESSE API] Address with moderate score (accepted but unverified)', [
                                     'query' => $query,
                                     'score' => $score,
                                     'match' => $matchLabel,
                                 ]);
                                 return [
                                     'valid' => true,
-                                    'message' => 'Adresse validée (score modéré)',
-                                    'source' => 'adresse',
+                                    'message' => 'Adresse acceptée (score modéré — non vérifiée)',
+                                    'source' => null,
                                     'normalized' => [
-                                        'street' => $matchLabel,
-                                        'postalCode' => $match['postalCode'] ?? $match['postcode'] ?? $postalCode,
-                                        'city' => $match['city'] ?? $city,
+                                        'street' => $street,
+                                        'postalCode' => $postalCode,
+                                        'city' => $city,
                                         'lat' => $match['lat'] ?? null,
                                         'lon' => $match['lon'] ?? null,
                                     ],
@@ -402,20 +411,41 @@ class AddressValidationService
                         'normalized' => null,
                     ];
                 }
+                // Vérifier que des tokens SIGNIFICATIFS (non génériques) de la rue apparaissent dans le match Mapbox
+                $genericWords = [
+                    'rue','avenue','av','boulevard','bd','chemin','route','impasse','place','allee','allée',
+                    'lotissement','cours','quai','square','cite','cité','passage','voie','faubourg','des',
+                    'de','du','les','la','le','en','sur','sous','par','aux','au'
+                ];
+                $streetTokensForMapbox = preg_split('/[^\p{L}0-9]+/u', $street, -1, PREG_SPLIT_NO_EMPTY);
+                $mapboxStreetMatch = false;
+                foreach ($streetTokensForMapbox as $token) {
+                    if (mb_strlen($token) < 3) continue;
+                    if (in_array(mb_strtolower($token), $genericWords, true)) continue;
+                    if (stripos($matchLabel, $token) !== false) {
+                        $mapboxStreetMatch = true;
+                        break;
+                    }
+                }
+
+                // Si aucun token significatif de la rue ne correspond → acceptée mais non vérifiée
+                $mapboxSource = ($streetProvided && !$mapboxStreetMatch) ? null : 'mapbox_fallback_fr';
+
                 $this->logger->warning('⚠️ [MAPBOX FALLBACK FR] Address accepted via Mapbox fallback', [
                     'query' => $query,
                     'match' => $matchLabel,
-                    'source' => 'mapbox_fallback_fr',
+                    'source' => $mapboxSource,
+                    'street_match' => $mapboxStreetMatch,
                     'strict' => $strict,
                 ]);
                 return [
                     'valid' => true,
-                    'message' => 'Adresse validée (via fallback Mapbox)',
-                    'source' => 'mapbox_fallback_fr',
+                    'message' => $mapboxSource ? 'Adresse validée (via fallback Mapbox)' : 'Adresse acceptée (rue non vérifiable)',
+                    'source' => $mapboxSource,
                     'normalized' => [
                         'street' => $street,
-                        'postalCode' => $match['postalCode'] ?? $match['postcode'] ?? $postalCode,
-                        'city' => $match['city'] ?? $city,
+                        'postalCode' => $postalCode,
+                        'city' => $city,
                         'lat' => $match['lat'] ?? null,
                         'lon' => $match['lon'] ?? null,
                     ],
