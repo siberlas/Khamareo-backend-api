@@ -40,6 +40,9 @@ class AdminPromoCodeController extends AbstractController
         }
         if ($typeFilter) {
             $qb->andWhere('p.type = :type')->setParameter('type', $typeFilter);
+        } else {
+            // Les codes launch sont gérés dans la section Lancement, on les exclut par défaut
+            $qb->andWhere('p.type != :excludeType')->setParameter('excludeType', 'launch');
         }
         if ($activeFilter !== null && $activeFilter !== '') {
             $isActive = filter_var($activeFilter, FILTER_VALIDATE_BOOLEAN);
