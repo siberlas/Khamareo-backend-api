@@ -216,10 +216,27 @@ class StripeWebhookController extends AbstractController
                 'is_locked' => true
             ]);
 
-            // 5️⃣ Gérer le panier
+            // 5️⃣ Décrémenter le stock des produits commandés
+            foreach ($order->getItems() as $item) {
+                $product = $item->getProduct();
+                if ($product === null) {
+                    continue;
+                }
+                $newStock = max(0, ($product->getStock() ?? 0) - $item->getQuantity());
+                $product->setStock($newStock);
+                $this->logger->info('📦 Stock décrémenté', [
+                    'product_id'   => (string) $product->getId(),
+                    'product_name' => $product->getName(),
+                    'qty_ordered'  => $item->getQuantity(),
+                    'stock_before' => $product->getStock() + $item->getQuantity(),
+                    'stock_after'  => $newStock,
+                ]);
+            }
+
+            // 6️⃣ Gérer le panier
             $this->handleCartCleanup($pi);
 
-            // 6️⃣ Sauvegarder en base
+            // 7️⃣ Sauvegarder en base
             try {
                 $this->em->flush();
                 
@@ -239,7 +256,7 @@ class StripeWebhookController extends AbstractController
                 throw new \RuntimeException('Database error during payment confirmation', 0, $e);
             }
 
-            // 7️⃣ Envoyer l'email de confirmation
+            // 8️⃣ Envoyer l'email de confirmation
             $this->sendOrderConfirmationEmail($order);
 
             $this->logger->info('🎉 Paiement traité avec succès', [
