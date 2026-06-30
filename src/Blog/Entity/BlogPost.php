@@ -142,6 +142,14 @@ class BlogPost
     #[Groups(['blog_post:read', 'blog_post:write'])]
     private ?BlogCategory $category = null;
 
+    #[ORM\Column(type: 'float', nullable: true)]
+    #[Groups(['blog_post:read'])]
+    private ?float $averageRating = null;
+
+    #[ORM\Column(type: 'integer')]
+    #[Groups(['blog_post:read'])]
+    private int $commentCount = 0;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -327,4 +335,10 @@ class BlogPost
         $this->category = $category;
         return $this;
     }
+
+    public function getAverageRating(): ?float { return $this->averageRating; }
+    public function setAverageRating(?float $averageRating): static { $this->averageRating = $averageRating ? round($averageRating, 1) : null; return $this; }
+
+    public function getCommentCount(): int { return $this->commentCount; }
+    public function setCommentCount(int $commentCount): static { $this->commentCount = $commentCount; return $this; }
 }

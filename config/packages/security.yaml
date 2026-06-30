@@ -87,6 +87,7 @@ security:
         - { path: ^/api/products, roles: PUBLIC_ACCESS }
         - { path: ^/api/catalog, roles: PUBLIC_ACCESS }
         - { path: ^/api/reviews, roles: PUBLIC_ACCESS, methods: [GET, POST] }
+        - { path: ^/api/blog_comments, roles: PUBLIC_ACCESS, methods: [GET, POST] }
         - { path: ^/api/hero_slides, roles: PUBLIC_ACCESS, methods: [GET] }
         - { path: ^/api/shipping_methods, roles: PUBLIC_ACCESS }
         - { path: ^/api/shipping_rates, roles: PUBLIC_ACCESS }
