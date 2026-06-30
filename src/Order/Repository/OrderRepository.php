@@ -20,7 +20,8 @@ class OrderRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('o')
             ->select('COUNT(o.id)')
-            ->andWhere('o.isTest = false');
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false);
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
         }
@@ -32,7 +33,8 @@ class OrderRepository extends ServiceEntityRepository
         $qb = $this->createQueryBuilder('o')
             ->select('COALESCE(SUM(o.totalAmount), 0)')
             ->andWhere("o.paymentStatus = 'paid'")
-            ->andWhere('o.isTest = false');
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false);
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
         }
@@ -44,7 +46,8 @@ class OrderRepository extends ServiceEntityRepository
         $qb = $this->createQueryBuilder('o')
             ->select('COALESCE(AVG(o.totalAmount), 0)')
             ->andWhere("o.paymentStatus = 'paid'")
-            ->andWhere('o.isTest = false');
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false);
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
         }
@@ -55,7 +58,8 @@ class OrderRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('o')
             ->select('o.status, COUNT(o.id) AS cnt')
-            ->andWhere('o.isTest = false')
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false)
             ->groupBy('o.status');
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
@@ -73,7 +77,8 @@ class OrderRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('o')
             ->select('o.status, COALESCE(SUM(o.totalAmount), 0) AS revenue')
-            ->andWhere('o.isTest = false')
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false)
             ->groupBy('o.status');
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);

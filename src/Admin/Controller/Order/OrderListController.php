@@ -165,7 +165,8 @@ class OrderListController extends AbstractController
                 ->leftJoin('o.items', 'oi')->addSelect('oi')
                 ->leftJoin('o.carrier', 'c')->addSelect('c')
                 ->leftJoin('o.shippingAddress', 'sa')->addSelect('sa')
-                ->andWhere('o.isTest = false');
+                ->andWhere('o.isTest = :isTest')
+                ->setParameter('isTest', false);
 
             // ✅ FILTRE : Status
             if ($status) {
