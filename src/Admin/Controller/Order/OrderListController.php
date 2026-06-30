@@ -164,7 +164,8 @@ class OrderListController extends AbstractController
                 ->leftJoin('o.owner', 'u')->addSelect('u')
                 ->leftJoin('o.items', 'oi')->addSelect('oi')
                 ->leftJoin('o.carrier', 'c')->addSelect('c')
-                ->leftJoin('o.shippingAddress', 'sa')->addSelect('sa');
+                ->leftJoin('o.shippingAddress', 'sa')->addSelect('sa')
+                ->andWhere('o.isTest = false');
 
             // ✅ FILTRE : Status
             if ($status) {
@@ -295,6 +296,7 @@ class OrderListController extends AbstractController
                     ],
                     'createdAt' => $order->getCreatedAt()?->format(\DateTime::ATOM),
                     'updatedAt' => $order->getUpdatedAt()?->format(\DateTime::ATOM),
+                    'isTest' => $order->isTest(),
                 ];
             }
 

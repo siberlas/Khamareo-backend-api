@@ -86,6 +86,13 @@ class OrderManagementController extends AbstractController
                 ], 400);
             }
 
+            // isTest peut toujours être modifié, même sur commande finale
+            if (array_key_exists('isTest', $data)) {
+                $order->setIsTest((bool) $data['isTest']);
+                $this->em->flush();
+                return $this->json(['success' => true, 'isTest' => $order->isTest()]);
+            }
+
             // Mettre à jour le statut
             $statusChanged = false;
             if (isset($data['status'])) {
