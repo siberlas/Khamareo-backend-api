@@ -18,7 +18,9 @@ class OrderRepository extends ServiceEntityRepository
 
     public function countOrdersByPeriod(?\DateTimeImmutable $since = null): int
     {
-        $qb = $this->createQueryBuilder('o')->select('COUNT(o.id)');
+        $qb = $this->createQueryBuilder('o')
+            ->select('COUNT(o.id)')
+            ->andWhere('o.isTest = false');
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
         }
@@ -29,7 +31,8 @@ class OrderRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('o')
             ->select('COALESCE(SUM(o.totalAmount), 0)')
-            ->andWhere("o.paymentStatus = 'paid'");
+            ->andWhere("o.paymentStatus = 'paid'")
+            ->andWhere('o.isTest = false');
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
         }
@@ -40,7 +43,8 @@ class OrderRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('o')
             ->select('COALESCE(AVG(o.totalAmount), 0)')
-            ->andWhere("o.paymentStatus = 'paid'");
+            ->andWhere("o.paymentStatus = 'paid'")
+            ->andWhere('o.isTest = false');
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
         }
@@ -51,6 +55,7 @@ class OrderRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('o')
             ->select('o.status, COUNT(o.id) AS cnt')
+            ->andWhere('o.isTest = false')
             ->groupBy('o.status');
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
@@ -68,6 +73,7 @@ class OrderRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('o')
             ->select('o.status, COALESCE(SUM(o.totalAmount), 0) AS revenue')
+            ->andWhere('o.isTest = false')
             ->groupBy('o.status');
         if ($since) {
             $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
@@ -91,7 +97,8 @@ class OrderRepository extends ServiceEntityRepository
              WHERE (o.guest_email = :email
                 OR o.owner_id IN (SELECT id FROM "user" WHERE email = :email))
              AND oi.product_id = :productId
-             AND o.payment_status = \'paid\'',
+             AND o.payment_status = \'paid\'
+             AND o.is_test = false',
             ['email' => $email, 'productId' => $product->getId()->toRfc4122()]
         )->fetchOne();
         return (int) $result > 0;

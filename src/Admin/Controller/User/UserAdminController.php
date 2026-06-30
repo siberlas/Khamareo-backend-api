@@ -98,7 +98,8 @@ class UserAdminController extends AbstractController
             $activeUsersQb = $this->em->createQueryBuilder()
                 ->select('COUNT(DISTINCT u.id)')
                 ->from(Order::class, 'o')
-                ->innerJoin('o.owner', 'u');
+                ->innerJoin('o.owner', 'u')
+                ->andWhere('o.isTest = false');
             if ($startDate) {
                 $activeUsersQb->andWhere('o.createdAt >= :startDate')
                               ->setParameter('startDate', $startDate);
@@ -108,7 +109,8 @@ class UserAdminController extends AbstractController
             $usersWithOrdersQb = $this->em->createQueryBuilder()
                 ->select('COUNT(DISTINCT u2.id)')
                 ->from(Order::class, 'o2')
-                ->innerJoin('o2.owner', 'u2');
+                ->innerJoin('o2.owner', 'u2')
+                ->andWhere('o2.isTest = false');
             $usersWithOrders = (int) $usersWithOrdersQb->getQuery()->getSingleScalarResult();
 
             $inactiveUsers = max(0, $registeredUsers - $usersWithOrders);
@@ -120,7 +122,8 @@ class UserAdminController extends AbstractController
                 ->select('COUNT(DISTINCT u3.id)')
                 ->from(Order::class, 'o3')
                 ->innerJoin('o3.owner', 'u3')
-                ->andWhere('u3.newsletter = true');
+                ->andWhere('u3.newsletter = true')
+                ->andWhere('o3.isTest = false');
             $newsletterCustomers = (int) $newsletterCustomersQb->getQuery()->getSingleScalarResult();
             $newsletterConversionRate = $newsletterUsers > 0
                 ? round(($newsletterCustomers / $newsletterUsers) * 100, 2)
@@ -138,6 +141,7 @@ class UserAdminController extends AbstractController
                 ->select('u.id AS id, u.email AS email, u.firstName AS firstName, u.lastName AS lastName, COUNT(o.id) AS ordersCount, COALESCE(SUM(o.totalAmount), 0) AS totalSpent')
                 ->from(Order::class, 'o')
                 ->innerJoin('o.owner', 'u')
+                ->andWhere('o.isTest = false')
                 ->groupBy('u.id')
                 ->orderBy('totalSpent', 'DESC')
                 ->setMaxResults(5);

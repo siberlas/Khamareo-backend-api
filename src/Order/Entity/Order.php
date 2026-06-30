@@ -160,6 +160,10 @@ class Order
     private ?\DateTimeImmutable $parcelsConfirmedAt = null;
 
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    #[Groups(['order:read', 'order:admin:read'])]
+    private bool $isTest = false;
+
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
     #[Groups(['order:read'])]
     private bool $labelsInvalidated = false;
 
@@ -534,6 +538,9 @@ class Order
 
     public function getParcelsConfirmedAt(): ?\DateTimeImmutable { return $this->parcelsConfirmedAt; }
     public function setParcelsConfirmedAt(?\DateTimeImmutable $parcelsConfirmedAt): self { $this->parcelsConfirmedAt = $parcelsConfirmedAt; return $this; }
+
+    public function isTest(): bool { return $this->isTest; }
+    public function setIsTest(bool $isTest): self { $this->isTest = $isTest; return $this; }
 
     public function isLabelsInvalidated(): bool { return $this->labelsInvalidated; }
     public function setLabelsInvalidated(bool $labelsInvalidated): self { $this->labelsInvalidated = $labelsInvalidated; return $this; }
