@@ -105,8 +105,8 @@ class ShippingRateCalculator
                 $total += self::DEFAULT_PRODUCT_WEIGHT_GRAMS * $qty;
             }
         }
-        // Sécurité : si le panier est vide ou tous les produits supprimés
-        return max($total, self::DEFAULT_PRODUCT_WEIGHT_GRAMS);
+        // Fallback uniquement si aucun produit n'a de poids configuré
+        return $total > 0 ? $total : self::DEFAULT_PRODUCT_WEIGHT_GRAMS;
     }
 
 }
