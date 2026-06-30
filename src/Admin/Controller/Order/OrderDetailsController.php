@@ -292,6 +292,7 @@ class OrderDetailsController extends AbstractController
                     'isLocked' => $order->isLocked(),
                     'parcelsConfirmed' => $order->isParcelsConfirmed(),
                     'parcelsConfirmedAt' => $order->getParcelsConfirmedAt()?->format(\DateTime::ATOM),
+                    'isTest' => $order->isTest(),
                     'labelsInvalidated' => $order->isLabelsInvalidated(),
                     'labelsInvalidatedMessage' => $order->getLabelsInvalidatedMessage(),
                     'labelsInvalidatedAt' => $order->getLabelsInvalidatedAt()?->format(\DateTime::ATOM),
