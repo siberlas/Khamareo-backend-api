@@ -296,8 +296,8 @@ class AdminLaunchController
     private function upsertSetting(string $key, ?string $value): void
     {
         $this->em->getConnection()->executeStatement(
-            "INSERT INTO app_settings (setting_key, setting_value, updated_at)
-             VALUES (:key, :value, NOW())
+            "INSERT INTO app_settings (id, setting_key, setting_value, updated_at)
+             VALUES ((SELECT COALESCE(MAX(id), 0) + 1 FROM app_settings), :key, :value, NOW())
              ON CONFLICT (setting_key) DO UPDATE SET setting_value = :value, updated_at = NOW()",
             ['key' => $key, 'value' => $value]
         );
