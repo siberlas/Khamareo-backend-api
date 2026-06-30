@@ -156,9 +156,10 @@ class CheckoutController extends AbstractController
             ->setIsBusiness($deliverySource->isBusiness())
             ->setCompanyName($deliverySource->getCompanyName());
 
-        // Champs relay (uniquement si addressKind = relay)
-        if ($deliverySource->getAddressKind() === 'relay') {
+        // Champs relay
+        if ($deliverySource->isRelayPoint()) {
             $shippingSnapshot
+                ->setAddressKind('relay')
                 ->setIsRelayPoint(true)
                 ->setRelayPointId($deliverySource->getRelayPointId())
                 ->setRelayCarrier($deliverySource->getRelayCarrier());
@@ -313,8 +314,8 @@ class CheckoutController extends AbstractController
                 ->setGuestPhone($billingSource->getPhone());
         }
 
-        // Point relais uniquement si shipping address est relay
-        if ($deliverySource->getAddressKind() === 'relay') {
+        // Point relais
+        if ($deliverySource->isRelayPoint()) {
             $order
                 ->setIsRelayPoint(true)
                 ->setRelayPointId($deliverySource->getRelayPointId())
@@ -453,6 +454,7 @@ class CheckoutController extends AbstractController
                 ->setIsDefault(false);
 
             if (!empty($input['isRelayPoint'])) {
+                $snapshot->setAddressKind('relay');
                 $snapshot->setIsRelayPoint(true);
                 $snapshot->setRelayPointId($input['relayPointId'] ?? null);
                 $snapshot->setRelayCarrier($input['relayCarrier'] ?? null);
