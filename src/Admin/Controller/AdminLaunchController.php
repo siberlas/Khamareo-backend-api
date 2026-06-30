@@ -215,9 +215,11 @@ class AdminLaunchController
         $conn = $this->em->getConnection();
         $conn->executeStatement("DELETE FROM launch_email_queue");
         $conn->executeStatement("DELETE FROM promo_code WHERE type = 'launch'");
-
-        $this->upsertSetting('launch_preparation_status', 'idle');
-        $this->em->flush();
+        $conn->executeStatement(
+            "INSERT INTO app_settings (setting_key, setting_value, updated_at)
+             VALUES ('launch_preparation_status', 'idle', NOW())
+             ON CONFLICT (setting_key) DO UPDATE SET setting_value = 'idle', updated_at = NOW()"
+        );
 
         return new JsonResponse(['reset' => true]);
     }
@@ -294,13 +296,11 @@ class AdminLaunchController
 
     private function upsertSetting(string $key, ?string $value): void
     {
-        $setting = $this->settingsRepo->findByKey($key);
-
-        if ($setting) {
-            $setting->setSettingValue($value);
-        } else {
-            $setting = new AppSettings($key, $value);
-            $this->em->persist($setting);
-        }
+        $this->em->getConnection()->executeStatement(
+            "INSERT INTO app_settings (setting_key, setting_value, updated_at)
+             VALUES (:key, :value, NOW())
+             ON CONFLICT (setting_key) DO UPDATE SET setting_value = :value, updated_at = NOW()",
+            ['key' => $key, 'value' => $value]
+        );
     }
 }
