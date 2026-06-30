@@ -6,8 +6,6 @@ use App\Shipping\Entity\CarrierMode;
 use App\Shipping\Entity\ShippingRate;
 use App\Shipping\Repository\CarrierModeRepository;
 use App\Shipping\Repository\ShippingRateRepository;
-use Symfony\Contracts\Cache\CacheInterface;
-use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Service qui résout les options de livraison disponibles
@@ -17,13 +15,9 @@ class ShippingOptionsResolver
 {
     private const TARIFF_NOTE = 'classification tarifaire Colissimo – indicative';
 
-    // Tranches de poids en grammes pour le bucketing du cache
-    private const WEIGHT_BUCKETS = [500, 1000, 2000, 3000, 5000, 10000, 20000, 30000];
-
     public function __construct(
         private CarrierModeRepository $carrierModeRepository,
         private ShippingRateRepository $shippingRateRepository,
-        private CacheInterface $shippingCache,
         private ShippingZoneMapper $zoneMapper,
     ) {}
 
@@ -46,14 +40,8 @@ class ShippingOptionsResolver
      */
     public function getAvailableOptions(string $countryCode, int $weightGrams): array
     {
-        $zone   = $this->zoneMapper->mapCountryToZone($countryCode);
-        $bucket = $this->weightBucket($weightGrams);
-        // La clé inclut le pays car certains carrier_modes ont des restrictions par pays (ex: Mondial Relay EU)
-        $key    = sprintf('shipping.options.%s.%s.%d', $zone, strtoupper($countryCode), $bucket);
-
-        return $this->shippingCache->get($key, function (ItemInterface $item) use ($countryCode, $weightGrams, $zone) {
-            return $this->resolveOptions($countryCode, $weightGrams, $zone);
-        });
+        $zone = $this->zoneMapper->mapCountryToZone($countryCode);
+        return $this->resolveOptions($countryCode, $weightGrams, $zone);
     }
 
     private function resolveOptions(string $countryCode, int $weightGrams, string $zone): array
@@ -124,20 +112,6 @@ class ShippingOptionsResolver
         usort($availableOptions, fn($a, $b) => $a['price'] <=> $b['price']);
 
         return $availableOptions;
-    }
-
-    /**
-     * Retourne la tranche de poids supérieure pour le bucketing du cache.
-     * Ex : 750g → 1000, 1500g → 2000, 35000g → 35000 (au-delà du max connu)
-     */
-    private function weightBucket(int $weightGrams): int
-    {
-        foreach (self::WEIGHT_BUCKETS as $bucket) {
-            if ($weightGrams <= $bucket) {
-                return $bucket;
-            }
-        }
-        return $weightGrams; // poids hors tranches connues
     }
 
     /**
