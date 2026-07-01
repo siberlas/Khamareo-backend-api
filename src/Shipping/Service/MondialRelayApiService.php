@@ -345,10 +345,17 @@ class MondialRelayApiService
             return '';
         }
 
-        // Transliterate accents (e.g. "e" -> "e", "a" -> "a")
+        // Transliterate accents (e.g. "é" -> "e", "à" -> "a")
         if (function_exists('transliterator_transliterate')) {
             $value = transliterator_transliterate('Any-Latin; Latin-ASCII', $value);
         }
+
+        // Remove apostrophes and other chars rejected by MR API
+        $value = str_replace(["'", "'", "`", '"'], ' ', $value);
+
+        // Keep only alphanumeric, spaces, hyphens, dots
+        $value = preg_replace('/[^A-Za-z0-9 \-\.]/', ' ', $value);
+        $value = preg_replace('/\s+/', ' ', trim($value));
 
         return strtoupper($value);
     }
