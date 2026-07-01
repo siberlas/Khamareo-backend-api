@@ -60,7 +60,7 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 title: '',
                 firstname: mb_substr($this->senderFirstname, 0, 20),
                 lastname: mb_substr($this->senderLastname, 0, 20),
-                addressAdd1: mb_substr($this->senderCompany, 0, 32),
+                addressAdd1: '',
                 streetname: mb_substr($senderStreet, 0, 32),
                 houseNo: mb_substr($senderHouseNo, 0, 8),
                 postcode: $this->senderZipcode,
