@@ -24,11 +24,16 @@ RUN apk add --no-cache \
     libpq-dev \
     libzip-dev \
     oniguruma-dev \
+    libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
         pdo_pgsql \
         intl \
         zip \
         opcache \
+        gd \
     && rm -rf /var/cache/apk/*
 
 # PHP production config
