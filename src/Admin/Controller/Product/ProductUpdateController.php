@@ -161,7 +161,14 @@ class ProductUpdateController extends AbstractController
             }
 
             if (array_key_exists('weightGrams', $data)) {
-                $product->setWeightGrams($data['weightGrams'] ? (int) $data['weightGrams'] : null);
+                $wg = $data['weightGrams'] ? (int) $data['weightGrams'] : 0;
+                if ($wg <= 0) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'Le poids (en grammes) est obligatoire et doit être supérieur à 0'
+                    ], 400);
+                }
+                $product->setWeightGrams($wg);
             }
 
             if (array_key_exists('badge', $data)) {
@@ -372,7 +379,14 @@ class ProductUpdateController extends AbstractController
             }
             if ($request->request->has('weightGrams')) {
                 $weightGrams = $request->request->get('weightGrams');
-                $product->setWeightGrams($weightGrams !== null && $weightGrams !== '' ? (int) $weightGrams : null);
+                $wg = ($weightGrams !== null && $weightGrams !== '') ? (int) $weightGrams : 0;
+                if ($wg <= 0) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'Le poids (en grammes) est obligatoire et doit être supérieur à 0'
+                    ], 400);
+                }
+                $product->setWeightGrams($wg);
             }
 
             if ($request->request->has('ingredients')) {
