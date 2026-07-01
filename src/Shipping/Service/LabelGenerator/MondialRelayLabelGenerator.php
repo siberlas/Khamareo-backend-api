@@ -78,6 +78,14 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 ?? $order->getGuestPhone()
                 ?? '';
 
+            $isRelayPointCheck = $shippingAddress->isRelayPoint() || !empty($order->getRelayPointId());
+            if (!$isRelayPointCheck && empty($recipientPhone)) {
+                return new LabelGenerationResult(
+                    success: false,
+                    error: 'Un numéro de téléphone est requis pour la livraison à domicile Mondial Relay. Veuillez mettre à jour l\'adresse de livraison.',
+                );
+            }
+
             $recipient = new MondialRelayAddressDTO(
                 title: $shippingAddress->getCivility() ?? '',
                 firstname: mb_substr($shippingAddress->getFirstName() ?? '', 0, 20),
@@ -94,8 +102,8 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 email: $recipientEmail,
             );
 
-            // Determine delivery mode
-            $isRelayPoint = $shippingAddress->isRelayPoint() || !empty($order->getRelayPointId());
+            // Determine delivery mode (reuse $isRelayPointCheck computed above)
+            $isRelayPoint = $isRelayPointCheck;
             $deliveryMode = $isRelayPoint ? MondialRelayMode::RELAY_POINT : MondialRelayMode::HOME;
 
             // Format relay point location

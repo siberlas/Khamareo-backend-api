@@ -153,8 +153,8 @@ class MondialRelayApiService
 
         $fields = [
             'Title'       => $address->title,
-            'Firstname'   => $address->firstname,
-            'Lastname'    => $address->lastname,
+            'Firstname'   => $this->normalizeForXml($address->firstname),
+            'Lastname'    => $this->normalizeForXml($address->lastname),
             'Streetname'  => $this->normalizeForXml($address->streetname),
             'HouseNo'     => $address->houseNo,
             'CountryCode' => strtoupper($address->countryCode),
@@ -169,7 +169,6 @@ class MondialRelayApiService
         ];
 
         foreach ($fields as $tag => $value) {
-            // Empty fields = empty XML tags (not omitted)
             $el->appendChild($doc->createElement($tag, $this->escapeXml($value)));
         }
 
