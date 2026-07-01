@@ -4,96 +4,82 @@ namespace App\Shared\Controller;
 
 use Doctrine\DBAL\Connection;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\HttpKernel\Attribute\AsController;
+use Symfony\Component\Routing\Attribute\Route;
 
 #[AsController]
 class SitemapController extends AbstractController
 {
-    public function __construct(private Connection $db) {}
+    public function __construct(
+        private Connection $db,
+        #[Autowire('%env(FRONTEND_BASE_URL)%')]
+        private string $frontendBaseUrl,
+    ) {}
 
     #[Route('/sitemap.xml', name: 'sitemap', methods: ['GET'])]
     public function __invoke(): Response
     {
-        $baseUrl = 'https://khamareo.com';
+        $baseUrl = rtrim($this->frontendBaseUrl, '/');
+        $today   = (new \DateTimeImmutable())->format('Y-m-d');
 
-        $urls = [];
-
-        // Static pages
+        // Pages statiques
         $staticPages = [
-            ['loc' => '/', 'priority' => '1.0', 'changefreq' => 'daily'],
-            ['loc' => '/boutique', 'priority' => '0.9', 'changefreq' => 'daily'],
-            ['loc' => '/blog', 'priority' => '0.8', 'changefreq' => 'daily'],
-            ['loc' => '/about', 'priority' => '0.6', 'changefreq' => 'monthly'],
-            ['loc' => '/contact', 'priority' => '0.5', 'changefreq' => 'monthly'],
-            ['loc' => '/terms', 'priority' => '0.3', 'changefreq' => 'yearly'],
-            ['loc' => '/privacy', 'priority' => '0.3', 'changefreq' => 'yearly'],
-            ['loc' => '/retractation', 'priority' => '0.3', 'changefreq' => 'yearly'],
+            ['loc' => '/',             'priority' => '1.0', 'changefreq' => 'daily',   'lastmod' => $today],
+            ['loc' => '/boutique',     'priority' => '0.9', 'changefreq' => 'daily',   'lastmod' => $today],
+            ['loc' => '/blog',         'priority' => '0.8', 'changefreq' => 'weekly',  'lastmod' => $today],
+            ['loc' => '/about',        'priority' => '0.6', 'changefreq' => 'monthly', 'lastmod' => $today],
+            ['loc' => '/contact',      'priority' => '0.5', 'changefreq' => 'monthly', 'lastmod' => $today],
+            ['loc' => '/terms',        'priority' => '0.3', 'changefreq' => 'yearly',  'lastmod' => $today],
+            ['loc' => '/privacy',      'priority' => '0.3', 'changefreq' => 'yearly',  'lastmod' => $today],
+            ['loc' => '/retractation', 'priority' => '0.3', 'changefreq' => 'yearly',  'lastmod' => $today],
         ];
-        foreach ($staticPages as $page) {
-            $urls[] = $page;
-        }
 
-        // Products (enabled, not deleted)
+        // Produits actifs
         $products = $this->db->executeQuery(
-            "SELECT slug, updated_at FROM product WHERE is_enabled = true AND is_deleted = false ORDER BY updated_at DESC"
+            "SELECT slug, COALESCE(updated_at, created_at) AS lastmod
+             FROM product
+             WHERE is_enabled = true AND is_deleted = false
+             ORDER BY updated_at DESC"
         )->fetchAllAssociative();
 
-        foreach ($products as $row) {
-            $urls[] = [
-                'loc' => '/product/' . $row['slug'],
-                'lastmod' => substr($row['updated_at'], 0, 10),
-                'priority' => '0.8',
-                'changefreq' => 'weekly',
-            ];
-        }
-
-        // Categories (enabled)
+        // Catégories actives (racines uniquement pour éviter les doublons)
         $categories = $this->db->executeQuery(
-            "SELECT slug FROM category WHERE is_enabled = true ORDER BY display_order"
+            "SELECT slug, COALESCE(updated_at, created_at) AS lastmod
+             FROM category
+             WHERE is_enabled = true
+             ORDER BY display_order"
         )->fetchAllAssociative();
 
-        foreach ($categories as $row) {
-            $urls[] = [
-                'loc' => '/boutique/' . $row['slug'],
-                'priority' => '0.7',
-                'changefreq' => 'weekly',
-            ];
-        }
-
-        // Blog posts (published)
-        $posts = $this->db->executeQuery(
-            "SELECT slug, updated_at FROM blog_post WHERE status = 'published' ORDER BY published_at DESC"
+        // Articles de blog publiés
+        $blogPosts = $this->db->executeQuery(
+            "SELECT slug, COALESCE(updated_at, created_at) AS lastmod
+             FROM blog_post
+             WHERE status = 'published'
+             ORDER BY published_at DESC"
         )->fetchAllAssociative();
 
-        foreach ($posts as $row) {
-            $urls[] = [
-                'loc' => '/blog/' . $row['slug'],
-                'lastmod' => substr($row['updated_at'], 0, 10),
-                'priority' => '0.7',
-                'changefreq' => 'monthly',
-            ];
-        }
+        // Catégories de blog ayant au moins un article publié
+        $blogCategories = $this->db->executeQuery(
+            "SELECT bc.slug, MAX(COALESCE(bp.updated_at, bp.created_at)) AS lastmod
+             FROM blog_category bc
+             INNER JOIN blog_post bp ON bp.category_id = bc.id
+             WHERE bp.status = 'published'
+             GROUP BY bc.id, bc.slug
+             ORDER BY bc.name"
+        )->fetchAllAssociative();
 
-        // Build XML
-        $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
-        $xml .= '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . "\n";
+        $content = $this->renderView('sitemap/sitemap.xml.twig', [
+            'baseUrl'        => $baseUrl,
+            'staticPages'    => $staticPages,
+            'products'       => $products,
+            'categories'     => $categories,
+            'blogPosts'      => $blogPosts,
+            'blogCategories' => $blogCategories,
+        ]);
 
-        foreach ($urls as $url) {
-            $xml .= "  <url>\n";
-            $xml .= "    <loc>{$baseUrl}{$url['loc']}</loc>\n";
-            if (isset($url['lastmod'])) {
-                $xml .= "    <lastmod>{$url['lastmod']}</lastmod>\n";
-            }
-            $xml .= "    <changefreq>{$url['changefreq']}</changefreq>\n";
-            $xml .= "    <priority>{$url['priority']}</priority>\n";
-            $xml .= "  </url>\n";
-        }
-
-        $xml .= '</urlset>';
-
-        $response = new Response($xml, 200, ['Content-Type' => 'application/xml']);
+        $response = new Response($content, 200, ['Content-Type' => 'application/xml; charset=UTF-8']);
         $response->headers->set('Cache-Control', 'public, max-age=3600');
 
         return $response;

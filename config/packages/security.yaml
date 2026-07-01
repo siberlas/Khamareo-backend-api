@@ -57,6 +57,9 @@ security:
        
     access_control:
 
+        # SEO – Sitemap (public)
+        - { path: ^/sitemap\.xml$, roles: PUBLIC_ACCESS }
+
         # Admin portal (waraba-l19)
         - { path: ^/waraba-l19/login$, roles: PUBLIC_ACCESS }
         - { path: ^/waraba-l19, roles: IS_AUTHENTICATED_FULLY }

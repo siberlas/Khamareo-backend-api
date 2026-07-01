@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+
+    {# Pages statiques #}
+    {% for page in staticPages %}
+    <url>
+        <loc>{{ (baseUrl ~ page.loc)|e }}</loc>
+        <lastmod>{{ page.lastmod }}</lastmod>
+        <changefreq>{{ page.changefreq }}</changefreq>
+        <priority>{{ page.priority }}</priority>
+    </url>
+    {% endfor %}
+
+    {# Produits actifs #}
+    {% for product in products %}
+    <url>
+        <loc>{{ (baseUrl ~ '/product/' ~ product.slug)|e }}</loc>
+        {% if product.lastmod %}
+        <lastmod>{{ product.lastmod|slice(0, 10) }}</lastmod>
+        {% endif %}
+        <changefreq>weekly</changefreq>
+        <priority>0.8</priority>
+    </url>
+    {% endfor %}
+
+    {# Catégories de produits #}
+    {% for category in categories %}
+    <url>
+        <loc>{{ (baseUrl ~ '/boutique/' ~ category.slug)|e }}</loc>
+        {% if category.lastmod %}
+        <lastmod>{{ category.lastmod|slice(0, 10) }}</lastmod>
+        {% endif %}
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    {% endfor %}
+
+    {# Articles de blog publiés #}
+    {% for post in blogPosts %}
+    <url>
+        <loc>{{ (baseUrl ~ '/blog/' ~ post.slug)|e }}</loc>
+        {% if post.lastmod %}
+        <lastmod>{{ post.lastmod|slice(0, 10) }}</lastmod>
+        {% endif %}
+        <changefreq>monthly</changefreq>
+        <priority>0.7</priority>
+    </url>
+    {% endfor %}
+
+    {# Catégories de blog #}
+    {% for category in blogCategories %}
+    <url>
+        <loc>{{ (baseUrl ~ '/blog?categorie=' ~ category.slug)|e }}</loc>
+        {% if category.lastmod %}
+        <lastmod>{{ category.lastmod|slice(0, 10) }}</lastmod>
+        {% endif %}
+        <changefreq>weekly</changefreq>
+        <priority>0.6</priority>
+    </url>
+    {% endfor %}
+
+</urlset>

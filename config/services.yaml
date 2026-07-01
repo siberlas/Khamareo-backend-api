@@ -6,6 +6,7 @@
 parameters:
     app.frontend_url: '%env(string:FRONTEND_BASE_URL)%'
     app.mailer_from: '%env(string:MAILER_FROM_EMAIL)%'
+    app.mr_collection_relay_id_default: ''
 
 
 services:
@@ -110,6 +111,7 @@ services:
             $senderCountry: '%env(COLISSIMO_SENDER_COUNTRY)%'
             $senderEmail: '%env(COLISSIMO_SENDER_EMAIL)%'
             $senderPhone: '%env(COLISSIMO_SENDER_PHONE)%'
+            $collectionRelayId: '%env(default:app.mr_collection_relay_id_default:MONDIAL_RELAY_COLLECTION_RELAY_ID)%'
         tags: ['app.label_generator']
 
     App\Shipping\Service\OrderDocumentPdfService:
