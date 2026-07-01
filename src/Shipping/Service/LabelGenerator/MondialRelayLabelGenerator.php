@@ -74,9 +74,9 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
             [$recipientHouseNo, $recipientStreet] = $this->splitStreetAddress($shippingAddress->getStreetAddress());
             $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail() ?? '';
             $recipientPhone = $shippingAddress->getPhone()
-                ?? $order->getOwner()?->getPhone()
-                ?? $order->getGuestPhone()
-                ?? '';
+                ?: ($order->getOwner()?->getPhone()
+                ?: ($order->getGuestPhone()
+                ?: ''));
 
             $isRelayPointCheck = $shippingAddress->isRelayPoint() || !empty($order->getRelayPointId());
             if (!$isRelayPointCheck && empty($recipientPhone)) {
