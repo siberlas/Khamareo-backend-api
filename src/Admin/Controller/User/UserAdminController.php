@@ -228,9 +228,10 @@ class UserAdminController extends AbstractController
             $orderDir = in_array($orderDir, ['ASC', 'DESC'], true) ? $orderDir : 'DESC';
 
             $qb = $this->userRepository->createQueryBuilder('u')
-                ->leftJoin(Order::class, 'o', 'WITH', 'o.owner = u')
+                ->leftJoin(Order::class, 'o', 'WITH', '(o.owner = u OR (o.owner IS NULL AND o.guestEmail = u.email)) AND o.isTest = :notTest')
                 ->addSelect('COUNT(o.id) AS ordersCount')
                 ->addSelect('COALESCE(SUM(o.totalAmount), 0) AS totalSpent')
+                ->setParameter('notTest', false)
                 ->groupBy('u.id');
 
             $this->applyUserFilters($qb, $search, $verified, $newsletter, $isGuest, $startDate, $endDate);
@@ -332,8 +333,9 @@ class UserAdminController extends AbstractController
 
             $orders = $this->orderRepository->createQueryBuilder('o')
                 ->select('o')
-                ->where('o.owner = :user')
+                ->where('o.owner = :user OR (o.owner IS NULL AND o.guestEmail = :email)')
                 ->setParameter('user', $user)
+                ->setParameter('email', $user->getEmail())
                 ->orderBy('o.createdAt', 'DESC')
                 ->getQuery()
                 ->getResult();
@@ -478,9 +480,11 @@ class UserAdminController extends AbstractController
             ->select('COUNT(DISTINCT u.id)');
 
         if ($hasOrders === true) {
-            $qb->innerJoin(Order::class, 'o', 'WITH', 'o.owner = u');
+            $qb->innerJoin(Order::class, 'o', 'WITH', '(o.owner = u OR (o.owner IS NULL AND o.guestEmail = u.email)) AND o.isTest = :notTest')
+               ->setParameter('notTest', false);
         } elseif ($hasOrders === false) {
-            $qb->leftJoin(Order::class, 'o', 'WITH', 'o.owner = u')
+            $qb->leftJoin(Order::class, 'o', 'WITH', '(o.owner = u OR (o.owner IS NULL AND o.guestEmail = u.email)) AND o.isTest = :notTest')
+               ->setParameter('notTest', false)
                ->andWhere('o.id IS NULL');
         }
 
