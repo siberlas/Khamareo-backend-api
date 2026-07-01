@@ -6,6 +6,8 @@ use App\Media\Service\CloudinaryService;
 use App\Shipping\DTO\MondialRelay\MondialRelayAddressDTO;
 use App\Shipping\DTO\MondialRelay\MondialRelayShipmentDTO;
 use App\Shipping\Entity\Parcel;
+use App\Shipping\Enum\MondialRelayMode;
+use App\Shipping\Exception\MondialRelayApiException;
 use App\Shipping\Service\MondialRelayApiService;
 use Psr\Log\LoggerInterface;
 
@@ -27,6 +29,10 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
         private string                 $senderCountry,
         private string                 $senderEmail,
         private string                 $senderPhone,
+        // Point relais où le vendeur dépose ses colis (ex: "FR-12345").
+        // Requis pour les livraisons 24R : sans lui, MR ne peut pas calculer le
+        // plan de tri entre deux relay points et retourne l'erreur 10055.
+        private string                 $collectionRelayId = '',
     ) {}
 
     public function generateLabelForParcel(Parcel $parcel): LabelGenerationResult
@@ -35,8 +41,9 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
             $order = $parcel->getOrder();
 
             $this->logger->info('Generating Mondial Relay label for parcel', [
-                'parcel_id' => $parcel->getId()->toRfc4122(),
-                'order_id' => $order->getId()->toRfc4122(),
+                'parcel_id'  => $parcel->getId()->toRfc4122(),
+                'order_id'   => $order->getId()->toRfc4122(),
+                'order_number' => $order->getOrderNumber(),
             ]);
 
             $shippingAddress = $order->getShippingAddress();
@@ -53,7 +60,7 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 title: '',
                 firstname: mb_substr($this->senderFirstname, 0, 20),
                 lastname: mb_substr($this->senderLastname, 0, 20),
-                addressAdd1: '', // Complément d'adresse (vide)
+                addressAdd1: mb_substr($this->senderCompany, 0, 32),
                 streetname: mb_substr($senderStreet, 0, 32),
                 houseNo: mb_substr($senderHouseNo, 0, 8),
                 postcode: $this->senderZipcode,
@@ -89,7 +96,7 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
 
             // Determine delivery mode
             $isRelayPoint = $shippingAddress->isRelayPoint() || !empty($order->getRelayPointId());
-            $deliveryMode = $isRelayPoint ? '24R' : 'HOM';
+            $deliveryMode = $isRelayPoint ? MondialRelayMode::RELAY_POINT : MondialRelayMode::HOME;
 
             // Format relay point location
             $deliveryLocation = '';
@@ -109,14 +116,34 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 $weightGrams = 10;
             }
 
+            // REL = vendeur dépose le colis en Point Relais (mode standard pour un e-commerce).
+            // CCC = collecte entrepôt (Mondial Relay vient chercher chez le vendeur) — non applicable ici.
+            // CollectionLocation = relay de dépôt du vendeur (MONDIAL_RELAY_COLLECTION_RELAY_ID).
+            $collectionLocation = '';
+            if (!empty($this->collectionRelayId)) {
+                $collectionLocation = str_contains($this->collectionRelayId, '-')
+                    ? $this->collectionRelayId
+                    : $this->resolveCountryCode($this->senderCountry) . '-' . $this->collectionRelayId;
+            }
+
+            $this->logger->info('Mondial Relay label request params', [
+                'order_number'               => $order->getOrderNumber(),
+                'delivery_mode'              => $deliveryMode,
+                'relay_destination_client'   => $relayPointId ?? '(aucun)',
+                'delivery_location_xml'      => $deliveryLocation ?: '(vide)',
+                'collection_mode'            => MondialRelayMode::COLLECTION_RELAY,
+                'relay_collecte_expediteur'  => $collectionLocation ?: '(vide — MONDIAL_RELAY_COLLECTION_RELAY_ID non configuré)',
+                'weight_grams'               => $weightGrams,
+            ]);
+
             $dto = new MondialRelayShipmentDTO(
                 sender: $sender,
                 recipient: $recipient,
                 weightGrams: $weightGrams,
                 deliveryMode: $deliveryMode,
                 deliveryLocation: $deliveryLocation,
-                collectionMode: 'CCC',
-                collectionLocation: '',
+                collectionMode: MondialRelayMode::COLLECTION_RELAY,
+                collectionLocation: $collectionLocation,
                 orderNo: substr($order->getOrderNumber() ?? '', 0, 15),
                 customerNo: '',
                 parcelContent: 'Produits naturels',
@@ -141,10 +168,25 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 labelUrl: $labelUrl ?? $labelResult->labelUrl,
             );
 
+        } catch (MondialRelayApiException $e) {
+            $this->logger->warning('Mondial Relay API error during label generation', [
+                'parcel_id'      => $parcel->getId()->toRfc4122(),
+                'order_number'   => $parcel->getOrder()->getOrderNumber(),
+                'relay_point_id' => $parcel->getOrder()->getRelayPointId()
+                                    ?? $parcel->getOrder()->getShippingAddress()?->getRelayPointId()
+                                    ?? '(aucun)',
+                'error_codes'    => $e->getErrorCodes(),
+                'message'        => $e->getMessage(),
+            ]);
+            throw $e;
         } catch (\Exception $e) {
             $this->logger->error('Mondial Relay label generation failed', [
-                'parcel_id' => $parcel->getId()->toRfc4122(),
-                'error' => $e->getMessage(),
+                'parcel_id'      => $parcel->getId()->toRfc4122(),
+                'order_number'   => $parcel->getOrder()->getOrderNumber(),
+                'relay_point_id' => $parcel->getOrder()->getRelayPointId()
+                                    ?? $parcel->getOrder()->getShippingAddress()?->getRelayPointId()
+                                    ?? '(aucun)',
+                'error'          => $e->getMessage(),
             ]);
 
             return new LabelGenerationResult(

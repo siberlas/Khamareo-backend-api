@@ -99,16 +99,22 @@ class MondialRelayApiService
         $shipment->appendChild($doc->createElement('CustomerNo', $this->escapeXml(substr($dto->customerNo, 0, 9))));
         $shipment->appendChild($doc->createElement('ParcelCount', '1'));
 
-        // DeliveryMode
+        // DeliveryMode — Location omis si vide (ex: livraison HOM sans relay).
+        // Un attribut Location="" cause une erreur 10055 chez MR.
         $deliveryMode = $doc->createElement('DeliveryMode');
         $deliveryMode->setAttribute('Mode', $this->escapeXml($dto->deliveryMode));
-        $deliveryMode->setAttribute('Location', $this->escapeXml($dto->deliveryLocation));
+        if ($dto->deliveryLocation !== '') {
+            $deliveryMode->setAttribute('Location', $this->escapeXml($dto->deliveryLocation));
+        }
         $shipment->appendChild($deliveryMode);
 
-        // CollectionMode
+        // CollectionMode — Location omis si vide (Mode REL sans relay de dépôt configuré).
+        // MR calcule le plan de tri depuis n'importe quel relay réseau si Location absent.
         $collectionMode = $doc->createElement('CollectionMode');
         $collectionMode->setAttribute('Mode', $this->escapeXml($dto->collectionMode));
-        $collectionMode->setAttribute('Location', $this->escapeXml($dto->collectionLocation));
+        if ($dto->collectionLocation !== '') {
+            $collectionMode->setAttribute('Location', $this->escapeXml($dto->collectionLocation));
+        }
         $shipment->appendChild($collectionMode);
 
         // Parcels

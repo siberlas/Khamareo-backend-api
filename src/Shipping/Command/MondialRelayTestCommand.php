@@ -4,6 +4,7 @@ namespace App\Shipping\Command;
 
 use App\Shipping\DTO\MondialRelay\MondialRelayAddressDTO;
 use App\Shipping\DTO\MondialRelay\MondialRelayShipmentDTO;
+use App\Shipping\Enum\MondialRelayMode;
 use App\Shipping\Service\MondialRelayApiService;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -59,9 +60,9 @@ class MondialRelayTestCommand extends Command
             sender: $sender,
             recipient: $recipient,
             weightGrams: 500,
-            deliveryMode: '24R',
+            deliveryMode: MondialRelayMode::RELAY_POINT,
             deliveryLocation: 'FR-66974',
-            collectionMode: 'CCC',
+            collectionMode: MondialRelayMode::COLLECTION_RELAY,
             orderNo: 'TEST-' . date('His'),
             parcelContent: 'Produits naturels',
         );

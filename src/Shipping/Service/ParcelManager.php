@@ -569,18 +569,8 @@ class ParcelManager
 
     private function getProductWeightGrams($product): int
     {
-        $weight = $product->getWeight();
-
-        if ($weight === null || !is_numeric($weight)) {
-            return 500;
-        }
-
-        $weight = (float) $weight;
-
-        if ($weight > 0 && $weight <= 30) {
-            return max(1, (int) round($weight * 1000));
-        }
-
-        return max(1, (int) round($weight));
+        return ($product->getWeightGrams() !== null && $product->getWeightGrams() > 0)
+            ? $product->getWeightGrams()
+            : 0;
     }
 }

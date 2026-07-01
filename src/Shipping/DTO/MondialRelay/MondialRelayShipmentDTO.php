@@ -8,9 +8,9 @@ readonly class MondialRelayShipmentDTO
         public MondialRelayAddressDTO $sender,
         public MondialRelayAddressDTO $recipient,
         public int                    $weightGrams,          // Min 10
-        public string                 $deliveryMode,         // "24R","24L","HOM","HOC","LCC"
+        public string                 $deliveryMode,         // "24R","24L","HOM","HOC" — voir MondialRelayMode
         public string                 $deliveryLocation = '', // "FR-XXXXX" for relay points
-        public string                 $collectionMode = 'CCC',
+        public string                 $collectionMode = 'REL', // REL=dépôt en relais, CCC=collecte entrepôt
         public string                 $collectionLocation = '',
         public string                 $orderNo = '',         // Max 15 chars
         public string                 $customerNo = '',      // Max 9 chars

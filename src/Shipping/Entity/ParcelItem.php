@@ -88,22 +88,11 @@ class ParcelItem
             return 500;
         }
 
-        // Utilise getWeight() actuel (sera migré vers getWeightGrams() plus tard)
-        $weight = $product->getWeight();
-        if ($weight === null || !is_numeric($weight)) {
-            return 500; // Même fallback que ParcelManager::getProductWeightGrams
+        if ($product->getWeightGrams() !== null && $product->getWeightGrams() > 0) {
+            return $product->getWeightGrams();
         }
 
-        $weight = (float) $weight;
-
-        // Conversion intelligente (comme dans ColissimoApiService)
-        if ($weight > 0 && $weight <= 30) {
-            // Valeur en KG (fixtures Faker) → convertir en grammes
-            return max(1, (int) round($weight * 1000));
-        }
-
-        // Déjà en grammes
-        return max(1, (int) round($weight));
+        return 0;
     }
 
     /**

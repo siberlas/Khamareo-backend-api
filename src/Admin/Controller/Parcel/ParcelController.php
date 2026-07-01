@@ -9,6 +9,7 @@ use App\Shared\Enum\OrderStatus;
 use App\Shipping\Entity\Parcel;
 use App\Shipping\Entity\ParcelItem;
 use App\Shipping\Repository\ParcelRepository;
+use App\Shipping\Exception\MondialRelayApiException;
 use App\Shipping\Service\ParcelManager;
 use App\Shipping\Service\LabelGenerator\LabelGeneratorFactory;
 use App\Media\Service\CloudinaryService;
@@ -862,6 +863,35 @@ class ParcelController extends AbstractController
                 ],
             ]);
 
+        } catch (MondialRelayApiException $e) {
+            $this->logger->warning('Mondial Relay API business error during label generation', [
+                'parcel_id'      => $parcelId,
+                'order_number'   => $parcel->getOrder()->getOrderNumber(),
+                'relay_point_id' => $parcel->getOrder()->getRelayPointId()
+                                    ?? $parcel->getOrder()->getShippingAddress()?->getRelayPointId()
+                                    ?? '(aucun)',
+                'error_codes'    => $e->getErrorCodes(),
+                'message'        => $e->getMessage(),
+            ]);
+
+            $relayId = $parcel->getOrder()->getRelayPointId()
+                ?? $parcel->getOrder()->getShippingAddress()?->getRelayPointId();
+
+            $errorMessages = $e->getErrorCodes();
+            $message = !empty($errorMessages)
+                ? implode(' | ', $errorMessages)
+                : $e->getMessage();
+
+            if ($relayId) {
+                $message .= sprintf(' [relay destination client: %s]', $relayId);
+            }
+
+            return $this->json([
+                'error'   => true,
+                'message' => $message,
+                'context' => 'mondial_relay_api',
+            ], 422);
+
         } catch (\Exception $e) {
             $this->logger->error('Label generation failed', [
                 'parcel_id' => $parcelId,
@@ -869,8 +899,9 @@ class ParcelController extends AbstractController
             ]);
 
             return $this->json([
-                'success' => false,
-                'error' => $e->getMessage(),
+                'error' => true,
+                'message' => 'Une erreur inattendue est survenue lors de la génération de l\'étiquette',
+                'context' => 'server_error',
             ], 500);
         }
     }

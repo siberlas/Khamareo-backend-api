@@ -68,10 +68,18 @@ class ProductCreationController extends AbstractController
             $isEnabled = $request->request->get('isEnabled');
             $isFeatured = $request->request->get('isFeatured');
 
+            $weightGramsRaw = $request->request->get('weightGrams');
             if (!$name || !$categoryId || !$price || $stock === null) {
                 return $this->json([
                     'success' => false,
                     'error' => 'Champs requis manquants : name, categoryId, price, stock'
+                ], 400);
+            }
+
+            if (!$weightGramsRaw || (int) $weightGramsRaw <= 0) {
+                return $this->json([
+                    'success' => false,
+                    'error' => 'Le poids (en grammes) est obligatoire et doit être supérieur à 0'
                 ], 400);
             }
 
@@ -129,12 +137,11 @@ class ProductCreationController extends AbstractController
                 $product->setBadge(null);
             }
             
+            $product->setWeightGrams((int) $weightGramsRaw);
+
             // Champs optionnels
             if ($originalPrice = $request->request->get('originalPrice')) {
                 $product->setOriginalPrice((float) $originalPrice);
-            }
-            if ($weightGrams = $request->request->get('weightGrams')) {
-                $product->setWeightGrams((int) $weightGrams);
             }
             if ($benefits = $request->request->all('benefits')) {
                 $product->setBenefits($benefits);
