@@ -86,6 +86,8 @@ security:
         - { path: ^/api/forgot-password, roles: PUBLIC_ACCESS }  # Demande reset
         
         # ✅ Routes publiques (catalogue)
+        - { path: ^/api/exchange-rates, roles: PUBLIC_ACCESS }
+        - { path: ^/api/currencies, roles: PUBLIC_ACCESS }
         - { path: ^/api/categories, roles: PUBLIC_ACCESS }
         - { path: ^/api/products, roles: PUBLIC_ACCESS }
         - { path: ^/api/catalog, roles: PUBLIC_ACCESS }

@@ -194,9 +194,10 @@ class CheckoutController extends AbstractController
         $pi = $this->stripeProvider->retrievePaymentIntent($cart->getPaymentIntentId());
         $piAmount = $pi->amount / 100;
 
-        if (strtoupper($pi->currency) !== $currencyCode) {
+        // Le PaymentIntent est toujours créé en EUR (Option A : débit EUR, affichage multi-devise)
+        if (strtoupper($pi->currency) !== 'EUR') {
             throw new BadRequestException(
-                "Devise PaymentIntent ({$pi->currency}) ne correspond pas à la devise demandée ({$currencyCode})."
+                "Devise PaymentIntent invalide ({$pi->currency}). Le paiement doit être en EUR."
             );
         }
 

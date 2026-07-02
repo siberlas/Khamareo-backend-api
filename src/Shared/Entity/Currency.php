@@ -15,8 +15,8 @@ use Symfony\Component\Uid\Uuid;
 #[ORM\Table(name: 'currency')]
 #[ApiResource(
     operations: [
-        new Get(),
-        new GetCollection()
+        new Get(security: "is_granted('PUBLIC_ACCESS')"),
+        new GetCollection(security: "is_granted('PUBLIC_ACCESS')"),
     ],
     normalizationContext: ['groups' => ['currency:read']],
     paginationEnabled: false
