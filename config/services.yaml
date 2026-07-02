@@ -50,6 +50,10 @@ services:
         arguments:
             $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'
             $logger: '@monolog.logger.payment'
+
+    App\Shared\Service\StripeExchangeRateService:
+        arguments:
+            $stripeSecretKey: '%env(STRIPE_SECRET_KEY)%'
        
     App\Payment\Provider\PaymentProviderFactory:
         arguments:

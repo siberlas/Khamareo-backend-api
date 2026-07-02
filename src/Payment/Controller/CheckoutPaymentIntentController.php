@@ -128,19 +128,19 @@ class CheckoutPaymentIntentController extends AbstractController
             $shippingCost = 0;
         }
 
-        // 5) Total
+        // 5) Total en EUR (devise de stockage — Stripe est toujours débité en EUR)
         $itemsSubtotal         = $cart->getSubtotal();
         $discountAmount        = $cart->getDiscountAmount() ? (float) $cart->getDiscountAmount() : 0;
         $subtotalAfterDiscount = $itemsSubtotal - $discountAmount;
         $total                 = $subtotalAfterDiscount + $shippingCost;
 
-        $stripeCurrency = strtolower($currencyCode);
+        $stripeCurrency = 'eur';
 
         $carrierName = ($carrierMode->getCarrier()?->getName() ?? '')
             . ' - '
             . ($carrierMode->getShippingMode()?->getName() ?? '');
 
-        // 6) Créer / mettre à jour PaymentIntent Stripe
+        // 6) Créer / mettre à jour PaymentIntent Stripe en EUR
         $resp = $this->stripeProvider->createOrUpdateCartPaymentIntent(
             $cart,
             (int) round($total * 100),
@@ -168,7 +168,7 @@ class CheckoutPaymentIntentController extends AbstractController
 
         $this->em->flush();
 
-        // 9) Réponse
+        // 9) Réponse en EUR (l'affichage dans la devise du client est géré côté frontend)
         return $this->json([
             'paymentIntentId'  => $resp->paymentId,
             'clientSecret'     => $resp->clientSecret,
