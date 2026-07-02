@@ -49,36 +49,43 @@ class UserAdminController extends AbstractController
 
             $totalUsers = (int) $this->userRepository->createQueryBuilder('u')
                 ->select('COUNT(u.id)')
+                ->andWhere('u.isTest = false')
                 ->getQuery()->getSingleScalarResult();
 
             $registeredUsers = (int) $this->userRepository->createQueryBuilder('u')
                 ->select('COUNT(u.id)')
                 ->andWhere('u.isGuest = false')
+                ->andWhere('u.isTest = false')
                 ->getQuery()->getSingleScalarResult();
 
             $guestUsers = (int) $this->userRepository->createQueryBuilder('u')
                 ->select('COUNT(u.id)')
                 ->andWhere('u.isGuest = true')
+                ->andWhere('u.isTest = false')
                 ->getQuery()->getSingleScalarResult();
 
             $verifiedUsers = (int) $this->userRepository->createQueryBuilder('u')
                 ->select('COUNT(u.id)')
                 ->andWhere('u.isVerified = true')
+                ->andWhere('u.isTest = false')
                 ->getQuery()->getSingleScalarResult();
 
             $unverifiedUsers = (int) $this->userRepository->createQueryBuilder('u')
                 ->select('COUNT(u.id)')
                 ->andWhere('u.isVerified = false')
+                ->andWhere('u.isTest = false')
                 ->getQuery()->getSingleScalarResult();
 
             $newsletterUsers = (int) $this->userRepository->createQueryBuilder('u')
                 ->select('COUNT(u.id)')
                 ->andWhere('u.newsletter = true')
+                ->andWhere('u.isTest = false')
                 ->getQuery()->getSingleScalarResult();
 
             $adminUsers = 0;
             $rolesRows = $this->userRepository->createQueryBuilder('u')
                 ->select('u.roles')
+                ->andWhere('u.isTest = false')
                 ->getQuery()->getArrayResult();
             foreach ($rolesRows as $row) {
                 $roles = $row['roles'] ?? [];
@@ -88,7 +95,8 @@ class UserAdminController extends AbstractController
             }
 
             $newUsersQb = $this->userRepository->createQueryBuilder('u')
-                ->select('COUNT(u.id)');
+                ->select('COUNT(u.id)')
+                ->andWhere('u.isTest = false');
             if ($startDate) {
                 $newUsersQb->andWhere('u.createdAt >= :startDate')
                            ->setParameter('startDate', $startDate);
@@ -99,7 +107,8 @@ class UserAdminController extends AbstractController
                 ->select('COUNT(DISTINCT u.id)')
                 ->from(Order::class, 'o')
                 ->innerJoin('o.owner', 'u')
-                ->andWhere('o.isTest = :f1')->setParameter('f1', false);
+                ->andWhere('o.isTest = :f1')->setParameter('f1', false)
+                ->andWhere('u.isTest = false');
             if ($startDate) {
                 $activeUsersQb->andWhere('o.createdAt >= :startDate')
                               ->setParameter('startDate', $startDate);
@@ -110,7 +119,8 @@ class UserAdminController extends AbstractController
                 ->select('COUNT(DISTINCT u2.id)')
                 ->from(Order::class, 'o2')
                 ->innerJoin('o2.owner', 'u2')
-                ->andWhere('o2.isTest = :f2')->setParameter('f2', false);
+                ->andWhere('o2.isTest = :f2')->setParameter('f2', false)
+                ->andWhere('u2.isTest = false');
             $usersWithOrders = (int) $usersWithOrdersQb->getQuery()->getSingleScalarResult();
 
             $inactiveUsers = max(0, $registeredUsers - $usersWithOrders);
@@ -123,7 +133,8 @@ class UserAdminController extends AbstractController
                 ->from(Order::class, 'o3')
                 ->innerJoin('o3.owner', 'u3')
                 ->andWhere('u3.newsletter = true')
-                ->andWhere('o3.isTest = :f3')->setParameter('f3', false);
+                ->andWhere('o3.isTest = :f3')->setParameter('f3', false)
+                ->andWhere('u3.isTest = false');
             $newsletterCustomers = (int) $newsletterCustomersQb->getQuery()->getSingleScalarResult();
             $newsletterConversionRate = $newsletterUsers > 0
                 ? round(($newsletterCustomers / $newsletterUsers) * 100, 2)
@@ -142,6 +153,7 @@ class UserAdminController extends AbstractController
                 ->from(Order::class, 'o')
                 ->innerJoin('o.owner', 'u')
                 ->andWhere('o.isTest = :f4')->setParameter('f4', false)
+                ->andWhere('u.isTest = false')
                 ->groupBy('u.id')
                 ->orderBy('totalSpent', 'DESC')
                 ->setMaxResults(5);
@@ -278,6 +290,7 @@ class UserAdminController extends AbstractController
                     'roles' => $user->getRoles(),
                     'isVerified' => $user->isVerified(),
                     'isGuest' => $user->isGuest(),
+                    'isTest' => $user->isTest(),
                     'newsletter' => $user->isNewsletter(),
                     'createdAt' => $user->getCreatedAt()?->format(\DateTime::ATOM),
                     'ordersCount' => $ordersCount,
@@ -402,6 +415,34 @@ class UserAdminController extends AbstractController
                 'success' => false,
                 'error' => 'Erreur lors de la récupération de l\'utilisateur'
             ], 500);
+        }
+    }
+
+    /**
+     * Toggle mode test utilisateur
+     * PATCH /api/admin/users/{id}/test
+     */
+    #[Route('/{id}/test', name: 'toggle_test', methods: ['PATCH'], requirements: ['id' => '[0-9a-f\-]{36}'])]
+    public function toggleTest(string $id, Request $request): JsonResponse
+    {
+        try {
+            $uuid = Uuid::fromString($id);
+            $user = $this->userRepository->find($uuid);
+
+            if (!$user) {
+                return $this->json(['success' => false, 'error' => 'Utilisateur introuvable'], 404);
+            }
+
+            $data = json_decode($request->getContent(), true) ?? [];
+            $isTest = (bool) ($data['isTest'] ?? !$user->isTest());
+
+            $user->setIsTest($isTest);
+            $this->em->flush();
+
+            return $this->json(['success' => true, 'isTest' => $user->isTest()]);
+
+        } catch (\Exception $e) {
+            return $this->json(['success' => false, 'error' => $e->getMessage()], 500);
         }
     }
 

@@ -35,6 +35,14 @@ class StoreSettings
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
     private ?string $freeShippingThreshold = null;
 
+    /**
+     * Seuils par zone tarifaire (FR, EU, OM1, OM2, CH, UK, B, C).
+     * null pour une zone = pas de livraison gratuite dans cette zone.
+     * Exemple : {"FR": 65.00, "EU": 100.00, "C": null}
+     */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $freeShippingThresholds = null;
+
     // ── Boutique ──────────────────────────────────────────────────────────────
 
     #[ORM\Column(length: 255, nullable: true)]
@@ -102,6 +110,26 @@ class StoreSettings
 
     public function getFreeShippingThreshold(): ?string { return $this->freeShippingThreshold; }
     public function setFreeShippingThreshold(?string $v): self { $this->freeShippingThreshold = $v; return $this; }
+
+    public function getFreeShippingThresholds(): ?array { return $this->freeShippingThresholds; }
+    public function setFreeShippingThresholds(?array $v): self { $this->freeShippingThresholds = $v; return $this; }
+
+    /**
+     * Retourne le seuil applicable pour une zone donnée.
+     * Fallback sur freeShippingThreshold legacy si aucune config par zone.
+     */
+    public function getThresholdForZone(string $zone): ?float
+    {
+        $thresholds = $this->freeShippingThresholds;
+        if ($thresholds !== null) {
+            return array_key_exists($zone, $thresholds) ? ($thresholds[$zone] !== null ? (float) $thresholds[$zone] : null) : null;
+        }
+        // Fallback legacy : threshold unique appliqué uniquement sur FR
+        if ($zone === 'FR' && $this->freeShippingThreshold !== null) {
+            return (float) $this->freeShippingThreshold;
+        }
+        return null;
+    }
 
     // ── Getters/setters Boutique ───────────────────────────────────────────
 

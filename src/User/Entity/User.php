@@ -199,6 +199,9 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(length: 255, nullable: true, unique: true)]
     private ?string $googleId = null;
 
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isTest = false;
+
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
@@ -651,4 +654,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
 
     public function getGoogleId(): ?string { return $this->googleId; }
     public function setGoogleId(?string $googleId): self { $this->googleId = $googleId; return $this; }
+
+    public function isTest(): bool { return $this->isTest; }
+    public function setIsTest(bool $isTest): self { $this->isTest = $isTest; return $this; }
 }

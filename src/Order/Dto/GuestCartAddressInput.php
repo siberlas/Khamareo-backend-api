@@ -25,13 +25,11 @@ final class GuestCartAddressInput
     #[Groups(['guest-user'])]
     public ?string $lastName = null;
 
-    #[Assert\NotBlank(message: "L'adresse email est obligatoire")]
     #[Assert\Email(message:"Le format de l'adresse email n'est pas valide")]
     #[Assert\Length(max: 180)]
     #[Groups(['guest-user'])]
     public ?string $email = null;
 
-    #[Assert\NotBlank(message: "Le numéro de téléphone est obligatoire")]
     #[Assert\Regex(
         pattern: '/^[0-9+\(\)\.\-\s]{7,20}$/',
         message: 'Numéro de téléphone invalide.',
@@ -66,8 +64,6 @@ final class GuestCartAddressInput
     #[Groups(['guest-user'])]
     public ?string $country = null;
 
-    // ✅ NOUVEAU : Consentement RGPD
-    #[Assert\IsTrue(message: 'Vous devez accepter les conditions générales pour continuer.')]
     #[Groups(['guest-user'])]
     public bool $hasAcceptedTerms = false;
 }

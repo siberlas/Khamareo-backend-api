@@ -67,6 +67,9 @@ class ContactMessage
     #[ORM\Column(type: 'boolean')]
     private bool $isProcessed = false;
 
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $isRead = false;
+
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $adminNotes = null;
 
@@ -257,9 +260,12 @@ class ContactMessage
         return $this;
     }
 
+    public function isRead(): bool { return $this->isRead; }
+    public function setIsRead(bool $isRead): self { $this->isRead = $isRead; return $this; }
+
     /**
      * Get the value of adminNotes
-     */ 
+     */
     public function getAdminNotes()
     {
         return $this->adminNotes;

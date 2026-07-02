@@ -272,7 +272,7 @@ class CheckoutController extends AbstractController
             ->setShippingAddress($shippingSnapshot)
             ->setShippingCost($shippingCost)
             ->setTotalAmount($piAmount)
-            ->setCurrency($currencyCode)
+            ->setCurrency('EUR')
             ->setLocale($locale);
 
         if ($cgvVersion) {
@@ -423,7 +423,7 @@ class CheckoutController extends AbstractController
             'success'     => true,
             'orderId'     => $order->getId(),
             'orderNumber' => $order->getOrderNumber(),
-            'currency'    => $currencyCode,
+            'currency'    => 'EUR',
         ]);
     }
 

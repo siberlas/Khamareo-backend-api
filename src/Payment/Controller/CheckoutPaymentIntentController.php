@@ -117,15 +117,16 @@ class CheckoutPaymentIntentController extends AbstractController
             ? (float) $rate->getPrice()
             : (float) ($carrierMode->getBasePrice() ?? 0);
 
-        // 4b) Livraison offerte si le seuil est atteint
+        // 4b) Livraison offerte si le seuil de la zone est atteint
         $storeSettings = $this->em->getRepository(StoreSettings::class)->findOneBy([]);
         $itemsSubtotalForShipping = $cart->getSubtotal();
-        if ($storeSettings
-            && $storeSettings->isFreeShippingEnabled()
-            && $storeSettings->getFreeShippingThreshold() !== null
-            && $itemsSubtotalForShipping >= (float) $storeSettings->getFreeShippingThreshold()
-        ) {
-            $shippingCost = 0;
+        $zoneThreshold = null;
+
+        if ($storeSettings && $storeSettings->isFreeShippingEnabled()) {
+            $zoneThreshold = $storeSettings->getThresholdForZone($zone);
+            if ($zoneThreshold !== null && $itemsSubtotalForShipping >= $zoneThreshold) {
+                $shippingCost = 0;
+            }
         }
 
         // 5) Total en EUR (devise de stockage — Stripe est toujours débité en EUR)
@@ -180,7 +181,9 @@ class CheckoutPaymentIntentController extends AbstractController
             'itemsSubtotal'    => $itemsSubtotal,
             'discountAmount'   => $discountAmount,
             'promoCode'        => $cart->getPromoCode(),
-            'freeShipping'     => $shippingCost === 0.0,
+            'freeShipping'          => $shippingCost === 0.0,
+            'freeShippingThreshold' => $zoneThreshold,
+            'shippingZone'          => $zone,
         ]);
     }
 
