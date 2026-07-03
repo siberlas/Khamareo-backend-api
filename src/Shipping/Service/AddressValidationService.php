@@ -124,29 +124,28 @@ class AddressValidationService
 
         // ✅ FRANCE: essayer Adresse API d'abord avec score strict, fallback Mapbox
         if (strtoupper($country) === 'FR') {
+            // Détecter si l'utilisateur a fourni une vraie rue (défini ici pour être accessible dans tout le bloc FR)
+            $streetProvided = trim($street) !== '' && preg_match('/[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/', $street);
+
             // 1️⃣ TENTATIVE 1: Adresse API (stricte - score >= 0.7)
             $results = $this->adresseApi->autocomplete($query, 5);
             if (!empty($results)) {
                 $match = $results[0];
                 $score = $match['raw']['properties']['score'] ?? 0;
                 $matchLabel = $match['label'] ?? 'N/A';
-                
+
                 $this->logger->info('📍 Adresse API search score', [
                     'query' => $query,
                     'score' => $score,
                     'match' => $matchLabel,
                 ]);
-                
+
                 // 🔍 VALIDATION: Vérifier que le match contient au moins le code postal ou la ville
                 // ET que la rue saisie (si fournie) apparaisse dans le résultat
                 $postalCodeInMatch = stripos($matchLabel, $postalCode) !== false;
                 $cityInMatch = stripos($matchLabel, $city) !== false;
 
-                // Détecter si l'utilisateur a fourni une vraie rue (pas vide, pas seulement nombre)
-                $streetProvided = trim($street) !== '' && preg_match('/[A-Za-zÀ-ÖØ-öø-ÿ]{2,}/', $street);
-
                 // Vérifier que la rue fournie a au minimum 2 termes significatifs (ex: "5 Rue de la Paix")
-                // Rejeter les cas type "5 rue", "4 Rue ", "1 Rue" (incomplets, non livrables)
                 $streetTokenCount = 0;
                 $significantStreetTokens = 0;
                 if ($streetProvided) {

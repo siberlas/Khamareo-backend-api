@@ -51,65 +51,81 @@ final class GuestCartAddressProcessor implements ProcessorInterface
             throw new BadRequestException("Aucun panier actif trouvé pour ce token.");
         }
 
-        // ✅ NOUVEAU : Vérifier le consentement RGPD
-        if (!$data->hasAcceptedTerms) {
-            throw new BadRequestException("Vous devez accepter les conditions générales pour continuer.");
-        }
+        // 3️⃣ Cas 1 : le panier a déjà un owner → ajout d'adresse alternative (email/CGV déjà collectés)
+        $existingOwner = $cart->getOwner();
 
-        $this->logger->info('✅ Panier trouvé', [
-            'cart_id' => $cart->getId(),
-            'email' => $data->email
-        ]);
+        if ($existingOwner !== null) {
+            $this->logger->info('✅ Ajout adresse alternative pour invité existant', [
+                'cart_id' => $cart->getId(),
+                'user_id' => $existingOwner->getId(),
+            ]);
 
-        // 3️⃣ Vérifier si l'email existe déjà
-        $existingUser = $this->em->getRepository(User::class)
-            ->findOneBy(['email' => $data->email]);
+            $user = $existingOwner;
 
-        if ($existingUser) {
-            if (!$existingUser->isGuest()) {
-                // ⚠️ Compte utilisateur réel existant
-                $this->logger->warning('⚠️ Tentative commande invitée avec compte existant', [
-                    'email' => $data->email,
+        } else {
+            // Cas 2 : checkout initial → email + téléphone + CGV obligatoires
+            if (!$data->email) {
+                throw new BadRequestException("L'adresse email est obligatoire pour continuer.");
+            }
+
+            if (!$data->phone) {
+                throw new BadRequestException("Le numéro de téléphone est obligatoire pour continuer.");
+            }
+
+            if (!$data->hasAcceptedTerms) {
+                throw new BadRequestException("Vous devez accepter les conditions générales pour continuer.");
+            }
+
+            $this->logger->info('✅ Panier trouvé (checkout initial)', [
+                'cart_id' => $cart->getId(),
+                'email' => $data->email,
+            ]);
+
+            $existingUser = $this->em->getRepository(User::class)
+                ->findOneBy(['email' => $data->email]);
+
+            if ($existingUser) {
+                if (!$existingUser->isGuest()) {
+                    $this->logger->warning('⚠️ Tentative commande invitée avec compte existant', [
+                        'email' => $data->email,
+                        'user_id' => $existingUser->getId(),
+                    ]);
+
+                    throw new AccountExistsException($data->email);
+                }
+
+                $this->logger->info('✅ Mise à jour invité existant', [
                     'user_id' => $existingUser->getId(),
                 ]);
 
-                throw new AccountExistsException($data->email);
+                $user = $existingUser;
+                $user
+                    ->setFirstName($data->firstName)
+                    ->setLastName($data->lastName)
+                    ->setPhone($data->phone)
+                    ->setHasAcceptedGuestTerms(true);
+
+            } else {
+                $this->logger->info('✅ Création nouvel invité', ['email' => $data->email]);
+
+                $user = new User();
+                $user
+                    ->setEmail($data->email)
+                    ->setFirstName($data->firstName)
+                    ->setLastName($data->lastName)
+                    ->setPhone($data->phone)
+                    ->setIsGuest(true)
+                    ->setIsVerified(false)
+                    ->setHasAcceptedGuestTerms(true);
+
+                $randomPassword = bin2hex(random_bytes(16));
+                $hashedPassword = $this->passwordHasher->hashPassword($user, $randomPassword);
+                $user->setPassword($hashedPassword);
+
+                $this->em->persist($user);
             }
 
-            // ✅ Invité existant : mise à jour
-            $this->logger->info('✅ Mise à jour invité existant', [
-                'user_id' => $existingUser->getId()
-            ]);
-
-            $user = $existingUser;
-            $user
-                ->setFirstName($data->firstName)
-                ->setLastName($data->lastName)
-                ->setPhone($data->phone)
-                ->setHasAcceptedGuestTerms(true); // ✅ Update consent
-
-        } else {
-            // ✅ Nouvel invité : création
-            $this->logger->info('✅ Création nouvel invité', ['email' => $data->email]);
-
-            $user = new User();
-            $user
-                ->setEmail($data->email)
-                ->setFirstName($data->firstName)
-                ->setLastName($data->lastName)
-                ->setPhone($data->phone)
-                ->setIsGuest(true)
-                ->setIsVerified(false)
-                ->setHasAcceptedGuestTerms(true); // ✅ NOUVEAU
-
-            // ✅ guestExpiresAt sera défini automatiquement par PrePersist
-
-            // Mot de passe aléatoire (sécurité)
-            $randomPassword = bin2hex(random_bytes(16));
-            $hashedPassword = $this->passwordHasher->hashPassword($user, $randomPassword);
-            $user->setPassword($hashedPassword);
-
-            $this->em->persist($user);
+            $cart->setOwner($user);
         }
 
         // 4️⃣ Créer l'adresse de livraison
@@ -132,10 +148,7 @@ final class GuestCartAddressProcessor implements ProcessorInterface
         // 5️⃣ Adresse de facturation = livraison
         $billingAddress = $deliveryAddress;
 
-        // 6️⃣ Lier le panier à l'utilisateur invité
-        $cart->setOwner($user);
-
-        // 7️⃣ Sauvegarder
+        // 6️⃣ Sauvegarder
         $this->em->flush();
 
         $addressVerified = $deliveryAddress->getGeocodingVerified();
@@ -147,14 +160,11 @@ final class GuestCartAddressProcessor implements ProcessorInterface
             'address_verified' => $addressVerified,
         ]);
 
-        // 8️⃣ Réponse
         $warnings = [];
         if ($addressVerified === false) {
             $warnings[] = 'address_unverified';
         }
 
-        // Retourner une JsonResponse brute pour éviter la sérialisation Hydra d'API Platform
-        // qui emballe les tableaux PHP en Collection { member: [...] } et perd les clés
         return new JsonResponse([
             'success' => true,
             'message' => 'Adresse invité enregistrée avec succès.',

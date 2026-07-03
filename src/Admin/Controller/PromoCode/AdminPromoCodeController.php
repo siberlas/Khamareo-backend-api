@@ -26,11 +26,14 @@ class AdminPromoCodeController extends AbstractController
     public function list(Request $request): JsonResponse
     {
         $page = max(1, (int) $request->query->get('page', 1));
-        $itemsPerPage = max(1, min(100, (int) $request->query->get('itemsPerPage', 20)));
+        $itemsPerPage = max(1, min(500, (int) $request->query->get('itemsPerPage', 20)));
         $codeFilter = $request->query->get('code');
         $typeFilter = $request->query->get('type');
+        $typeGroupFilter = $request->query->get('typeGroup'); // 'auto' | 'manual'
         $activeFilter = $request->query->get('active');
         $eligibleCustomer = $request->query->get('eligibleCustomer');
+
+        $autoTypes = ['newsletter', 'first_order', 'registration'];
 
         $qb = $this->promoCodeRepository->createQueryBuilder('p')
             ->orderBy('p.createdAt', 'DESC');
@@ -38,12 +41,17 @@ class AdminPromoCodeController extends AbstractController
         if ($codeFilter) {
             $qb->andWhere('p.code LIKE :code')->setParameter('code', '%' . $codeFilter . '%');
         }
-        if ($typeFilter) {
+
+        if ($typeGroupFilter === 'auto') {
+            $qb->andWhere('p.type IN (:autoTypes)')->setParameter('autoTypes', $autoTypes);
+        } elseif ($typeGroupFilter === 'manual') {
+            $qb->andWhere('p.type = :manualType')->setParameter('manualType', 'manual');
+        } elseif ($typeFilter) {
             $qb->andWhere('p.type = :type')->setParameter('type', $typeFilter);
         } else {
-            // Les codes launch sont gérés dans la section Lancement, on les exclut par défaut
             $qb->andWhere('p.type != :excludeType')->setParameter('excludeType', 'launch');
         }
+
         if ($activeFilter !== null && $activeFilter !== '') {
             $isActive = filter_var($activeFilter, FILTER_VALIDATE_BOOLEAN);
             $qb->andWhere('p.isActive = :isActive')->setParameter('isActive', $isActive);
@@ -67,6 +75,9 @@ class AdminPromoCodeController extends AbstractController
             '@type' => 'hydra:Collection',
             'hydra:member' => array_map(fn($p) => $this->serialize($p), $promoCodes),
             'hydra:totalItems' => $total,
+            'hydra:totalPages' => (int) ceil($total / $itemsPerPage),
+            'hydra:currentPage' => $page,
+            'hydra:itemsPerPage' => $itemsPerPage,
         ]);
     }
 

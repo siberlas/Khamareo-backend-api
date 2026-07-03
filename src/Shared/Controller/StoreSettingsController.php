@@ -51,6 +51,13 @@ class StoreSettingsController
                 $data['freeShippingThreshold'] !== null ? (string) $data['freeShippingThreshold'] : null
             );
         }
+        if (array_key_exists('freeShippingThresholds', $data) && is_array($data['freeShippingThresholds'])) {
+            $normalized = [];
+            foreach ($data['freeShippingThresholds'] as $zone => $threshold) {
+                $normalized[(string) $zone] = $threshold !== null && $threshold !== '' ? (float) $threshold : null;
+            }
+            $settings->setFreeShippingThresholds($normalized);
+        }
 
         // ── Boutique ──────────────────────────────────────────────────────
         if (array_key_exists('shopName', $data)) {
@@ -112,8 +119,9 @@ class StoreSettingsController
             'dispatchMaxDays'       => $s->getDispatchMaxDays(),
             'dispatchDaysUnit'      => $s->getDispatchDaysUnit(),
             'dispatchNote'          => $s->getDispatchNote(),
-            'freeShippingEnabled'   => $s->isFreeShippingEnabled(),
-            'freeShippingThreshold' => $s->getFreeShippingThreshold() !== null ? (float) $s->getFreeShippingThreshold() : null,
+            'freeShippingEnabled'     => $s->isFreeShippingEnabled(),
+            'freeShippingThreshold'   => $s->getFreeShippingThreshold() !== null ? (float) $s->getFreeShippingThreshold() : null,
+            'freeShippingThresholds'  => $s->getFreeShippingThresholds(),
             // Boutique
             'shopName'         => $s->getShopName(),
             'shopEmail'        => $s->getShopEmail(),
