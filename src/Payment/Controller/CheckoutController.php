@@ -115,7 +115,11 @@ class CheckoutController extends AbstractController
             ->setCountry($billingSource->getCountry())
             ->setLabel('Billing snapshot')
             ->setIsDefault(false)
-            ->setOwner(null);
+            ->setOwner(null)
+            // Copier lat/lon pour que le listener utilise le reverse geocode (fiable)
+            // plutôt que de re-géocoder le texte depuis zéro (score variable)
+            ->setLatitude($billingSource->getLatitude())
+            ->setLongitude($billingSource->getLongitude());
 
         // Champs persos
         $billingSnapshot
@@ -142,7 +146,11 @@ class CheckoutController extends AbstractController
             ->setCountry($deliverySource->getCountry())
             ->setLabel('Shipping snapshot')
             ->setIsDefault(false)
-            ->setOwner(null);
+            ->setOwner(null)
+            // Copier lat/lon pour que le listener utilise le reverse geocode (fiable)
+            // plutôt que de re-géocoder le texte depuis zéro (score variable)
+            ->setLatitude($deliverySource->getLatitude())
+            ->setLongitude($deliverySource->getLongitude());
 
         // Champs persos
         $shippingSnapshot
