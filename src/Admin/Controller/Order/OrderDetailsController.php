@@ -243,12 +243,23 @@ class OrderDetailsController extends AbstractController
                 ];
             }
 
-            // Code promo
+            // Code promo — supporte l'ancien champ unique ET le nouveau promoCodesData
             $promoData = null;
-            if ($order->getPromoCode()) {
+            if ($order->getPromoCodesData() && count($order->getPromoCodesData()) > 0) {
+                $totalDiscount = array_sum(array_column($order->getPromoCodesData(), 'discount'));
                 $promoData = [
-                    'code' => $order->getPromoCode(),
-                    'discountAmount' => $order->getDiscountAmount(),
+                    'codes'         => array_column($order->getPromoCodesData(), 'code'),
+                    'codesData'     => $order->getPromoCodesData(),
+                    'discountAmount' => round($totalDiscount, 2),
+                ];
+            } elseif ($order->getPromoCode()) {
+                $promoData = [
+                    'codes'          => [$order->getPromoCode()],
+                    'codesData'      => [[
+                        'code'     => $order->getPromoCode(),
+                        'discount' => (float) $order->getDiscountAmount(),
+                    ]],
+                    'discountAmount' => (float) $order->getDiscountAmount(),
                 ];
             }
 

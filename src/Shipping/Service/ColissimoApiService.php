@@ -1009,18 +1009,34 @@ class ColissimoApiService
 
     private function extractJsonFromMultipart(string $content): array
     {
-        // On prend le premier JSON du multipart (jsonInfos)
-        $start = strpos($content, '{');
-        $end = strrpos($content, '}');
+        // The JSON part always comes before the first PDF in the multipart body.
+        // Restricting the search window avoids strrpos() picking up '}' bytes
+        // inside the binary PDF content and producing malformed JSON.
+        $pdfStart  = strpos($content, '%PDF');
+        $searchIn  = $pdfStart !== false ? substr($content, 0, $pdfStart) : $content;
+
+        $start = strpos($searchIn, '{');
+        $end   = strrpos($searchIn, '}');
 
         if ($start === false || $end === false || $end <= $start) {
+            $this->logger->warning('Colissimo multipart: no valid JSON found before PDF', [
+                'content_length' => strlen($content),
+                'pdf_offset'     => $pdfStart,
+            ]);
             return [];
         }
 
-        $jsonStr = substr($content, $start, $end - $start + 1);
+        $jsonStr = substr($searchIn, $start, $end - $start + 1);
         $decoded = json_decode($jsonStr, true);
 
-        return is_array($decoded) ? $decoded : [];
+        if (!is_array($decoded)) {
+            $this->logger->warning('Colissimo multipart: JSON decode failed', [
+                'json_sample' => substr($jsonStr, 0, 200),
+            ]);
+            return [];
+        }
+
+        return $decoded;
     }
 
     // ------------------------------------------------------------------
