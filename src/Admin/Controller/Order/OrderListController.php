@@ -101,6 +101,9 @@ class OrderListController extends AbstractController
             $averageOrderValue = $this->orderRepository->getAverageOrderValue($startDate);
             $ordersByStatus = $this->orderRepository->countOrdersByStatus($startDate);
             $revenueByStatus = $this->orderRepository->getRevenueByStatus($startDate);
+            $revenueExcludingShipping = $this->orderRepository->getRevenueExcludingShipping($startDate);
+            $totalShippingCosts = $this->orderRepository->getTotalShippingCosts($startDate);
+            $shippingCostsByCarrier = $this->orderRepository->getShippingCostsByCarrier($startDate);
 
             return $this->json([
                 'success' => true,
@@ -110,6 +113,9 @@ class OrderListController extends AbstractController
                     'averageOrderValue' => $averageOrderValue,
                     'ordersByStatus' => $ordersByStatus,
                     'revenueByStatus' => $revenueByStatus,
+                    'revenueExcludingShipping' => $revenueExcludingShipping,
+                    'totalShippingCosts' => $totalShippingCosts,
+                    'shippingCostsByCarrier' => $shippingCostsByCarrier,
                     'period' => $period,
                     'periodStart' => $startDate?->format(\DateTime::ATOM),
                     'periodEnd' => $endDate->format(\DateTime::ATOM),

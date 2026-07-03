@@ -92,6 +92,54 @@ class OrderRepository extends ServiceEntityRepository
         return $result;
     }
 
+    public function getRevenueExcludingShipping(?\DateTimeImmutable $since = null): float
+    {
+        $qb = $this->createQueryBuilder('o')
+            ->select('COALESCE(SUM(o.totalAmount - COALESCE(o.shippingCost, 0)), 0)')
+            ->andWhere("o.paymentStatus = 'paid'")
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false);
+        if ($since) {
+            $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
+        }
+        return round((float) $qb->getQuery()->getSingleScalarResult(), 2);
+    }
+
+    public function getTotalShippingCosts(?\DateTimeImmutable $since = null): float
+    {
+        $qb = $this->createQueryBuilder('o')
+            ->select('COALESCE(SUM(o.shippingCost), 0)')
+            ->andWhere("o.paymentStatus = 'paid'")
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false);
+        if ($since) {
+            $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
+        }
+        return round((float) $qb->getQuery()->getSingleScalarResult(), 2);
+    }
+
+    public function getShippingCostsByCarrier(?\DateTimeImmutable $since = null): array
+    {
+        $qb = $this->createQueryBuilder('o')
+            ->select('c.code AS carrierCode, COALESCE(SUM(o.shippingCost), 0) AS shipping')
+            ->leftJoin('o.carrier', 'c')
+            ->andWhere("o.paymentStatus = 'paid'")
+            ->andWhere('o.isTest = :isTest')
+            ->setParameter('isTest', false)
+            ->groupBy('c.code');
+        if ($since) {
+            $qb->andWhere('o.createdAt >= :since')->setParameter('since', $since);
+        }
+        $rows = $qb->getQuery()->getArrayResult();
+        $result = [];
+        foreach ($rows as $row) {
+            if ($row['carrierCode'] !== null) {
+                $result[$row['carrierCode']] = round((float) $row['shipping'], 2);
+            }
+        }
+        return $result;
+    }
+
     public function hasVerifiedPurchase(string $email, \App\Catalog\Entity\Product $product): bool
     {
         $conn = $this->getEntityManager()->getConnection();
