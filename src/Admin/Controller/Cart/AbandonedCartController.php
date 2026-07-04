@@ -102,8 +102,8 @@ class AbandonedCartController extends AbstractController
                         'country' => $country,
                         'city' => $city,
                     ] : null,
-                    'guestCountry' => $owner ? null : $cart->getGuestCountry(),
-                    'guestReferrer' => $owner ? null : $cart->getGuestReferrer(),
+                    'guestCountry' => $country ?? $cart->getGuestCountry(),
+                    'guestReferrer' => $cart->getGuestReferrer(),
                     'paymentIntentStarted' => $cart->getPaymentIntentId() !== null,
                     'paymentLastError'     => $cart->getPaymentLastError(),
                 ];

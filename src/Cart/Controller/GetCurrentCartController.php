@@ -49,6 +49,24 @@ class GetCurrentCartController extends AbstractController
             ]);
 
             if ($cart) {
+                $updated = false;
+
+                $country = $request->query->get('country');
+                if ($cart->getGuestCountry() === null && $country && preg_match('/^[A-Z]{2}$/', $country)) {
+                    $cart->setGuestCountry($country);
+                    $updated = true;
+                }
+
+                $referrer = $request->query->get('referrer');
+                if ($cart->getGuestReferrer() === null && $referrer) {
+                    $cart->setGuestReferrer(substr($referrer, 0, 500));
+                    $updated = true;
+                }
+
+                if ($updated) {
+                    $this->em->flush();
+                }
+
                 return $cart;
             }
         }
