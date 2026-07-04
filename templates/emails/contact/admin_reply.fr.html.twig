@@ -1,0 +1,20 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block content %}
+    <h2>Réponse à votre message</h2>
+
+    <p>Bonjour {{ contactMessage.name }},</p>
+
+    <p>Merci de nous avoir contactés. Voici notre réponse à votre message :</p>
+
+    <div style="background: #f5f0e8; border-left: 4px solid #8b6914; padding: 16px 20px; border-radius: 4px; margin: 20px 0;">
+        <p style="margin: 0; white-space: pre-line;">{{ replyText }}</p>
+    </div>
+
+    <p style="color: #888; font-size: 0.85em; margin-top: 30px; border-top: 1px solid #eee; padding-top: 16px;">
+        <strong>Votre message original :</strong><br>
+        <em>{{ contactMessage.message }}</em>
+    </p>
+
+    <p>Cordialement,<br>L'équipe Khamareo</p>
+{% endblock %}
