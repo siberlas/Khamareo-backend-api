@@ -6,6 +6,7 @@ use App\Order\Entity\Order;
 use App\Marketing\Entity\NewsletterSubscriber;
 use App\Marketing\Entity\PromoCode;
 use App\User\Entity\User;
+use App\Contact\Entity\ContactConversation;
 use App\Contact\Entity\ContactMessage;
 use App\Marketing\Entity\StockAlert;
 use App\Shipping\Entity\Parcel;
@@ -416,17 +417,19 @@ class MailerService
     /**
      * Envoie la réponse admin au client via son email de contact
      */
-    public function sendContactReply(ContactMessage $message, string $replyText): void
+    public function sendContactReply(ContactConversation $conversation, string $replyText): void
     {
         try {
-            $html = $this->twig->render('emails/contact/admin_reply.fr.html.twig', [
-                'contactMessage' => $message,
-                'replyText'      => $replyText,
+            $locale   = in_array($conversation->getLocale(), ['fr', 'en'], true) ? $conversation->getLocale() : 'fr';
+            $template = "emails/contact/admin_reply.{$locale}.html.twig";
+            $html = $this->twig->render($template, [
+                'conversation' => $conversation,
+                'replyText'    => $replyText,
             ]);
 
             $email = (new Email())
                 ->from($this->fromEmail)
-                ->to($message->getEmail())
+                ->to($conversation->getEmail())
                 ->replyTo($this->fromEmail)
                 ->subject('Réponse à votre message - Khamareo')
                 ->html($html);
@@ -434,13 +437,13 @@ class MailerService
             $this->mailer->send($email);
 
             $this->logger->info('Contact reply sent', [
-                'contact_id' => $message->getId(),
-                'to'         => $message->getEmail(),
+                'conversation_id' => $conversation->getId(),
+                'to'              => $conversation->getEmail(),
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to send contact reply', [
-                'contact_id' => $message->getId(),
-                'error'      => $e->getMessage(),
+                'conversation_id' => $conversation->getId(),
+                'error'           => $e->getMessage(),
             ]);
             throw $e;
         }

@@ -165,6 +165,7 @@ class RecoverOrderFromCartCommand extends Command
         $order = new Order();
         $order
             ->setStatus(OrderStatus::PAID)
+            ->setPaymentStatus('paid')
             ->setOwner($user)
             ->setCarrier($carrierMode->getCarrier())
             ->setShippingMode($carrierMode->getShippingMode())

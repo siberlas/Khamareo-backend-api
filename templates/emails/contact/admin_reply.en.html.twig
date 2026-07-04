@@ -1,20 +1,20 @@
 {% extends 'emails/layout/base.html.twig' %}
 
 {% block content %}
-    <h2>Réponse à votre message</h2>
+    <h2>Reply to your message</h2>
 
-    <p>Bonjour {{ conversation.name }},</p>
+    <p>Hello {{ conversation.name }},</p>
 
-    <p>Merci de nous avoir contactés. Voici notre réponse à votre message :</p>
+    <p>Thank you for reaching out. Here is our reply to your message:</p>
 
     <div style="background: #f5f0e8; border-left: 4px solid #8b6914; padding: 16px 20px; border-radius: 4px; margin: 20px 0;">
         <p style="margin: 0; white-space: pre-line;">{{ replyText }}</p>
     </div>
 
-    <p>Cordialement,<br>L'équipe Khamareo</p>
+    <p>Best regards,<br>The Khamareo Team</p>
 
     <p style="color: #888; font-size: 0.85em; margin-top: 30px; border-top: 1px solid #eee; padding-top: 16px;">
-        Vous avez d'autres questions ?
-        <a href="https://khamareo.com/contact" style="color: #8b6914;">Contactez-nous via notre formulaire</a>.
+        Still have questions?
+        <a href="https://khamareo.com/contact" style="color: #8b6914;">Contact us via our contact form</a>.
     </p>
 {% endblock %}

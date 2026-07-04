@@ -98,10 +98,16 @@ class ApiRateLimiterSubscriber implements EventSubscriberInterface
         if (!$limit->isAccepted()) {
             $retryAfter = $limit->getRetryAfter()?->getTimestamp();
             $headers = [];
+            $waitSeconds = 0;
             if ($retryAfter) {
-                $headers['Retry-After'] = (string) max(0, $retryAfter - time());
+                $waitSeconds = max(0, $retryAfter - time());
+                $headers['Retry-After'] = (string) $waitSeconds;
             }
-            throw new TooManyRequestsHttpException(null, 'Too many requests', null, 0, $headers);
+            $waitMinutes = (int) ceil($waitSeconds / 60);
+            $message = $waitMinutes > 0
+                ? sprintf('Trop de tentatives. Veuillez patienter %d minute%s avant de réessayer.', $waitMinutes, $waitMinutes > 1 ? 's' : '')
+                : 'Trop de tentatives. Veuillez réessayer dans quelques instants.';
+            throw new TooManyRequestsHttpException(null, $message, null, 0, $headers);
         }
     }
 }

@@ -4,52 +4,59 @@ namespace App\Contact\State;
 
 use ApiPlatform\Metadata\Operation;
 use ApiPlatform\State\ProcessorInterface;
+use App\Contact\Entity\ContactConversation;
 use App\Contact\Entity\ContactMessage;
+use App\Contact\Repository\ContactConversationRepository;
 use App\Shared\Service\MailerService;
 use Doctrine\ORM\EntityManagerInterface;
-use Symfony\Component\HttpFoundation\RequestStack;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 final class ContactMessageProcessor implements ProcessorInterface
 {
     public function __construct(
         private EntityManagerInterface $em,
+        private ContactConversationRepository $conversationRepo,
         private MailerService $mailerService,
         private RequestStack $requestStack,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
     ) {}
 
     public function process(mixed $data, Operation $operation, array $uriVariables = [], array $context = []): ContactMessage
     {
         assert($data instanceof ContactMessage);
 
-        // Récupérer la requête et la locale
         $request = $this->requestStack->getCurrentRequest();
-        
-        $this->logger->info('📧 ContactMessage - Request received', [
-            'has_request' => $request !== null,
-            'accept_language' => $request?->headers->get('Accept-Language'),
-            'current_locale' => $request?->getLocale(),
-        ]);
-
         $locale = $request?->getLocale() ?? 'fr';
-        
-        $this->logger->info('📧 ContactMessage - Locale determined', [
-            'locale' => $locale,
-            'email' => $data->getEmail(),
-            'name' => $data->getName(),
-        ]);
+
+        // Chercher une conversation existante pour cet email
+        $conversation = $this->conversationRepo->findByEmail($data->getEmail());
+
+        if ($conversation === null) {
+            $conversation = new ContactConversation();
+            $conversation->setEmail($data->getEmail());
+            $conversation->setName($data->getName());
+            $conversation->setSubject($data->getSubject());
+            $conversation->setLocale($locale);
+            $this->em->persist($conversation);
+        } else {
+            // Nouveau message dans une conversation existante
+            $conversation->setHasNew(true);
+            $conversation->setIsRead(false);
+            $this->logger->info('📧 ContactMessage - New message in existing conversation', [
+                'conversation_id' => $conversation->getId(),
+                'email' => $data->getEmail(),
+            ]);
+        }
+
+        $conversation->setLastMessageAt(new \DateTimeImmutable());
+        $conversation->addMessage($data);
 
         $this->em->persist($data);
         $this->em->flush();
 
-        // Envoyer les emails AVEC la locale
         $this->mailerService->sendContactNotification($data);
-        $this->mailerService->sendContactConfirmation($data, $locale); // ← ICI !
-
-        $this->logger->info('✅ ContactMessage - Emails sent', [
-            'locale' => $locale,
-        ]);
+        $this->mailerService->sendContactConfirmation($data, $locale);
 
         return $data;
     }
