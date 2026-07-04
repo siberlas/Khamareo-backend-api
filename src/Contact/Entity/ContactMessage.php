@@ -17,7 +17,8 @@ use App\Contact\State\ContactMessageProcessor;
         new Post(
             security: "is_granted('PUBLIC_ACCESS')",
             processor: ContactMessageProcessor::class,
-            denormalizationContext: ['groups' => ['contact:write']]
+            denormalizationContext: ['groups' => ['contact:write']],
+            normalizationContext: ['groups' => ['contact:read']]
         )
     ]
 )]
@@ -26,58 +27,51 @@ class ContactMessage
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['contact:read'])]
     private ?int $id = null;
+
+    #[ORM\ManyToOne(targetEntity: ContactConversation::class, inversedBy: 'messages')]
+    #[ORM\JoinColumn(nullable: false, onDelete: 'CASCADE')]
+    private ContactConversation $conversation;
 
     #[ORM\Column(length: 100)]
     #[Assert\NotBlank]
     #[Assert\Length(min: 2, max: 100)]
-    #[Groups(['contact:write'])]
+    #[Groups(['contact:write', 'contact:read'])]
     private string $name;
 
     #[ORM\Column(length: 180)]
     #[Assert\NotBlank]
     #[Assert\Email]
-    #[Groups(['contact:write'])]
+    #[Groups(['contact:write', 'contact:read'])]
     private string $email;
 
     #[ORM\Column(length: 20, nullable: true)]
     #[Assert\Regex(pattern: '/^[0-9+\(\)\.\-\s]{7,20}$/')]
-    #[Groups(['contact:write'])]
+    #[Groups(['contact:write', 'contact:read'])]
     private ?string $phone = null;
 
     #[ORM\Column(length: 200)]
     #[Assert\NotBlank]
     #[Assert\Length(min: 3, max: 200)]
-    #[Groups(['contact:write'])]
+    #[Groups(['contact:write', 'contact:read'])]
     private string $subject;
 
     #[ORM\Column(type: 'text')]
     #[Assert\NotBlank]
     #[Assert\Length(min: 10, max: 5000)]
-    #[Groups(['contact:write'])]
+    #[Groups(['contact:write', 'contact:read'])]
     private string $message;
 
     #[ORM\Column(length: 50, nullable: true)]
-    #[Groups(['contact:write'])]
-    private ?string $orderNumber = null; // Pour SAV
+    #[Groups(['contact:write', 'contact:read'])]
+    private ?string $orderNumber = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $isAdminReply = false;
 
     #[ORM\Column]
     private ?\DateTimeImmutable $createdAt = null;
-
-    #[ORM\Column(type: 'boolean')]
-    private bool $isProcessed = false;
-
-    #[ORM\Column(type: 'boolean', options: ['default' => false])]
-    private bool $isRead = false;
-
-    #[ORM\Column(type: 'text', nullable: true)]
-    private ?string $adminNotes = null;
-
-    #[ORM\Column(type: 'text', nullable: true)]
-    private ?string $adminReply = null;
-
-    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
-    private ?\DateTimeImmutable $repliedAt = null;
 
     #[ORM\PrePersist]
     public function onPrePersist(): void
@@ -85,213 +79,32 @@ class ContactMessage
         $this->createdAt = new \DateTimeImmutable();
     }
 
+    public function getId(): ?int { return $this->id; }
 
-    /**
-     * Get the value of id
-     */ 
-    public function getId()
-    {
-        return $this->id;
-    }
+    public function getConversation(): ContactConversation { return $this->conversation; }
+    public function setConversation(ContactConversation $conversation): self { $this->conversation = $conversation; return $this; }
 
-    /**
-     * Set the value of id
-     *
-     * @return  self
-     */ 
-    public function setId($id)
-    {
-        $this->id = $id;
+    public function getName(): string { return $this->name; }
+    public function setName(string $name): self { $this->name = $name; return $this; }
 
-        return $this;
-    }
+    public function getEmail(): string { return $this->email; }
+    public function setEmail(string $email): self { $this->email = $email; return $this; }
 
-    /**
-     * Get the value of name
-     */ 
-    public function getName()
-    {
-        return $this->name;
-    }
+    public function getPhone(): ?string { return $this->phone; }
+    public function setPhone(?string $phone): self { $this->phone = $phone; return $this; }
 
-    /**
-     * Set the value of name
-     *
-     * @return  self
-     */ 
-    public function setName($name)
-    {
-        $this->name = $name;
+    public function getSubject(): string { return $this->subject; }
+    public function setSubject(string $subject): self { $this->subject = $subject; return $this; }
 
-        return $this;
-    }
+    public function getMessage(): string { return $this->message; }
+    public function setMessage(string $message): self { $this->message = $message; return $this; }
 
-    /**
-     * Get the value of email
-     */ 
-    public function getEmail()
-    {
-        return $this->email;
-    }
+    public function getOrderNumber(): ?string { return $this->orderNumber; }
+    public function setOrderNumber(?string $orderNumber): self { $this->orderNumber = $orderNumber; return $this; }
 
-    /**
-     * Set the value of email
-     *
-     * @return  self
-     */ 
-    public function setEmail($email)
-    {
-        $this->email = $email;
+    public function isAdminReply(): bool { return $this->isAdminReply; }
+    public function setIsAdminReply(bool $isAdminReply): self { $this->isAdminReply = $isAdminReply; return $this; }
 
-        return $this;
-    }
-
-    /**
-     * Get the value of phone
-     */ 
-    public function getPhone()
-    {
-        return $this->phone;
-    }
-
-    /**
-     * Set the value of phone
-     *
-     * @return  self
-     */ 
-    public function setPhone($phone)
-    {
-        $this->phone = $phone;
-
-        return $this;
-    }
-
-    /**
-     * Get the value of subject
-     */ 
-    public function getSubject()
-    {
-        return $this->subject;
-    }
-
-    /**
-     * Set the value of subject
-     *
-     * @return  self
-     */ 
-    public function setSubject($subject)
-    {
-        $this->subject = $subject;
-
-        return $this;
-    }
-
-    /**
-     * Get the value of message
-     */ 
-    public function getMessage()
-    {
-        return $this->message;
-    }
-
-    /**
-     * Set the value of message
-     *
-     * @return  self
-     */ 
-    public function setMessage($message)
-    {
-        $this->message = $message;
-
-        return $this;
-    }
-
-    /**
-     * Get the value of orderNumber
-     */ 
-    public function getOrderNumber()
-    {
-        return $this->orderNumber;
-    }
-
-    /**
-     * Set the value of orderNumber
-     *
-     * @return  self
-     */ 
-    public function setOrderNumber($orderNumber)
-    {
-        $this->orderNumber = $orderNumber;
-
-        return $this;
-    }
-
-    /**
-     * Get the value of isProcessed
-     */ 
-    public function getIsProcessed()
-    {
-        return $this->isProcessed;
-    }
-
-    /**
-     * Set the value of isProcessed
-     *
-     * @return  self
-     */ 
-    public function setIsProcessed($isProcessed)
-    {
-        $this->isProcessed = $isProcessed;
-
-        return $this;
-    }
-
-    /**
-     * Get the value of createdAt
-     */ 
-    public function getCreatedAt()
-    {
-        return $this->createdAt;
-    }
-
-    /**
-     * Set the value of createdAt
-     *
-     * @return  self
-     */ 
-    public function setCreatedAt($createdAt)
-    {
-        $this->createdAt = $createdAt;
-
-        return $this;
-    }
-
-    public function isRead(): bool { return $this->isRead; }
-    public function setIsRead(bool $isRead): self { $this->isRead = $isRead; return $this; }
-
-    public function getAdminReply(): ?string { return $this->adminReply; }
-    public function setAdminReply(?string $adminReply): self { $this->adminReply = $adminReply; return $this; }
-
-    public function getRepliedAt(): ?\DateTimeImmutable { return $this->repliedAt; }
-    public function setRepliedAt(?\DateTimeImmutable $repliedAt): self { $this->repliedAt = $repliedAt; return $this; }
-
-    /**
-     * Get the value of adminNotes
-     */
-    public function getAdminNotes()
-    {
-        return $this->adminNotes;
-    }
-
-    /**
-     * Set the value of adminNotes
-     *
-     * @return  self
-     */ 
-    public function setAdminNotes($adminNotes)
-    {
-        $this->adminNotes = $adminNotes;
-
-        return $this;
-    }
+    public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
+    public function setCreatedAt(\DateTimeImmutable $createdAt): self { $this->createdAt = $createdAt; return $this; }
 }
