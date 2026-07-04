@@ -90,7 +90,7 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 title: $shippingAddress->getCivility() ?? '',
                 firstname: mb_substr($shippingAddress->getFirstName() ?? '', 0, 20),
                 lastname: mb_substr($shippingAddress->getLastName() ?? '', 0, 20),
-                addressAdd1: '', // Complément d'adresse (vide)
+                addressAdd1: mb_substr($shippingAddress->getAddressComplement() ?? '', 0, 32),
                 addressAdd2: mb_substr($shippingAddress->getCompanyName() ?? '', 0, 32),
                 streetname: mb_substr($recipientStreet, 0, 32),
                 houseNo: mb_substr($recipientHouseNo, 0, 8),

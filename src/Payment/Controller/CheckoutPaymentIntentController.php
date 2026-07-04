@@ -117,6 +117,9 @@ class CheckoutPaymentIntentController extends AbstractController
             ? (float) $rate->getPrice()
             : (float) ($carrierMode->getBasePrice() ?? 0);
 
+        // Tarif réel que Khamareo paie au transporteur (avant toute remise livraison offerte)
+        $carrierShippingCost = $shippingCost;
+
         // 4b) Livraison offerte si le seuil de la zone est atteint
         $storeSettings = $this->em->getRepository(StoreSettings::class)->findOneBy([]);
         $itemsSubtotalForShipping = $cart->getSubtotal();
@@ -124,7 +127,7 @@ class CheckoutPaymentIntentController extends AbstractController
 
         if ($storeSettings && $storeSettings->isFreeShippingEnabled()) {
             $zoneThreshold = $storeSettings->getThresholdForZone($zone);
-            if ($zoneThreshold !== null && $itemsSubtotalForShipping >= $zoneThreshold) {
+            if ($zoneThreshold !== null && $zoneThreshold > 0 && $itemsSubtotalForShipping >= $zoneThreshold) {
                 $shippingCost = 0;
             }
         }
@@ -166,6 +169,7 @@ class CheckoutPaymentIntentController extends AbstractController
         $cart->setPaymentIntentId($resp->paymentId);
         $cart->setPaymentClientSecret($resp->clientSecret);
         $cart->setShippingCost($shippingCost);
+        $cart->setCarrierShippingCost($carrierShippingCost);
 
         $this->em->flush();
 
@@ -208,6 +212,7 @@ class CheckoutPaymentIntentController extends AbstractController
                 ->setFirstName($input['firstName'] ?? null)
                 ->setLastName($input['lastName'] ?? null)
                 ->setStreetAddress($input['streetAddress'] ?? '')
+                ->setAddressComplement($input['addressComplement'] ?? null)
                 ->setPostalCode($input['postalCode'] ?? '')
                 ->setCity($input['city'] ?? '')
                 ->setCountry($input['country'] ?? 'FR')

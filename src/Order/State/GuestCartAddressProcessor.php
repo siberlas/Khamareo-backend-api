@@ -137,6 +137,7 @@ final class GuestCartAddressProcessor implements ProcessorInterface
             ->setLastName($data->lastName)
             ->setPhone($data->phone)
             ->setStreetAddress($data->streetAddress)
+            ->setAddressComplement($data->addressComplement)
             ->setPostalCode($data->postalCode)
             ->setCity($data->city)
             ->setCountry($data->country)

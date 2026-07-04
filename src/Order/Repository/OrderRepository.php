@@ -94,8 +94,9 @@ class OrderRepository extends ServiceEntityRepository
 
     public function getRevenueExcludingShipping(?\DateTimeImmutable $since = null): float
     {
+        // CA hors frais de port effectifs (ce que Khamareo paie au transporteur)
         $qb = $this->createQueryBuilder('o')
-            ->select('COALESCE(SUM(o.totalAmount - COALESCE(o.shippingCost, 0)), 0)')
+            ->select('COALESCE(SUM(o.totalAmount - COALESCE(o.carrierShippingCost, o.shippingCost, 0)), 0)')
             ->andWhere("o.paymentStatus = 'paid'")
             ->andWhere('o.isTest = :isTest')
             ->setParameter('isTest', false);
@@ -107,8 +108,9 @@ class OrderRepository extends ServiceEntityRepository
 
     public function getTotalShippingCosts(?\DateTimeImmutable $since = null): float
     {
+        // Frais effectifs payés au transporteur (inclut la livraison offerte)
         $qb = $this->createQueryBuilder('o')
-            ->select('COALESCE(SUM(o.shippingCost), 0)')
+            ->select('COALESCE(SUM(COALESCE(o.carrierShippingCost, o.shippingCost, 0)), 0)')
             ->andWhere("o.paymentStatus = 'paid'")
             ->andWhere('o.isTest = :isTest')
             ->setParameter('isTest', false);
@@ -121,7 +123,7 @@ class OrderRepository extends ServiceEntityRepository
     public function getShippingCostsByCarrier(?\DateTimeImmutable $since = null): array
     {
         $qb = $this->createQueryBuilder('o')
-            ->select('c.code AS carrierCode, COALESCE(SUM(o.shippingCost), 0) AS shipping')
+            ->select('c.code AS carrierCode, COALESCE(SUM(COALESCE(o.carrierShippingCost, o.shippingCost, 0)), 0) AS shipping')
             ->leftJoin('o.carrier', 'c')
             ->andWhere("o.paymentStatus = 'paid'")
             ->andWhere('o.isTest = :isTest')

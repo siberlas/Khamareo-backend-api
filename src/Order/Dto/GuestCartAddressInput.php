@@ -42,6 +42,10 @@ final class GuestCartAddressInput
     #[Groups(['guest-user'])]
     public ?string $streetAddress = null;
 
+    #[Assert\Length(max: 255)]
+    #[Groups(['guest-user'])]
+    public ?string $addressComplement = null;
+
     #[Assert\NotBlank(message:"le Code postal est obligatoire")]
     #[Assert\Regex(
         pattern: '/^[A-Za-z0-9\-\s]{3,12}$/',

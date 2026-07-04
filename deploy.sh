@@ -84,6 +84,13 @@ echo ">>> Cache..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
     php bin/console cache:clear --env=prod --no-debug
 
+# Clear Redis-backed Doctrine cache pools (metadata + query + result)
+echo ">>> Doctrine cache pools Redis..."
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
+    php bin/console cache:pool:clear doctrine.system_cache_pool --env=prod --no-debug
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
+    php bin/console cache:pool:clear doctrine.result_cache_pool --env=prod --no-debug
+
 if [ "${1:-}" = "first-run" ]; then
     echo ">>> Création du compte admin..."
     docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \

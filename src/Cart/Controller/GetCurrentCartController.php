@@ -59,6 +59,16 @@ class GetCurrentCartController extends AbstractController
         $newCart->setIsActive(true);
         $newCart->setGuestToken(bin2hex(random_bytes(16)));
 
+        $country = $request->query->get('country');
+        if ($country && preg_match('/^[A-Z]{2}$/', $country)) {
+            $newCart->setGuestCountry($country);
+        }
+
+        $referrer = $request->query->get('referrer');
+        if ($referrer) {
+            $newCart->setGuestReferrer(substr($referrer, 0, 500));
+        }
+
         $this->em->persist($newCart);
         $this->em->flush();
 
