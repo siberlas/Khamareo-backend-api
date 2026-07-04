@@ -299,6 +299,9 @@ class OrderManagementController extends AbstractController
         if (!empty($data['street']) || !empty($data['streetAddress'])) {
             $address->setStreetAddress($data['street'] ?? $data['streetAddress']);
         }
+        if (array_key_exists('addressComplement', $data)) {
+            $address->setAddressComplement($data['addressComplement'] ?: null);
+        }
         if (!empty($data['city'])) {
             $address->setCity($data['city']);
         }
@@ -368,6 +371,7 @@ class OrderManagementController extends AbstractController
             'firstName' => $address->getFirstName(),
             'lastName' => $address->getLastName(),
             'street' => $address->getStreetAddress(),
+            'addressComplement' => $address->getAddressComplement(),
             'city' => $address->getCity(),
             'postalCode' => $address->getPostalCode(),
             'country' => $address->getCountry(),

@@ -125,6 +125,12 @@ class Cart
     #[Groups(['cart:read', 'cart:write'])]
     private ?float $shippingCost = null;
 
+    #[ORM\Column(type: 'float', nullable: true)]
+    private ?float $carrierShippingCost = null;
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $paymentLastError = null;
+
     #[ORM\Column(length: 50, nullable: true)]
     #[Groups(['cart:read', 'cart:write'])]
     private ?string $promoCode = null;
@@ -140,6 +146,12 @@ class Cart
     #[ORM\Column(type: 'json', nullable: true)]
     #[Groups(['cart:read'])]
     private ?array $promoCodesData = null;
+
+    #[ORM\Column(length: 5, nullable: true)]
+    private ?string $guestCountry = null;
+
+    #[ORM\Column(length: 500, nullable: true)]
+    private ?string $guestReferrer = null;
 
     public function __construct()
     {
@@ -345,6 +357,12 @@ class Cart
         return $this;
     }
 
+    public function getCarrierShippingCost(): ?float { return $this->carrierShippingCost; }
+    public function setCarrierShippingCost(?float $cost): self { $this->carrierShippingCost = $cost; return $this; }
+
+    public function getPaymentLastError(): ?string { return $this->paymentLastError; }
+    public function setPaymentLastError(?string $error): self { $this->paymentLastError = $error; return $this; }
+
     public function getPromoCodesData(): ?array
     {
         return $this->promoCodesData;
@@ -368,5 +386,11 @@ class Cart
         }
         return $this->promoCode ? [$this->promoCode] : [];
     }
+
+    public function getGuestCountry(): ?string { return $this->guestCountry; }
+    public function setGuestCountry(?string $guestCountry): static { $this->guestCountry = $guestCountry; return $this; }
+
+    public function getGuestReferrer(): ?string { return $this->guestReferrer; }
+    public function setGuestReferrer(?string $guestReferrer): static { $this->guestReferrer = $guestReferrer; return $this; }
 
 }

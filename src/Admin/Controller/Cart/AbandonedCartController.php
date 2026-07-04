@@ -3,7 +3,6 @@
 namespace App\Admin\Controller\Cart;
 
 use App\Cart\Entity\Cart;
-use App\Cart\Repository\CartRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -18,7 +17,6 @@ class AbandonedCartController extends AbstractController
 {
     public function __construct(
         private EntityManagerInterface $em,
-        private CartRepository $cartRepository,
         private LoggerInterface $logger
     ) {}
 
@@ -104,7 +102,10 @@ class AbandonedCartController extends AbstractController
                         'country' => $country,
                         'city' => $city,
                     ] : null,
+                    'guestCountry' => $owner ? null : $cart->getGuestCountry(),
+                    'guestReferrer' => $owner ? null : $cart->getGuestReferrer(),
                     'paymentIntentStarted' => $cart->getPaymentIntentId() !== null,
+                    'paymentLastError'     => $cart->getPaymentLastError(),
                 ];
             }
 

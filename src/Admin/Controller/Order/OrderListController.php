@@ -285,6 +285,8 @@ class OrderListController extends AbstractController
                     'itemsCount' => $order->getItems()->count(),
                     'shippingMethod' => $order->getCarrier()?->getCode(),
                     'shippingCost' => $order->getShippingCost(),
+                    'carrierShippingCost' => $order->getCarrierShippingCost() ?? $order->getShippingCost(),
+                    'freeShippingApplied' => ($order->getShippingCost() == 0 && ($order->getCarrierShippingCost() ?? 0) > 0),
                     'trackingNumber' => $order->getTrackingNumber(),
                     'customer' => [
                         'id' => $order->getOwner()?->getId()->toRfc4122(),

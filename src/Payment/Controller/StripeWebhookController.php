@@ -296,37 +296,51 @@ class StripeWebhookController extends AbstractController
      */
     private function handlePaymentFailed(PaymentIntent $pi): JsonResponse
     {
+        $errorCode    = $pi->last_payment_error?->code ?? null;
+        $errorMessage = $pi->last_payment_error?->message ?? 'Unknown error';
+
         $this->logger->warning('⚠️ Paiement échoué', [
-            'payment_intent_id' => $pi->id,
-            'amount' => $pi->amount / 100,
-            'currency' => $pi->currency,
-            'last_payment_error' => $pi->last_payment_error?->message ?? 'Unknown error',
-            'metadata' => $pi->metadata->toArray()
+            'payment_intent_id'  => $pi->id,
+            'amount'             => $pi->amount / 100,
+            'currency'           => $pi->currency,
+            'error_code'         => $errorCode,
+            'last_payment_error' => $errorMessage,
+            'metadata'           => $pi->metadata->toArray(),
         ]);
 
         try {
-            $payment = $this->findPaymentByIntentId($pi->id);
+            // Stocker l'erreur sur le cart (cart abandonné avec tentative de paiement échouée)
+            $cart = $this->em->getRepository(Cart::class)
+                ->findOneBy(['paymentIntentId' => $pi->id]);
 
+            if ($cart) {
+                $cart->setPaymentLastError($errorCode ?? $errorMessage);
+                $this->logger->info('✅ Erreur paiement stockée sur le panier', [
+                    'cart_id'    => $cart->getId(),
+                    'error_code' => $errorCode,
+                ]);
+            }
+
+            // Mettre à jour le Payment/Order si la commande existe déjà
+            $payment = $this->findPaymentByIntentId($pi->id);
             if ($payment) {
                 $payment->setStatus(PaymentStatus::FAILED);
-                
                 if ($order = $payment->getOrder()) {
                     $order->setStatus(OrderStatus::FAILED);
                     $order->setPaymentStatus('failed');
                 }
-
-                $this->em->flush();
-
                 $this->logger->info('✅ Payment et Order marqués comme FAILED', [
                     'payment_id' => $payment->getId(),
-                    'order_id' => $order?->getId()
+                    'order_id'   => $order?->getId(),
                 ]);
             }
+
+            $this->em->flush();
 
         } catch (\Exception $e) {
             $this->logger->error('❌ Erreur lors traitement échec paiement', [
                 'payment_intent_id' => $pi->id,
-                'error' => $e->getMessage()
+                'error'             => $e->getMessage(),
             ]);
         }
 

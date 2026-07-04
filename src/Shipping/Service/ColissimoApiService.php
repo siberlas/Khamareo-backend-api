@@ -173,6 +173,10 @@ class ColissimoApiService
             'mobileNumber' => $customerData['phone'],
         ];
 
+        if (!empty($address->getAddressComplement())) {
+            $addresseeAddress['line3'] = $this->normalizeAddressField($address->getAddressComplement());
+        }
+
         if ($customerData['companyName'] !== null) {
             $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
@@ -336,6 +340,8 @@ class ColissimoApiService
         // État/Province obligatoire pour US et CA (Colissimo : champ line3)
         if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
             $addresseeAddress['line3'] = strtoupper($address->getState());
+        } elseif (!empty($address->getAddressComplement())) {
+            $addresseeAddress['line3'] = $this->normalizeAddressField($address->getAddressComplement());
         }
 
         if ($customerData['companyName'] !== null) {
@@ -481,6 +487,10 @@ class ColissimoApiService
             'email' => $customerData['email'],
             'mobileNumber' => $customerData['phone'],
         ];
+
+        if (!empty($address->getAddressComplement())) {
+            $addresseeAddress['line3'] = $this->normalizeAddressField($address->getAddressComplement());
+        }
 
         if ($customerData['companyName'] !== null) {
             $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
@@ -654,6 +664,8 @@ class ColissimoApiService
         $countryCode = $addresseeAddress['countryCode'];
         if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
             $addresseeAddress['line3'] = strtoupper($address->getState());
+        } elseif (!empty($address->getAddressComplement())) {
+            $addresseeAddress['line3'] = $this->normalizeAddressField($address->getAddressComplement());
         }
 
         $this->logger->info('OM weight calculation', [

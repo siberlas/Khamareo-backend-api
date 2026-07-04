@@ -90,6 +90,10 @@ class Address
     #[Groups(['address:read', 'address:write', 'order:read'])]
     private string $streetAddress;
 
+    #[ORM\Column(length: 255, nullable: true)]
+    #[Groups(['address:read', 'address:write', 'order:read'])]
+    private ?string $addressComplement = null;
+
     #[ORM\Column(length: 100)]
     #[Assert\NotBlank(message: "La ville est obligatoire.")]
     #[Groups(['address:read', 'address:write', 'order:read'])]
@@ -204,6 +208,9 @@ class Address
 
     public function getStreetAddress(): string { return $this->streetAddress; }
     public function setStreetAddress(string $street): self { $this->streetAddress = $street; return $this; }
+
+    public function getAddressComplement(): ?string { return $this->addressComplement; }
+    public function setAddressComplement(?string $complement): self { $this->addressComplement = $complement; return $this; }
 
     public function getCity(): string { return $this->city; }
     public function setCity(string $city): self { $this->city = $city; return $this; }

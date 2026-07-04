@@ -235,6 +235,10 @@ class Order
     #[Groups(['order:read'])]
     private ?float $shippingCost = null;
 
+    #[ORM\Column(type: 'float', nullable: true)]
+    #[Groups(['order:read'])]
+    private ?float $carrierShippingCost = null;
+
     // ============ 🔹 Champs “Guest checkout” (nouveaux) ============
     #[ORM\Column(length: 180, nullable: true)]
     #[Assert\Email]
@@ -432,6 +436,9 @@ class Order
 
     public function getShippingCost(): ?float { return $this->shippingCost; }
     public function setShippingCost(?float $shippingCost): self { $this->shippingCost = $shippingCost; return $this; }
+
+    public function getCarrierShippingCost(): ?float { return $this->carrierShippingCost; }
+    public function setCarrierShippingCost(?float $cost): self { $this->carrierShippingCost = $cost; return $this; }
 
     // --- Getters / setters invités
     public function getGuestEmail(): ?string { return $this->guestEmail; }
