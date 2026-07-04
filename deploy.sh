@@ -85,17 +85,20 @@ echo ">>> Suppression physique du cache prod..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
     sh -c "rm -rf /var/www/html/var/cache/prod"
 
-# Clear cache
-echo ">>> Cache..."
+# Clear Redis-backed Doctrine cache pools AVANT cache:clear
+# (évite que cache:clear lise une metadata Redis obsolète au moment du warmup)
+echo ">>> Doctrine cache pools Redis (pré-clear)..."
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T redis \
+    redis-cli FLUSHDB || true
+
+# Clear cache + warmup
+echo ">>> Cache clear..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
     php bin/console cache:clear --env=prod --no-debug
 
-# Clear Redis-backed Doctrine cache pools (metadata + query + result)
-echo ">>> Doctrine cache pools Redis..."
+echo ">>> Cache warmup (proxies Doctrine + routes)..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
-    php bin/console cache:pool:clear doctrine.system_cache_pool --env=prod --no-debug
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
-    php bin/console cache:pool:clear doctrine.result_cache_pool --env=prod --no-debug
+    php bin/console cache:warmup --env=prod --no-debug
 
 if [ "${1:-}" = "first-run" ]; then
     echo ">>> Création du compte admin..."
