@@ -80,57 +80,75 @@ class OrderListController extends AbstractController
     #[Route('/stats', name: 'stats', methods: ['GET'])]
     public function getStats(Request $request): JsonResponse
     {
+        $period = $request->query->get('period', '30days');
+        $step = 'init';
+
         try {
-            // Période
-            $period = $request->query->get('period', '30days');
-            
-            // Calculer les dates
+            $step = 'date_calculation';
             $endDate = new \DateTimeImmutable('now');
             $startDate = match($period) {
-                '7days' => $endDate->modify('-7 days'),
+                '7days'  => $endDate->modify('-7 days'),
                 '30days' => $endDate->modify('-30 days'),
                 '90days' => $endDate->modify('-90 days'),
-                '1year' => $endDate->modify('-1 year'),
-                'all' => null,
-                default => $endDate->modify('-30 days'),
+                '1year'  => $endDate->modify('-1 year'),
+                'all'    => null,
+                default  => $endDate->modify('-30 days'),
             };
 
-            // Utiliser les méthodes du repository
+            $step = 'countOrdersByPeriod';
             $totalOrders = $this->orderRepository->countOrdersByPeriod($startDate);
+
+            $step = 'getTotalRevenue';
             $totalRevenue = $this->orderRepository->getTotalRevenue($startDate);
+
+            $step = 'getAverageOrderValue';
             $averageOrderValue = $this->orderRepository->getAverageOrderValue($startDate);
+
+            $step = 'countOrdersByStatus';
             $ordersByStatus = $this->orderRepository->countOrdersByStatus($startDate);
+
+            $step = 'getRevenueByStatus';
             $revenueByStatus = $this->orderRepository->getRevenueByStatus($startDate);
+
+            $step = 'getRevenueExcludingShipping';
             $revenueExcludingShipping = $this->orderRepository->getRevenueExcludingShipping($startDate);
+
+            $step = 'getTotalShippingCosts';
             $totalShippingCosts = $this->orderRepository->getTotalShippingCosts($startDate);
+
+            $step = 'getShippingCostsByCarrier';
             $shippingCostsByCarrier = $this->orderRepository->getShippingCostsByCarrier($startDate);
 
             return $this->json([
                 'success' => true,
                 'stats' => [
-                    'totalOrders' => $totalOrders,
-                    'totalRevenue' => $totalRevenue,
-                    'averageOrderValue' => $averageOrderValue,
-                    'ordersByStatus' => $ordersByStatus,
-                    'revenueByStatus' => $revenueByStatus,
+                    'totalOrders'              => $totalOrders,
+                    'totalRevenue'             => $totalRevenue,
+                    'averageOrderValue'        => $averageOrderValue,
+                    'ordersByStatus'           => $ordersByStatus,
+                    'revenueByStatus'          => $revenueByStatus,
                     'revenueExcludingShipping' => $revenueExcludingShipping,
-                    'totalShippingCosts' => $totalShippingCosts,
-                    'shippingCostsByCarrier' => $shippingCostsByCarrier,
-                    'period' => $period,
-                    'periodStart' => $startDate?->format(\DateTime::ATOM),
-                    'periodEnd' => $endDate->format(\DateTime::ATOM),
+                    'totalShippingCosts'       => $totalShippingCosts,
+                    'shippingCostsByCarrier'   => $shippingCostsByCarrier,
+                    'period'                   => $period,
+                    'periodStart'              => $startDate?->format(\DateTime::ATOM),
+                    'periodEnd'                => $endDate->format(\DateTime::ATOM),
                 ]
             ]);
 
         } catch (\Exception $e) {
-            $this->logger->error('Get orders stats failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
+            $this->logger->error('Stats failed at step [{step}]: {message}', [
+                'step'    => $step,
+                'period'  => $period,
+                'message' => $e->getMessage(),
+                'class'   => get_class($e),
+                'file'    => $e->getFile() . ':' . $e->getLine(),
+                'trace'   => $e->getTraceAsString(),
             ]);
 
             return $this->json([
                 'success' => false,
-                'error' => 'Erreur lors de la récupération des statistiques'
+                'error'   => "Erreur lors de l'étape « {$step} » ({$period})",
             ], 500);
         }
     }
