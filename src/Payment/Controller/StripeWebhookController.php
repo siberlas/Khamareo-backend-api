@@ -92,14 +92,17 @@ class StripeWebhookController extends AbstractController
 
         // Traitement selon le type d'événement
         try {
-            $this->logger->debug('🔄 Dispatch événement webhook', [
-                'event_type' => $event->type
+            $this->logger->info('🔄 Dispatch événement webhook', [
+                'event_type' => $event->type,
+                'event_id'   => $event->id,
             ]);
 
             return match ($event->type) {
-                'payment_intent.succeeded' => $this->handlePaymentSucceeded($event->data->object),
+                'payment_intent.succeeded'      => $this->handlePaymentSucceeded($event->data->object),
                 'payment_intent.payment_failed' => $this->handlePaymentFailed($event->data->object),
-                'payment_intent.canceled' => $this->handlePaymentCanceled($event->data->object),
+                'payment_intent.canceled'       => $this->handlePaymentCanceled($event->data->object),
+                'charge.refunded'               => $this->handleChargeRefunded($event->data->object),
+                'refund.created'                => $this->handleRefundCreated($event->data->object),
                 default => $this->handleUnknownEvent($event)
             };
 
@@ -390,6 +393,147 @@ class StripeWebhookController extends AbstractController
             'success' => true,
             'status'  => 'payment_canceled_processed',
         ], 200);
+    }
+
+    /**
+     * Gère un remboursement déclenché depuis le dashboard Stripe (charge.refunded)
+     */
+    private function handleChargeRefunded(\Stripe\Charge $charge): JsonResponse
+    {
+        $paymentIntentId = $charge->payment_intent;
+        $amountRefunded  = $charge->amount_refunded / 100;
+        $amountTotal     = $charge->amount / 100;
+        $isFullyRefunded = $charge->refunded; // bool Stripe
+
+        $this->logger->info('💸 charge.refunded reçu depuis Stripe', [
+            'charge_id'           => $charge->id,
+            'payment_intent_id'   => $paymentIntentId,
+            'amount_total'        => $amountTotal,
+            'amount_refunded'     => $amountRefunded,
+            'is_fully_refunded'   => $isFullyRefunded,
+            'refunds_count'       => count($charge->refunds->data ?? []),
+        ]);
+
+        if (!$paymentIntentId) {
+            $this->logger->warning('⚠️ charge.refunded sans payment_intent_id — ignoré', [
+                'charge_id' => $charge->id,
+            ]);
+            return new JsonResponse(['success' => true, 'status' => 'no_payment_intent'], 200);
+        }
+
+        try {
+            $payment = $this->findPaymentByIntentId($paymentIntentId);
+
+            if (!$payment) {
+                $this->logger->warning('⚠️ Payment introuvable pour charge.refunded', [
+                    'payment_intent_id' => $paymentIntentId,
+                    'charge_id'         => $charge->id,
+                ]);
+                return new JsonResponse(['success' => true, 'status' => 'payment_not_found'], 200);
+            }
+
+            $order = $payment->getOrder();
+            if (!$order) {
+                $this->logger->warning('⚠️ Order introuvable pour charge.refunded', [
+                    'payment_id' => $payment->getId(),
+                ]);
+                return new JsonResponse(['success' => true, 'status' => 'order_not_found'], 200);
+            }
+
+            $this->logger->info('🔗 Order trouvé pour remboursement Stripe', [
+                'order_id'            => $order->getId(),
+                'order_number'        => $order->getOrderNumber(),
+                'current_status'      => $order->getStatus()->value,
+                'current_payment_status' => $order->getPaymentStatus(),
+                'amount_refunded'     => $amountRefunded,
+                'is_fully_refunded'   => $isFullyRefunded,
+            ]);
+
+            // Synchroniser le montant remboursé depuis Stripe
+            $order->setRefundedAmount($amountRefunded);
+
+            if ($isFullyRefunded) {
+                $order->setStatus(\App\Shared\Enum\OrderStatus::REFUNDED);
+                $order->setPaymentStatus('refunded');
+
+                // Restituer le stock
+                foreach ($order->getItems() as $item) {
+                    $product = $item->getProduct();
+                    if ($product) {
+                        $product->setStock($product->getStock() + $item->getQuantity());
+                        $this->logger->info('📦 Stock restitué (remboursement Stripe)', [
+                            'product' => $product->getName(),
+                            'qty'     => $item->getQuantity(),
+                        ]);
+                    }
+                }
+
+                $this->logger->info('✅ Order marqué REFUNDED (remboursement total Stripe)', [
+                    'order_number'    => $order->getOrderNumber(),
+                    'amount_refunded' => $amountRefunded,
+                ]);
+            } else {
+                $order->setPaymentStatus('partially_refunded');
+
+                $this->logger->info('✅ Order marqué partially_refunded (remboursement partiel Stripe)', [
+                    'order_number'    => $order->getOrderNumber(),
+                    'amount_refunded' => $amountRefunded,
+                    'amount_total'    => $amountTotal,
+                ]);
+            }
+
+            // Note horodatée sur la commande
+            $note = sprintf(
+                '[REMBOURSEMENT%s VIA STRIPE DASHBOARD - %s] %.2f € remboursés sur %.2f €',
+                $isFullyRefunded ? ' TOTAL' : ' PARTIEL',
+                (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                $amountRefunded,
+                $amountTotal
+            );
+            $currentNote = $order->getCustomerNote();
+            $order->setCustomerNote($currentNote ? $currentNote . "\n\n" . $note : $note);
+
+            $this->em->flush();
+
+            $this->logger->info('✅ charge.refunded traité avec succès', [
+                'order_number'  => $order->getOrderNumber(),
+                'payment_status' => $order->getPaymentStatus(),
+            ]);
+
+            return new JsonResponse([
+                'success'      => true,
+                'status'       => $isFullyRefunded ? 'fully_refunded' : 'partially_refunded',
+                'order_number' => $order->getOrderNumber(),
+            ], 200);
+
+        } catch (\Exception $e) {
+            $this->logger->error('❌ Erreur lors traitement charge.refunded', [
+                'charge_id'         => $charge->id,
+                'payment_intent_id' => $paymentIntentId,
+                'error'             => $e->getMessage(),
+                'trace'             => $e->getTraceAsString(),
+            ]);
+
+            return new JsonResponse(['success' => false, 'error' => 'internal_error'], 500);
+        }
+    }
+
+    /**
+     * Gère refund.created (granularité fine sur chaque remboursement individuel)
+     */
+    private function handleRefundCreated(\Stripe\Refund $refund): JsonResponse
+    {
+        $this->logger->info('🔍 refund.created reçu', [
+            'refund_id'         => $refund->id,
+            'payment_intent_id' => $refund->payment_intent,
+            'amount'            => $refund->amount / 100,
+            'status'            => $refund->status,
+            'reason'            => $refund->reason,
+        ]);
+
+        // Le vrai traitement est fait dans charge.refunded qui a plus d'infos
+        // On logue juste pour la traçabilité
+        return new JsonResponse(['success' => true, 'status' => 'logged'], 200);
     }
 
     /**

@@ -430,6 +430,8 @@ class OrderManagementController extends AbstractController
             $data = json_decode($request->getContent(), true) ?? [];
             $reason = $data['reason'] ?? 'Annulée par l\'administrateur';
             $shouldRefund = $data['refund'] ?? false;
+            $sendEmail = $data['sendEmail'] ?? false;
+            $adminMessage = trim($data['adminMessage'] ?? '');
 
             // Annuler la commande
             $oldStatus = $order->getStatus();
@@ -455,27 +457,131 @@ class OrderManagementController extends AbstractController
             $this->em->flush();
 
             $this->logger->info('Order cancelled', [
-                'order_id' => $order->getId()->toRfc4122(),
-                'old_status' => $oldStatus->value,
-                'reason' => $reason,
+                'order_id'        => $order->getId()->toRfc4122(),
+                'old_status'      => $oldStatus->value,
+                'reason'          => $reason,
                 'refund_requested' => $shouldRefund,
+                'email_sent'      => $sendEmail,
             ]);
+
+            // Remboursement Stripe automatique si demandé et commande payée
+            $refundDone = false;
+            $refundError = null;
+            if ($shouldRefund) {
+                $payment = $order->getPayment();
+                $paymentStatus = $order->getPaymentStatus();
+
+                if ($payment && $payment->getProviderPaymentId() && in_array($paymentStatus, ['paid', 'partially_refunded'], true)) {
+                    $remaining = $order->getRemainingRefundable();
+                    if ($remaining > 0) {
+                        try {
+                            $refundResult = $this->stripeService->refundPayment(
+                                $payment->getProviderPaymentId(),
+                                (int) round($remaining * 100),
+                                'requested_by_customer',
+                                [
+                                    'order_id'     => (string) $order->getId(),
+                                    'order_number' => $order->getOrderNumber(),
+                                    'admin_reason' => $reason,
+                                ]
+                            );
+
+                            if ($refundResult['success']) {
+                                $order->addRefundedAmount($remaining);
+                                $order->setStatus(OrderStatus::REFUNDED);
+                                $order->setPaymentStatus('refunded');
+
+                                $refundNote = sprintf(
+                                    "[REMBOURSEMENT TOTAL - %s] Montant : %.2f %s | Raison annulation : %s | Stripe ID : %s",
+                                    (new \DateTimeImmutable())->format('Y-m-d H:i:s'),
+                                    $remaining,
+                                    $order->getCurrency(),
+                                    $reason,
+                                    $refundResult['refund_id']
+                                );
+                                $currentNote = $order->getCustomerNote();
+                                $order->setCustomerNote($currentNote ? $currentNote . "\n\n" . $refundNote : $refundNote);
+
+                                $this->em->flush();
+                                $refundDone = true;
+
+                                $this->logger->info('💸 Refund triggered on cancellation', [
+                                    'order_id'     => $order->getId()->toRfc4122(),
+                                    'amount'       => $remaining,
+                                    'stripe_id'    => $refundResult['refund_id'],
+                                ]);
+
+                                try {
+                                    $this->mailerService->sendRefundNotification($order, $remaining, $refundResult['refund_id']);
+                                } catch (\Throwable $e) {
+                                    $this->logger->warning('Failed to send refund email on cancellation', [
+                                        'order_id' => $order->getId()->toRfc4122(),
+                                        'error'    => $e->getMessage(),
+                                    ]);
+                                }
+                            } else {
+                                $refundError = $refundResult['error'];
+                                $this->logger->error('❌ Stripe refund failed on cancellation', [
+                                    'order_id' => $order->getId()->toRfc4122(),
+                                    'error'    => $refundError,
+                                ]);
+                            }
+                        } catch (\Exception $e) {
+                            $refundError = $e->getMessage();
+                            $this->logger->error('❌ Exception during refund on cancellation', [
+                                'order_id' => $order->getId()->toRfc4122(),
+                                'error'    => $refundError,
+                            ]);
+                        }
+                    } else {
+                        $this->logger->info('Refund skipped: already fully refunded', [
+                            'order_id' => $order->getId()->toRfc4122(),
+                        ]);
+                    }
+                } else {
+                    $this->logger->info('Refund skipped: no Stripe payment linked or order not paid', [
+                        'order_id'      => $order->getId()->toRfc4122(),
+                        'payment_id'    => $payment?->getProviderPaymentId(),
+                        'payment_status' => $paymentStatus,
+                    ]);
+                }
+            }
+
+            if ($sendEmail) {
+                try {
+                    $this->mailerService->sendCancellationNotification($order, $reason, $adminMessage);
+                } catch (\Exception $e) {
+                    $this->logger->error('Failed to send cancellation email', [
+                        'order_id' => $order->getId()->toRfc4122(),
+                        'error'    => $e->getMessage(),
+                    ]);
+                }
+            }
 
             $message = 'Commande annulée avec succès';
             if ($shouldRefund) {
-                $message .= '. Un remboursement doit être effectué manuellement via Stripe.';
+                if ($refundDone) {
+                    $message .= ' et remboursement Stripe effectué.';
+                } elseif ($refundError) {
+                    $message .= '. Attention : le remboursement Stripe a échoué (' . $refundError . ').';
+                } else {
+                    $message .= '. Aucun paiement Stripe lié — remboursement non déclenché.';
+                }
             }
 
             return $this->json([
                 'success' => true,
                 'order' => [
-                    'id' => $order->getId()->toRfc4122(),
-                    'reference' => $order->getReference(),
-                    'status' => $order->getStatus()->value,
-                    'statusLabel' => $order->getStatus()->label(),
+                    'id'            => $order->getId()->toRfc4122(),
+                    'reference'     => $order->getReference(),
+                    'status'        => $order->getStatus()->value,
+                    'statusLabel'   => $order->getStatus()->label(),
+                    'paymentStatus' => $order->getPaymentStatus(),
                 ],
-                'message' => $message,
-                'refundRequired' => $shouldRefund
+                'message'      => $message,
+                'refundDone'   => $refundDone,
+                'refundError'  => $refundError,
+                'emailSent'    => $sendEmail,
             ]);
 
         } catch (\Exception $e) {
