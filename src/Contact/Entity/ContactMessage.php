@@ -73,6 +73,12 @@ class ContactMessage
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $adminNotes = null;
 
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $adminReply = null;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $repliedAt = null;
+
     #[ORM\PrePersist]
     public function onPrePersist(): void
     {
@@ -262,6 +268,12 @@ class ContactMessage
 
     public function isRead(): bool { return $this->isRead; }
     public function setIsRead(bool $isRead): self { $this->isRead = $isRead; return $this; }
+
+    public function getAdminReply(): ?string { return $this->adminReply; }
+    public function setAdminReply(?string $adminReply): self { $this->adminReply = $adminReply; return $this; }
+
+    public function getRepliedAt(): ?\DateTimeImmutable { return $this->repliedAt; }
+    public function setRepliedAt(?\DateTimeImmutable $repliedAt): self { $this->repliedAt = $repliedAt; return $this; }
 
     /**
      * Get the value of adminNotes

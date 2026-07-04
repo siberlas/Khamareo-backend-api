@@ -414,6 +414,39 @@ class MailerService
     }
 
     /**
+     * Envoie la réponse admin au client via son email de contact
+     */
+    public function sendContactReply(ContactMessage $message, string $replyText): void
+    {
+        try {
+            $html = $this->twig->render('emails/contact/admin_reply.fr.html.twig', [
+                'contactMessage' => $message,
+                'replyText'      => $replyText,
+            ]);
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($message->getEmail())
+                ->replyTo($this->fromEmail)
+                ->subject('Réponse à votre message - Khamareo')
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Contact reply sent', [
+                'contact_id' => $message->getId(),
+                'to'         => $message->getEmail(),
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send contact reply', [
+                'contact_id' => $message->getId(),
+                'error'      => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Envoie une confirmation au client
      */
     public function sendContactConfirmation(ContactMessage $message, ?string $locale = null): void

@@ -4,6 +4,7 @@ namespace App\Admin\Controller\Contact;
 
 use App\Contact\Entity\ContactMessage;
 use App\Contact\Repository\ContactMessageRepository;
+use App\Shared\Service\MailerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,6 +21,7 @@ class AdminContactMessageController extends AbstractController
     public function __construct(
         private ContactMessageRepository $repo,
         private EntityManagerInterface $em,
+        private MailerService $mailer,
     ) {}
 
     #[Route('', name: 'list', methods: ['GET'])]
@@ -82,6 +84,36 @@ class AdminContactMessageController extends AbstractController
         return $this->json($this->serialize($message, true));
     }
 
+    #[Route('/{id}/reply', name: 'reply', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function reply(int $id, Request $request): JsonResponse
+    {
+        $message = $this->repo->find($id);
+        if (!$message) {
+            return $this->json(['error' => 'Message introuvable'], 404);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $replyText = trim($data['reply'] ?? '');
+
+        if (empty($replyText)) {
+            return $this->json(['error' => 'Le texte de réponse est requis.'], 400);
+        }
+
+        try {
+            $this->mailer->sendContactReply($message, $replyText);
+        } catch (\Exception $e) {
+            return $this->json(['error' => "Échec de l'envoi : " . $e->getMessage()], 500);
+        }
+
+        $message->setAdminReply($replyText);
+        $message->setRepliedAt(new \DateTimeImmutable());
+        $message->setIsProcessed(true);
+        $message->setIsRead(true);
+        $this->em->flush();
+
+        return $this->json(['success' => true, 'message' => $this->serialize($message, true)]);
+    }
+
     #[Route('/{id}', name: 'delete', methods: ['DELETE'], requirements: ['id' => '\d+'])]
     public function delete(int $id): JsonResponse
     {
@@ -112,6 +144,9 @@ class AdminContactMessageController extends AbstractController
             $data['message']     = $m->getMessage();
             $data['orderNumber'] = $m->getOrderNumber();
             $data['adminNotes']  = $m->getAdminNotes();
+            $data['adminReply']  = $m->getAdminReply();
+            $data['repliedAt']   = $m->getRepliedAt()?->format('c');
+            $data['isProcessed'] = $m->getIsProcessed();
         }
 
         return $data;
