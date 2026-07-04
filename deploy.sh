@@ -79,6 +79,12 @@ echo ">>> Permissions var/..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
     chown -R www-data:www-data /var/www/html/var
 
+# Suppression physique du cache avant cache:clear
+# (évite le deadlock si l'app ne peut pas booter à cause d'un cache Doctrine obsolète)
+echo ">>> Suppression physique du cache prod..."
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T php \
+    sh -c "rm -rf /var/www/html/var/cache/prod"
+
 # Clear cache
 echo ">>> Cache..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" exec -T -u www-data php \
