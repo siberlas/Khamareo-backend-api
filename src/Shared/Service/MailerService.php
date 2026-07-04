@@ -72,6 +72,10 @@ class MailerService
             'fr' => 'Remboursement effectué #{orderNumber} - Khamareo',
             'en' => 'Refund Processed #{orderNumber} - Khamareo'
         ],
+        'order_cancellation' => [
+            'fr' => 'Annulation de votre commande #{orderNumber} - Khamareo',
+            'en' => 'Your Order #{orderNumber} Has Been Cancelled - Khamareo'
+        ],
     ];
 
     public function __construct(
@@ -872,11 +876,59 @@ class MailerService
         }
     }
 
-    /**
-     * Envoie l'email d'annonce de lancement avec le code promo individuel
-     */
+    public function sendCancellationNotification(Order $order, string $reason, string $adminMessage = ''): void
+    {
+        try {
+            $locale = $this->getEmailLocale(null, $order);
+
+            $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail();
+            if (!$recipientEmail) {
+                return;
+            }
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : "Bonjour",
+                'en' => $firstName ? "Hello {$firstName}" : "Hello",
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/cancellation', $locale),
+                [
+                    'order'        => $order,
+                    'greeting'     => $greetings[$locale],
+                    'reason'       => $reason,
+                    'adminMessage' => $adminMessage,
+                    'orderUrl'     => $this->frontBaseUrl . '/order-confirmation/' . $order->getOrderNumber(),
+                    'locale'       => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('order_cancellation', $locale, [
+                    'orderNumber' => $order->getOrderNumber()
+                ]))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Cancellation notification sent', [
+                'order_number' => $order->getOrderNumber(),
+                'email'        => $recipientEmail,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send cancellation notification', [
+                'order_number' => $order->getOrderNumber(),
+                'error'        => $e->getMessage(),
+            ]);
+        }
+    }
+
     /**
      * Envoie l'email d'annonce de lancement avec le code promo individuel.
+
      *
      * @return array{success: bool, error: string|null}
      */

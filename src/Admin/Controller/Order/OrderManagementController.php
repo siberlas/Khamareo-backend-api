@@ -430,6 +430,8 @@ class OrderManagementController extends AbstractController
             $data = json_decode($request->getContent(), true) ?? [];
             $reason = $data['reason'] ?? 'Annulée par l\'administrateur';
             $shouldRefund = $data['refund'] ?? false;
+            $sendEmail = $data['sendEmail'] ?? false;
+            $adminMessage = trim($data['adminMessage'] ?? '');
 
             // Annuler la commande
             $oldStatus = $order->getStatus();
@@ -455,11 +457,23 @@ class OrderManagementController extends AbstractController
             $this->em->flush();
 
             $this->logger->info('Order cancelled', [
-                'order_id' => $order->getId()->toRfc4122(),
-                'old_status' => $oldStatus->value,
-                'reason' => $reason,
+                'order_id'        => $order->getId()->toRfc4122(),
+                'old_status'      => $oldStatus->value,
+                'reason'          => $reason,
                 'refund_requested' => $shouldRefund,
+                'email_sent'      => $sendEmail,
             ]);
+
+            if ($sendEmail) {
+                try {
+                    $this->mailerService->sendCancellationNotification($order, $reason, $adminMessage);
+                } catch (\Exception $e) {
+                    $this->logger->error('Failed to send cancellation email', [
+                        'order_id' => $order->getId()->toRfc4122(),
+                        'error'    => $e->getMessage(),
+                    ]);
+                }
+            }
 
             $message = 'Commande annulée avec succès';
             if ($shouldRefund) {
@@ -469,13 +483,14 @@ class OrderManagementController extends AbstractController
             return $this->json([
                 'success' => true,
                 'order' => [
-                    'id' => $order->getId()->toRfc4122(),
-                    'reference' => $order->getReference(),
-                    'status' => $order->getStatus()->value,
+                    'id'          => $order->getId()->toRfc4122(),
+                    'reference'   => $order->getReference(),
+                    'status'      => $order->getStatus()->value,
                     'statusLabel' => $order->getStatus()->label(),
                 ],
-                'message' => $message,
-                'refundRequired' => $shouldRefund
+                'message'        => $message,
+                'refundRequired' => $shouldRefund,
+                'emailSent'      => $sendEmail,
             ]);
 
         } catch (\Exception $e) {
