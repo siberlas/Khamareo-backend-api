@@ -370,6 +370,7 @@ class ColissimoApiService
                     'contents' => [
                         'category' => ['value' => 3],
                         'article' => $articles,
+                        'eoriNumber' => $this->senderInfo['eori'] ?? '',
                     ],
                 ],
                 'sender' => [
@@ -696,6 +697,7 @@ class ColissimoApiService
                     'contents' => [
                         'category' => ['value' => 3],
                         'article' => $articles,
+                        'eoriNumber' => $this->senderInfo['eori'] ?? '',
                     ],
                 ],
                 'sender' => [
