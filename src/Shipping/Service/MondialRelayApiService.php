@@ -33,6 +33,18 @@ class MondialRelayApiService
             );
         }
 
+        // Plafond documenté Mondial Relay : 64 x 39 x 38 cm. On valide en amont
+        // plutôt que de laisser l'API renvoyer une erreur 10xxx opaque.
+        if ($dto->lengthCm > 64 || $dto->widthCm > 39 || $dto->depthCm > 38
+            || $dto->lengthCm <= 0 || $dto->widthCm <= 0 || $dto->depthCm <= 0) {
+            throw new MondialRelayException(sprintf(
+                'Dimensions du colis invalides (%dx%dx%d cm) : maximum autorisé 64x39x38 cm.',
+                $dto->lengthCm,
+                $dto->widthCm,
+                $dto->depthCm,
+            ));
+        }
+
         $xmlRequest = $this->buildXmlRequest($dto);
 
         $this->logger->debug('Mondial Relay XML request', [
@@ -121,6 +133,24 @@ class MondialRelayApiService
         $parcels = $doc->createElement('Parcels');
         $parcel = $doc->createElement('Parcel');
         $parcel->appendChild($doc->createElement('Content', $this->escapeXml(substr($dto->parcelContent, 0, 40))));
+
+        // Dimensions — obligatoires (erreur 10106 WebApi_MandatoryParcelSize sinon,
+        // au moins pour le mode HOM). Plafond documenté : 64x39x38 cm.
+        $length = $doc->createElement('Length');
+        $length->setAttribute('Value', (string) $dto->lengthCm);
+        $length->setAttribute('Unit', 'cm');
+        $parcel->appendChild($length);
+
+        $width = $doc->createElement('Width');
+        $width->setAttribute('Value', (string) $dto->widthCm);
+        $width->setAttribute('Unit', 'cm');
+        $parcel->appendChild($width);
+
+        $depth = $doc->createElement('Depth');
+        $depth->setAttribute('Value', (string) $dto->depthCm);
+        $depth->setAttribute('Unit', 'cm');
+        $parcel->appendChild($depth);
+
         $weight = $doc->createElement('Weight');
         $weight->setAttribute('Value', (string) $dto->weightGrams);
         $weight->setAttribute('Unit', 'gr');
@@ -243,14 +273,16 @@ class MondialRelayApiService
 
         // Check StatusList for errors
         $errorCodes = [];
+        $warningCodes = [];
         $statusList = $xml->StatusList ?? null;
 
         if ($statusList) {
             foreach ($statusList->children() as $status) {
-                // Format 1: attributes (<Status Code="10001" Message="..." />)
+                // Format 1: attributes (<Status Code="10001" Level="..." Message="..." />)
                 $attrs = $status->attributes();
                 $codeFromAttr = (string) ($attrs['Code'] ?? '');
                 $msgFromAttr = (string) ($attrs['Message'] ?? '');
+                $level = strtolower((string) ($attrs['Level'] ?? ''));
 
                 // Format 2: child elements (<Code>20</Code><Message>...</Message>)
                 $codeFromChild = (string) ($status->Code ?? '');
@@ -259,11 +291,26 @@ class MondialRelayApiService
                 $code = $codeFromAttr !== '' ? $codeFromAttr : $codeFromChild;
                 $message = $msgFromAttr !== '' ? $msgFromAttr : $msgFromChild;
 
-                // Code "0" or empty = success
-                if ($code !== '' && $code !== '0') {
-                    $errorCodes[] = $code . ($message ? ': ' . $message : '');
+                // Code "0" ou vide = succès
+                if ($code === '' || $code === '0') {
+                    continue;
                 }
+
+                // Level="Warning" = non bloquant (Mondial Relay traite le champ concerné
+                // comme ignoré côté serveur, l'expédition est tout de même créée)
+                if ($level === 'warning') {
+                    $warningCodes[] = $code . ($message ? ': ' . $message : '');
+                    continue;
+                }
+
+                $errorCodes[] = $code . ($message ? ': ' . $message : '');
             }
+        }
+
+        if (!empty($warningCodes)) {
+            $this->logger->warning('Mondial Relay API warning(s) (non bloquant)', [
+                'warning_codes' => $warningCodes,
+            ]);
         }
 
         if (!empty($errorCodes)) {

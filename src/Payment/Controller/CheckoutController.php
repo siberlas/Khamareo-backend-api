@@ -97,6 +97,15 @@ class CheckoutController extends AbstractController
         $billingSource  = $this->resolveAddressInput($billingAddressIri);
         $deliverySource = $this->resolveAddressInput($deliveryAddressIri);
 
+        $this->logger->info('🔎 [CHECKOUT] Adresse source résolue', [
+            'delivery_address_iri' => $deliveryAddressIri,
+            'delivery_source_id' => $deliverySource?->getId(),
+            'delivery_source_state' => $deliverySource?->getState(),
+            'delivery_source_country' => $deliverySource?->getCountry(),
+            'billing_address_iri' => $billingAddressIri,
+            'billing_source_id' => $billingSource?->getId(),
+            'billing_source_state' => $billingSource?->getState(),
+        ]);
 
         if (!$billingSource || !$deliverySource) {
             throw new BadRequestException("Adresse de livraison ou facturation invalide.");
@@ -114,6 +123,7 @@ class CheckoutController extends AbstractController
             ->setCity($billingSource->getCity())
             ->setPostalCode($billingSource->getPostalCode())
             ->setCountry($billingSource->getCountry())
+            ->setState($billingSource->getState())
             ->setLabel('Billing snapshot')
             ->setIsDefault(false)
             ->setOwner(null)
@@ -146,6 +156,7 @@ class CheckoutController extends AbstractController
             ->setCity($deliverySource->getCity())
             ->setPostalCode($deliverySource->getPostalCode())
             ->setCountry($deliverySource->getCountry())
+            ->setState($deliverySource->getState())
             ->setLabel('Shipping snapshot')
             ->setIsDefault(false)
             ->setOwner(null)
@@ -462,6 +473,7 @@ class CheckoutController extends AbstractController
                 ->setPostalCode($input['postalCode'] ?? '')
                 ->setCity($input['city'] ?? '')
                 ->setCountry($input['country'] ?? 'FR')
+                ->setState($input['state'] ?? null)
                 ->setPhone($input['phone'] ?? null)
                 ->setOwner(null) // snapshot détaché
                 ->setIsDefault(false);

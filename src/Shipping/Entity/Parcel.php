@@ -102,6 +102,18 @@ class Parcel
     #[Groups(['parcel:read'])]
     private ?\DateTimeImmutable $labelGeneratedAt = null;
 
+    /**
+     * Dernier message d'erreur rencontré lors d'une tentative de génération d'étiquette
+     * (transporteur, EORI, état/province, téléphone...). Effacé au prochain succès.
+     */
+    #[ORM\Column(type: 'text', nullable: true)]
+    #[Groups(['parcel:read', 'order:read'])]
+    private ?string $lastLabelError = null;
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    #[Groups(['parcel:read', 'order:read'])]
+    private ?\DateTimeImmutable $lastLabelErrorAt = null;
+
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     #[Groups(['parcel:read'])]
     private ?\DateTimeImmutable $shippedAt = null;
@@ -228,6 +240,20 @@ class Parcel
     { 
         $this->labelGeneratedAt = $labelGeneratedAt; 
         return $this; 
+    }
+
+    public function getLastLabelError(): ?string { return $this->lastLabelError; }
+    public function setLastLabelError(?string $lastLabelError): self
+    {
+        $this->lastLabelError = $lastLabelError;
+        return $this;
+    }
+
+    public function getLastLabelErrorAt(): ?\DateTimeImmutable { return $this->lastLabelErrorAt; }
+    public function setLastLabelErrorAt(?\DateTimeImmutable $lastLabelErrorAt): self
+    {
+        $this->lastLabelErrorAt = $lastLabelErrorAt;
+        return $this;
     }
 
     public function getShippedAt(): ?\DateTimeImmutable { return $this->shippedAt; }

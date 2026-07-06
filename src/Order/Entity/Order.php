@@ -321,7 +321,7 @@ class Order
         $this->createdAt = $now;
 
         if (!$this->orderNumber) {
-            $this->orderNumber = 'CMD-' . $now->format('Ymd') . '-' . random_int(1000, 9999);
+            $this->orderNumber = 'CMD-' . $now->format('Ymd') . '-' . random_int(100000, 999999);
         }
     }
 

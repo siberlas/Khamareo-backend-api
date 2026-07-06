@@ -100,6 +100,11 @@ class MondialRelayServiceTest extends TestCase
         // Content
         $this->assertStringContainsString('<Content>Produits naturels</Content>', $xml);
 
+        // Dimensions (obligatoires, erreur 10106 WebApi_MandatoryParcelSize sinon)
+        $this->assertStringContainsString('<Length Value="30" Unit="cm"/>', $xml);
+        $this->assertStringContainsString('<Width Value="20" Unit="cm"/>', $xml);
+        $this->assertStringContainsString('<Depth Value="15" Unit="cm"/>', $xml);
+
         // Sender address fields (uppercased)
         $this->assertStringContainsString('<Streetname>1 RUE EXEMPLE</Streetname>', $xml);
         $this->assertStringContainsString('<City>PARIS</City>', $xml);
@@ -265,6 +270,38 @@ XML;
 
         $this->expectException(MondialRelayException::class);
         $this->expectExceptionMessage('Weight must be at least 10 grams');
+
+        $service->createLabel($dto);
+    }
+
+    public function testMaxParcelSizeValidation(): void
+    {
+        $service = $this->createService();
+
+        $dto = new MondialRelayShipmentDTO(
+            sender: new MondialRelayAddressDTO(
+                addressAdd1: 'TEST',
+                streetname: 'RUE TEST',
+                postcode: '75001',
+                city: 'PARIS',
+                countryCode: 'FR',
+            ),
+            recipient: new MondialRelayAddressDTO(
+                addressAdd1: 'TEST',
+                streetname: 'RUE TEST',
+                postcode: '75002',
+                city: 'PARIS',
+                countryCode: 'FR',
+            ),
+            weightGrams: 500,
+            deliveryMode: 'HOM',
+            lengthCm: 65, // Above maximum (64)
+            widthCm: 20,
+            depthCm: 15,
+        );
+
+        $this->expectException(MondialRelayException::class);
+        $this->expectExceptionMessage('Dimensions du colis invalides');
 
         $service->createLabel($dto);
     }

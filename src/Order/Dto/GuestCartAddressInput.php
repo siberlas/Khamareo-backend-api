@@ -68,6 +68,10 @@ final class GuestCartAddressInput
     #[Groups(['guest-user'])]
     public ?string $country = null;
 
+    #[Assert\Length(exactly: 2, exactMessage: "Le code d'état/province doit faire 2 caractères (ex: NY, CA, ON, QC).")]
+    #[Groups(['guest-user'])]
+    public ?string $state = null;
+
     #[Groups(['guest-user'])]
     public bool $hasAcceptedTerms = false;
 }

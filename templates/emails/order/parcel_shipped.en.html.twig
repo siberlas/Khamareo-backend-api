@@ -71,7 +71,8 @@
     {% if order.shippingAddress %}
     <div class="card">
         {% if order.isRelayPoint %}
-        <h3 style="margin-top: 0; color: #4A2E20;">Your Relay Point</h3>
+        {% set pickupLabel = order.shippingMode and order.shippingMode.code == 'locker' ? 'Locker' : 'Relay Point' %}
+        <h3 style="margin-top: 0; color: #4A2E20;">Your {{ pickupLabel }}</h3>
         {% else %}
         <h3 style="margin-top: 0; color: #4A2E20;">Delivery address</h3>
         {% endif %}
