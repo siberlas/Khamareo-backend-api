@@ -41,16 +41,17 @@
     {% if order.shippingAddress %}
     <div class="card">
         {% if order.isRelayPoint %}
-        <h3 style="margin-top: 0; color: #4A2E20;">Your Pickup Point</h3>
+        {% set pickupLabel = order.shippingMode and order.shippingMode.code == 'locker' ? 'Locker' : 'Relay Point' %}
+        <h3 style="margin-top: 0; color: #4A2E20;">Your {{ pickupLabel }}</h3>
         <p style="margin: 0 0 8px; font-size: 13px;">
-            <span class="tag">{{ order.carrier ? order.carrier.name : (order.relayCarrier ?? 'Pickup Point') }}</span>
+            <span class="tag">{{ order.carrier ? order.carrier.name : (order.relayCarrier ?? pickupLabel) }}</span>
         </p>
         {% if order.relayPointId %}
         <p style="margin: 0 0 6px;" class="muted">
-            Pickup point ID: <strong style="font-family: monospace;">{{ order.relayPointId }}</strong>
+            {{ pickupLabel }} ID: <strong style="font-family: monospace;">{{ order.relayPointId }}</strong>
         </p>
         {% endif %}
-        <p style="margin: 0 0 4px; font-size: 13px; color: #7A5C47;">Pickup point address:</p>
+        <p style="margin: 0 0 4px; font-size: 13px; color: #7A5C47;">{{ pickupLabel }} address:</p>
         <p style="margin: 0; line-height: 1.8;">
             <strong>{{ order.shippingAddress.firstName }} {{ order.shippingAddress.lastName }}</strong><br>
             {{ order.shippingAddress.streetAddress ?? order.shippingAddress.street }}<br>

@@ -16,6 +16,12 @@ use Psr\Log\LoggerInterface;
  */
 class MondialRelayLabelGenerator implements LabelGeneratorInterface
 {
+    // Dimensions par défaut (cm) tant qu'aucune donnée réelle n'est disponible
+    // sur Product/Parcel. Bien en-dessous du plafond Mondial Relay (64x39x38 cm).
+    private const DEFAULT_PARCEL_LENGTH_CM = 30;
+    private const DEFAULT_PARCEL_WIDTH_CM = 20;
+    private const DEFAULT_PARCEL_DEPTH_CM = 15;
+
     public function __construct(
         private MondialRelayApiService $mondialRelayApi,
         private CloudinaryService      $cloudinary,
@@ -73,9 +79,17 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
             // Build recipient address
             [$recipientHouseNo, $recipientStreet] = $this->splitStreetAddress($shippingAddress->getStreetAddress());
             $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail() ?? '';
+            // Priorité au guestPhone : instantané propre à CETTE commande, stable
+            // dans le temps. owner.phone n'est utilisé qu'en dernier recours, et
+            // seulement si ce n'est pas un compte invité partagé/mutable (un guest
+            // User est réutilisé et écrasé par chaque nouvelle commande passée avec
+            // le même email — donc pas fiable comme source pour CETTE expédition).
+            $ownerPhone = ($order->getOwner() && !$order->getOwner()->isGuest())
+                ? $order->getOwner()->getPhone()
+                : null;
             $recipientPhone = $shippingAddress->getPhone()
-                ?: ($order->getOwner()?->getPhone()
                 ?: ($order->getGuestPhone()
+                ?: ($ownerPhone
                 ?: ''));
 
             $isRelayPointCheck = $shippingAddress->isRelayPoint() || !empty($order->getRelayPointId());
@@ -124,6 +138,24 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 $weightGrams = 10;
             }
 
+            // Dimensions : obligatoires pour Mondial Relay (erreur 10106
+            // WebApi_MandatoryParcelSize sinon, au moins en mode HOM), mais aucune
+            // dimension réelle n'est tracée aujourd'hui ni sur Product ni sur Parcel.
+            // On utilise donc une taille de colis par défaut, en le signalant
+            // explicitement pour pouvoir identifier les cas à corriger plus tard
+            // (ex: ajouter de vraies dimensions produit).
+            $lengthCm = self::DEFAULT_PARCEL_LENGTH_CM;
+            $widthCm = self::DEFAULT_PARCEL_WIDTH_CM;
+            $depthCm = self::DEFAULT_PARCEL_DEPTH_CM;
+
+            $this->logger->warning('Mondial Relay: dimensions de colis par défaut utilisées (aucune dimension réelle disponible)', [
+                'parcel_id' => $parcel->getId()->toRfc4122(),
+                'order_number' => $order->getOrderNumber(),
+                'default_length_cm' => $lengthCm,
+                'default_width_cm' => $widthCm,
+                'default_depth_cm' => $depthCm,
+            ]);
+
             // REL = vendeur dépose le colis en Point Relais (mode standard pour un e-commerce).
             // CCC = collecte entrepôt (Mondial Relay vient chercher chez le vendeur) — non applicable ici.
             // CollectionLocation = relay de dépôt du vendeur (MONDIAL_RELAY_COLLECTION_RELAY_ID).
@@ -149,6 +181,9 @@ class MondialRelayLabelGenerator implements LabelGeneratorInterface
                 recipient: $recipient,
                 weightGrams: $weightGrams,
                 deliveryMode: $deliveryMode,
+                lengthCm: $lengthCm,
+                widthCm: $widthCm,
+                depthCm: $depthCm,
                 deliveryLocation: $deliveryLocation,
                 collectionMode: MondialRelayMode::COLLECTION_RELAY,
                 collectionLocation: $collectionLocation,

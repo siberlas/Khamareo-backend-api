@@ -241,6 +241,16 @@ class ColissimoApiService
             ]);
 
             $content = $response->getContent(false);
+            $statusCode = $response->getStatusCode();
+
+            $this->logger->info('🔎 [COLISSIMO RAW RESPONSE] parcel', [
+                'parcel_id' => $parcel->getId()->toRfc4122(),
+                'product_code' => $productCode,
+                'status_code' => $statusCode,
+                'is_multipart' => $this->isMultipart($content),
+                'content_length' => strlen($content),
+                'content_preview' => substr($content, 0, 3000),
+            ]);
 
             if ($this->isMultipart($content)) {
                 $json = $this->extractJsonFromMultipart($content);
@@ -264,10 +274,28 @@ class ColissimoApiService
                     ];
                 }
 
+                $this->logger->warning('🔎 [COLISSIMO RAW RESPONSE] multipart sans PDF — json extrait', [
+                    'parcel_id' => $parcel->getId()->toRfc4122(),
+                    'extracted_json' => $json,
+                ]);
+
                 throw new \RuntimeException("Réponse multipart [$productCode] sans PDF exploitable.");
             }
 
             $data = $response->toArray(false);
+
+            $this->logger->info('🔎 [COLISSIMO RAW RESPONSE] non-multipart — payload décodé', [
+                'parcel_id' => $parcel->getId()->toRfc4122(),
+                'status_code' => $statusCode,
+                'decoded' => $data,
+            ]);
+
+            if ($statusCode >= 400) {
+                $msg = $data['messages'][0]['messageContent']
+                    ?? $data['message']
+                    ?? "Erreur Colissimo [$productCode] (HTTP $statusCode)";
+                throw new \RuntimeException($msg);
+            }
 
             return [
                 'success' => true,
@@ -337,11 +365,13 @@ class ColissimoApiService
             'mobileNumber' => $customerData['phone'],
         ];
 
-        // État/Province obligatoire pour US et CA (Colissimo : champ line3)
-        if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
-            $addresseeAddress['line3'] = strtoupper($address->getState());
-        } elseif (!empty($address->getAddressComplement())) {
+        if (!empty($address->getAddressComplement())) {
             $addresseeAddress['line3'] = $this->normalizeAddressField($address->getAddressComplement());
+        }
+
+        // stateOrProvinceCode : champ dédié Colissimo, obligatoire pour les US (distinct de line3)
+        if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
+            $addresseeAddress['stateOrProvinceCode'] = strtoupper($address->getState());
         }
 
         if ($customerData['companyName'] !== null) {
@@ -388,6 +418,14 @@ class ColissimoApiService
                 ],
                 'addressee' => [
                     'address' => $addresseeAddress,
+                ],
+            ],
+            'fields' => [
+                'field' => [
+                    [
+                        'key' => 'EORI',
+                        'value' => $this->senderInfo['eori'],
+                    ],
                 ],
             ],
         ];
@@ -663,10 +701,12 @@ class ColissimoApiService
         }
 
         $countryCode = $addresseeAddress['countryCode'];
-        if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
-            $addresseeAddress['line3'] = strtoupper($address->getState());
-        } elseif (!empty($address->getAddressComplement())) {
+        if (!empty($address->getAddressComplement())) {
             $addresseeAddress['line3'] = $this->normalizeAddressField($address->getAddressComplement());
+        }
+
+        if (in_array($countryCode, ['US', 'CA'], true) && method_exists($address, 'getState') && $address->getState()) {
+            $addresseeAddress['stateOrProvinceCode'] = strtoupper($address->getState());
         }
 
         $this->logger->info('OM weight calculation', [
@@ -716,6 +756,12 @@ class ColissimoApiService
                 'addressee' => [
                     'address' => $addresseeAddress,
                 ],
+                'fields' => [
+                    [
+                        'key' => 'EORI',
+                        'value' => $this->senderInfo['eori'],
+                    ]
+                ],
             ],
         ];
     }
@@ -748,23 +794,41 @@ class ColissimoApiService
 
     private function getCustomerData(Order $order, $address): array
     {
-        if ($order->getOwner()) {
-            $user = $order->getOwner();
+        $owner = $order->getOwner();
+
+        // Compte réel (non invité) : ses données sont fiables et propres à cet
+        // utilisateur, on les utilise en priorité.
+        if ($owner && !$owner->isGuest()) {
             return [
-                'email' => $user->getEmail(),
-                'firstName' => $user->getFirstName(),
-                'lastName' => $user->getLastName(),
-                'phone' => $user->getPhone() ?? '0600000000',
+                'email' => $owner->getEmail(),
+                'firstName' => $owner->getFirstName(),
+                'lastName' => $owner->getLastName(),
+                'phone' => $owner->getPhone() ?? '0600000000',
                 'companyName' => null,
             ];
         }
 
+        // Invité : le guestPhone est un instantané propre à CETTE commande, stable
+        // dans le temps — contrairement à owner.phone, qui pointe vers un User
+        // invité partagé/mutable (réutilisé et écrasé par chaque nouvelle commande
+        // passée avec le même email).
         if ($order->getGuestEmail()) {
             return [
                 'email' => $order->getGuestEmail(),
                 'firstName' => $order->getGuestFirstName(),
                 'lastName' => $order->getGuestLastName(),
                 'phone' => $order->getGuestPhone() ?? '0600000000',
+                'companyName' => null,
+            ];
+        }
+
+        // Dernier recours : compte invité partagé sans guestEmail renseigné.
+        if ($owner) {
+            return [
+                'email' => $owner->getEmail(),
+                'firstName' => $owner->getFirstName(),
+                'lastName' => $owner->getLastName(),
+                'phone' => $owner->getPhone() ?? '0600000000',
                 'companyName' => null,
             ];
         }

@@ -296,20 +296,40 @@ class OrderManagementController extends AbstractController
             $this->em->persist($address);
         }
 
-        if (!empty($data['street']) || !empty($data['streetAddress'])) {
-            $address->setStreetAddress($data['street'] ?? $data['streetAddress']);
+        // Champs obligatoires : s'ils sont fournis dans la requête, ils ne peuvent
+        // pas être vides — on rejette explicitement plutôt que d'ignorer en silence
+        // (avant ce correctif, envoyer une valeur vide laissait l'ancienne valeur
+        // en place tout en renvoyant quand même un succès, ce qui était trompeur).
+        if (array_key_exists('street', $data) || array_key_exists('streetAddress', $data)) {
+            $street = trim((string) ($data['street'] ?? $data['streetAddress'] ?? ''));
+            if ($street === '') {
+                throw new BadRequestHttpException('La rue est obligatoire et ne peut pas être vide.');
+            }
+            $address->setStreetAddress($street);
         }
         if (array_key_exists('addressComplement', $data)) {
             $address->setAddressComplement($data['addressComplement'] ?: null);
         }
-        if (!empty($data['city'])) {
-            $address->setCity($data['city']);
+        if (array_key_exists('city', $data)) {
+            $city = trim((string) $data['city']);
+            if ($city === '') {
+                throw new BadRequestHttpException('La ville est obligatoire et ne peut pas être vide.');
+            }
+            $address->setCity($city);
         }
-        if (!empty($data['postalCode'])) {
-            $address->setPostalCode($data['postalCode']);
+        if (array_key_exists('postalCode', $data)) {
+            $postalCode = trim((string) $data['postalCode']);
+            if ($postalCode === '') {
+                throw new BadRequestHttpException('Le code postal est obligatoire et ne peut pas être vide.');
+            }
+            $address->setPostalCode($postalCode);
         }
-        if (!empty($data['country'])) {
-            $address->setCountry($data['country']);
+        if (array_key_exists('country', $data)) {
+            $country = trim((string) $data['country']);
+            if ($country === '') {
+                throw new BadRequestHttpException('Le pays est obligatoire et ne peut pas être vide.');
+            }
+            $address->setCountry($country);
         }
 
         if (array_key_exists('state', $data)) {

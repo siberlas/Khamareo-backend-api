@@ -401,6 +401,56 @@ class ParcelController extends AbstractController
         }
     }
 
+    /**
+     * Remettre un colis "labeled" en "confirmed" (débloque la régénération d'étiquette)
+     *
+     * Utile quand une étiquette a été marquée "labeled" par erreur (échec silencieux
+     * de l'API transporteur) sans tracking/PDF exploitable — cas qui, sans cet
+     * endpoint, restait bloqué définitivement (generate-label exige status='confirmed').
+     *
+     * POST /api/admin/parcels/{parcelId}/unlabel
+     */
+    #[Route('/parcels/{parcelId}/unlabel', name: 'unlabel_parcel', methods: ['POST'])]
+    public function unlabelParcel(string $parcelId): JsonResponse
+    {
+        $parcel = $this->getParcel($parcelId);
+        if (!$parcel) {
+            return $this->json(['error' => 'Colis introuvable'], 404);
+        }
+
+        if ($parcel->getStatus() !== 'labeled') {
+            return $this->json([
+                'success' => false,
+                'error' => 'Seul un colis étiqueté (labeled) peut être remis en confirmé'
+            ], 400);
+        }
+
+        try {
+            $parcel->setStatus('confirmed');
+            $parcel->setTrackingNumber(null);
+            $parcel->setLabelPdfPath(null);
+            $parcel->setCn23PdfPath(null);
+            $parcel->setLabelGeneratedAt(null);
+            $this->em->flush();
+
+            $this->logger->info('Parcel unlabeled (labeled -> confirmed)', [
+                'parcel_id' => $parcel->getId()->toRfc4122(),
+                'parcel_number' => $parcel->getParcelNumber(),
+            ]);
+
+            return $this->json([
+                'success' => true,
+                'message' => sprintf('Colis #%d remis en confirmé, étiquette regénérable', $parcel->getParcelNumber()),
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
      /**
      * Produits disponibles pour la répartition manuelle
      * GET /api/admin/orders/{orderId}/parcels/available-products
@@ -500,6 +550,8 @@ class ParcelController extends AbstractController
                     'status' => $parcel->getStatus(),
                     'labelGeneratedAt' => $parcel->getLabelGeneratedAt()?->format(\DateTime::ATOM),
                     'shippedAt' => $parcel->getShippedAt()?->format(\DateTime::ATOM),
+                    'lastLabelError' => $parcel->getLastLabelError(),
+                    'lastLabelErrorAt' => $parcel->getLastLabelErrorAt()?->format(\DateTime::ATOM),
                 ];
             }, $order->getParcels()->toArray()),
         ]);
@@ -831,6 +883,9 @@ class ParcelController extends AbstractController
                     'carrier' => $carrier->getCode(),
                     'error' => $result->error,
                 ]);
+                $parcel->setLastLabelError($result->error);
+                $parcel->setLastLabelErrorAt(new \DateTimeImmutable());
+                $this->em->flush();
                 return $this->json(['error' => $result->error], 500);
             }
 
@@ -839,6 +894,8 @@ class ParcelController extends AbstractController
             $parcel->setCn23PdfPath($result->cn23Url);
             $parcel->setStatus('labeled');
             $parcel->setLabelGeneratedAt(new \DateTimeImmutable());
+            $parcel->setLastLabelError(null);
+            $parcel->setLastLabelErrorAt(null);
 
             $this->em->flush();
 
@@ -886,6 +943,10 @@ class ParcelController extends AbstractController
                 $message .= sprintf(' [relay destination client: %s]', $relayId);
             }
 
+            $parcel->setLastLabelError($message);
+            $parcel->setLastLabelErrorAt(new \DateTimeImmutable());
+            $this->em->flush();
+
             return $this->json([
                 'error'   => true,
                 'message' => $message,
@@ -897,6 +958,10 @@ class ParcelController extends AbstractController
                 'parcel_id' => $parcelId,
                 'error' => $e->getMessage(),
             ]);
+
+            $parcel->setLastLabelError($e->getMessage());
+            $parcel->setLastLabelErrorAt(new \DateTimeImmutable());
+            $this->em->flush();
 
             return $this->json([
                 'error' => true,

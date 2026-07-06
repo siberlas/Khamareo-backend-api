@@ -143,7 +143,28 @@ class OrderDetailsController extends AbstractController
                     'city' => $shippingAddress->getCity(),
                     'postalCode' => $shippingAddress->getPostalCode(),
                     'country' => $shippingAddress->getCountry(),
-                    'phone' => $shippingAddress->getPhone(),
+                    'state' => $shippingAddress->getState(),
+                    // Fallback téléphone réservé aux points relais/locker (l'adresse n'a
+                    // volontairement pas de téléphone propre dans ce cas). Priorité au
+                    // guestPhone : c'est un instantané propre à CETTE commande, stable
+                    // dans le temps. owner.phone n'est utilisé qu'en dernier recours, et
+                    // seulement si ce n'est pas un compte invité partagé/mutable (un
+                    // guest User est réutilisé et écrasé par chaque nouvelle commande
+                    // passée avec le même email — donc pas fiable comme source).
+                    // Pour une livraison à domicile, un téléphone vide reste vide : ça
+                    // signale une vraie donnée manquante plutôt que de la masquer.
+                    'phone' => $shippingAddress->getPhone() ?: (
+                        ($shippingAddress->isRelayPoint() || !empty($order->getRelayPointId()))
+                            ? ($order->getGuestPhone() ?: (
+                                ($order->getOwner() && !$order->getOwner()->isGuest())
+                                    ? $order->getOwner()->getPhone()
+                                    : null
+                              ))
+                            : null
+                    ),
+                    'isRelayPoint' => $shippingAddress->isRelayPoint(),
+                    'relayPointId' => $shippingAddress->getRelayPointId(),
+                    'relayCarrier' => $shippingAddress->getRelayCarrier(),
                     'geocodingVerified' => $shippingAddress->getGeocodingVerified(),
                 ];
             }
@@ -160,7 +181,16 @@ class OrderDetailsController extends AbstractController
                     'city' => $billingAddress->getCity(),
                     'postalCode' => $billingAddress->getPostalCode(),
                     'country' => $billingAddress->getCountry(),
-                    'phone' => $billingAddress->getPhone(),
+                    'state' => $billingAddress->getState(),
+                    'phone' => $billingAddress->getPhone() ?: (
+                        $billingAddress->isRelayPoint()
+                            ? ($order->getGuestPhone() ?: (
+                                ($order->getOwner() && !$order->getOwner()->isGuest())
+                                    ? $order->getOwner()->getPhone()
+                                    : null
+                              ))
+                            : null
+                    ),
                 ];
             }
 

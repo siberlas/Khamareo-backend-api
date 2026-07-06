@@ -129,6 +129,12 @@ final class GuestCartAddressProcessor implements ProcessorInterface
         }
 
         // 4️⃣ Créer l'adresse de livraison
+        $this->logger->info('🔎 [GUEST CART ADDRESS] Données reçues', [
+            'guestToken' => $guestToken,
+            'country' => $data->country,
+            'state' => $data->state,
+            'postalCode' => $data->postalCode,
+        ]);
         $deliveryAddress = new Address();
         $deliveryAddress
             ->setOwner($user)
@@ -141,6 +147,7 @@ final class GuestCartAddressProcessor implements ProcessorInterface
             ->setPostalCode($data->postalCode)
             ->setCity($data->city)
             ->setCountry($data->country)
+            ->setState($data->state)
             ->setIsDefault(true)
             ->setLabel('Adresse de livraison');
 
