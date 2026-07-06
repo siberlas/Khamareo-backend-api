@@ -40,4 +40,5 @@ api_platform:
                 type: header
 
     use_symfony_listeners: true
+    mercure: false
     
