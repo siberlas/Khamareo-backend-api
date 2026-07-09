@@ -160,6 +160,7 @@ class CheckoutPaymentIntentController extends AbstractController
                 'carrier_mode_id'     => (string) $carrierMode->getId(),
                 'shipping_cost'       => (string) $shippingCost,
                 'promo_code'          => $cart->getPromoCode() ?? '',
+                'promo_codes'         => $cart->getPromoCodesData() ? json_encode($cart->getPromoCodesData()) : '',
                 'discount_amount'     => (string) ($cart->getDiscountAmount() ?? '0'),
                 'currency'            => $currencyCode,
             ]

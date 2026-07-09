@@ -153,6 +153,18 @@ class Cart
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $guestReferrer = null;
 
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $lastReminderAt = null;
+
+    #[ORM\Column(options: ['default' => 0])]
+    private int $reminderCount = 0;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $lastGuestReminderAt = null;
+
+    #[ORM\Column(options: ['default' => 0])]
+    private int $guestReminderCount = 0;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -243,6 +255,18 @@ class Cart
 
         return $this;
     }
+
+    public function getLastReminderAt(): ?\DateTimeImmutable { return $this->lastReminderAt; }
+    public function setLastReminderAt(?\DateTimeImmutable $lastReminderAt): static { $this->lastReminderAt = $lastReminderAt; return $this; }
+
+    public function getReminderCount(): int { return $this->reminderCount; }
+    public function setReminderCount(int $reminderCount): static { $this->reminderCount = $reminderCount; return $this; }
+
+    public function getLastGuestReminderAt(): ?\DateTimeImmutable { return $this->lastGuestReminderAt; }
+    public function setLastGuestReminderAt(?\DateTimeImmutable $lastGuestReminderAt): static { $this->lastGuestReminderAt = $lastGuestReminderAt; return $this; }
+
+    public function getGuestReminderCount(): int { return $this->guestReminderCount; }
+    public function setGuestReminderCount(int $guestReminderCount): static { $this->guestReminderCount = $guestReminderCount; return $this; }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void

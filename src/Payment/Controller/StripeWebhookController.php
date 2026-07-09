@@ -3,10 +3,19 @@
 namespace App\Payment\Controller;
 
 use App\Cart\Entity\Cart;
+use App\Order\Entity\Order;
+use App\Order\Entity\OrderItem;
 use App\Payment\Entity\Payment;
+use App\User\Entity\Address;
+use App\User\Entity\User;
+use App\Marketing\Entity\PromoCodeRedemption;
+use App\Marketing\Repository\PromoCodeRepository;
+use App\Marketing\Service\PromoCodeApplicationService;
+use App\Shipping\Repository\CarrierModeRepository;
 use App\Shared\Enum\OrderStatus;
 use App\Shared\Enum\PaymentStatus;
 use App\Shared\Service\MailerService;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Stripe\PaymentIntent;
@@ -24,6 +33,9 @@ class StripeWebhookController extends AbstractController
         private readonly EntityManagerInterface $em,
         private readonly LoggerInterface $logger,
         private readonly MailerService $mailerService,
+        private readonly CarrierModeRepository $carrierModeRepository,
+        private readonly PromoCodeRepository $promoCodeRepository,
+        private readonly PromoCodeApplicationService $promoCodeApplicationService,
         private readonly string $webhookSecret,
     ) {
         $this->logger->debug('🔧 StripeWebhookController initialisé');
@@ -136,11 +148,22 @@ class StripeWebhookController extends AbstractController
         ]);
 
         try {
-            // 1️⃣ Récupérer le Payment
+            // 1️⃣ Récupérer le Payment, ou reconstruire la commande depuis les
+            // metadata du PaymentIntent si /api/cart/checkout n'a jamais été
+            // appelé côté front (onglet fermé, 3DS interrompu, etc.)
             $payment = $this->findPaymentByIntentId($pi->id);
 
             if (!$payment) {
-                $this->logger->error('❌ Payment introuvable pour PaymentIntent', [
+                $this->logger->warning('⚠️ Payment introuvable, tentative de création de la commande depuis les metadata du PaymentIntent', [
+                    'payment_intent_id' => $pi->id,
+                    'metadata' => $pi->metadata->toArray()
+                ]);
+
+                $payment = $this->createOrderFromMetadata($pi);
+            }
+
+            if (!$payment) {
+                $this->logger->error('❌ Impossible de créer/retrouver le Payment pour ce PaymentIntent', [
                     'payment_intent_id' => $pi->id,
                     'metadata' => $pi->metadata->toArray()
                 ]);
@@ -148,7 +171,7 @@ class StripeWebhookController extends AbstractController
                 return new JsonResponse([
                     'success' => false,
                     'error'   => 'payment_not_found',
-                    'message' => 'Payment record not found for this PaymentIntent',
+                    'message' => 'Payment record not found for this PaymentIntent and could not be reconstructed from metadata',
                 ], 400);
             }
 
@@ -589,6 +612,285 @@ class StripeWebhookController extends AbstractController
     }
 
     /**
+     * Reconstruit la commande (Order + Payment PENDING) depuis les metadata du
+     * PaymentIntent, quand /api/cart/checkout n'a jamais été appelé côté front
+     * (onglet fermé pendant le 3DS, page blanche Safari iOS, refresh utilisateur...).
+     *
+     * Miroir volontaire de CheckoutController::__invoke et de
+     * RecoverOrderFromCartCommand (mêmes snapshots d'adresse, mêmes rédemptions
+     * promo), mais piloté par les metadata Stripe au lieu d'un payload front ou
+     * d'arguments CLI, et avec gestion du cas invité (guest_token) qui manquait
+     * dans RecoverOrderFromCartCommand.
+     *
+     * Retourne null si la reconstruction est impossible (cart/adresses/carrier
+     * introuvables, ou aucun email exploitable pour un invité) — dans ce cas
+     * l'appelant renvoie 400 et la récupération manuelle (app:recover-order-from-cart)
+     * reste le filet de sécurité.
+     */
+    private function createOrderFromMetadata(PaymentIntent $pi): ?Payment
+    {
+        $metadata = $pi->metadata->toArray();
+        $cartId   = $metadata['cart_id'] ?? null;
+
+        if (!$cartId) {
+            $this->logger->error('❌ cart_id manquant dans metadata, reconstruction impossible', [
+                'payment_intent_id' => $pi->id,
+            ]);
+            return null;
+        }
+
+        $cart = $this->em->getRepository(Cart::class)->find($cartId);
+        if (!$cart || $cart->getItems()->isEmpty()) {
+            $this->logger->error('❌ Cart introuvable ou vide, reconstruction impossible', [
+                'payment_intent_id' => $pi->id,
+                'cart_id' => $cartId,
+            ]);
+            return null;
+        }
+
+        $billingSource  = isset($metadata['billing_address_id'])
+            ? $this->em->getRepository(Address::class)->find((int) $metadata['billing_address_id'])
+            : null;
+        $deliverySource = isset($metadata['delivery_address_id'])
+            ? $this->em->getRepository(Address::class)->find((int) $metadata['delivery_address_id'])
+            : null;
+
+        if (!$billingSource || !$deliverySource) {
+            $this->logger->error('❌ Adresse(s) introuvable(s), reconstruction impossible', [
+                'payment_intent_id' => $pi->id,
+                'billing_address_id' => $metadata['billing_address_id'] ?? null,
+                'delivery_address_id' => $metadata['delivery_address_id'] ?? null,
+            ]);
+            return null;
+        }
+
+        $carrierMode = isset($metadata['carrier_mode_id'])
+            ? $this->carrierModeRepository->find((int) $metadata['carrier_mode_id'])
+            : null;
+
+        if (!$carrierMode) {
+            $this->logger->error('❌ CarrierMode introuvable, reconstruction impossible', [
+                'payment_intent_id' => $pi->id,
+                'carrier_mode_id' => $metadata['carrier_mode_id'] ?? null,
+            ]);
+            return null;
+        }
+
+        // Owner : user connecté (user_id) ou invité (fallback sur le guest user attaché au cart)
+        $user = null;
+        if (!empty($metadata['user_id'])) {
+            $user = $this->em->getRepository(User::class)->find($metadata['user_id']);
+            if (!$user) {
+                $this->logger->error('❌ User introuvable pour user_id metadata, reconstruction impossible', [
+                    'payment_intent_id' => $pi->id,
+                    'user_id' => $metadata['user_id'],
+                ]);
+                return null;
+            }
+        }
+
+        $guestEmail = null;
+        if (!$user) {
+            $guestUser  = $cart->getOwner();
+            $guestEmail = $guestUser?->getEmail();
+            if (!$guestEmail) {
+                $this->logger->error('❌ Aucun email invité exploitable, reconstruction impossible', [
+                    'payment_intent_id' => $pi->id,
+                    'guest_token' => $metadata['guest_token'] ?? null,
+                ]);
+                return null;
+            }
+        }
+
+        $this->logger->info('🧱 Reconstruction de la commande depuis les metadata PaymentIntent', [
+            'payment_intent_id' => $pi->id,
+            'cart_id' => $cartId,
+            'is_guest' => !$user,
+        ]);
+
+        // --- Snapshots d'adresse (mêmes champs que CheckoutController) ---
+        $billingSnapshot = (new Address())
+            ->setAddressKind($billingSource->getAddressKind())
+            ->setStreetAddress($billingSource->getStreetAddress())
+            ->setAddressComplement($billingSource->getAddressComplement())
+            ->setCity($billingSource->getCity())
+            ->setPostalCode($billingSource->getPostalCode())
+            ->setCountry($billingSource->getCountry())
+            ->setState($billingSource->getState())
+            ->setLabel('Billing snapshot (webhook)')
+            ->setIsDefault(false)->setOwner(null)
+            ->setLatitude($billingSource->getLatitude())
+            ->setLongitude($billingSource->getLongitude())
+            ->setCivility($billingSource->getCivility())
+            ->setFirstName($billingSource->getFirstName())
+            ->setLastName($billingSource->getLastName())
+            ->setPhone($billingSource->getPhone())
+            ->setIsBusiness($billingSource->isBusiness())
+            ->setCompanyName($billingSource->getCompanyName());
+        $this->em->persist($billingSnapshot);
+
+        $shippingSnapshot = (new Address())
+            ->setAddressKind($deliverySource->getAddressKind())
+            ->setStreetAddress($deliverySource->getStreetAddress())
+            ->setAddressComplement($deliverySource->getAddressComplement())
+            ->setCity($deliverySource->getCity())
+            ->setPostalCode($deliverySource->getPostalCode())
+            ->setCountry($deliverySource->getCountry())
+            ->setState($deliverySource->getState())
+            ->setLabel('Shipping snapshot (webhook)')
+            ->setIsDefault(false)->setOwner(null)
+            ->setLatitude($deliverySource->getLatitude())
+            ->setLongitude($deliverySource->getLongitude())
+            ->setCivility($deliverySource->getCivility())
+            ->setFirstName($deliverySource->getFirstName())
+            ->setLastName($deliverySource->getLastName())
+            ->setPhone($deliverySource->getPhone())
+            ->setIsBusiness($deliverySource->isBusiness())
+            ->setCompanyName($deliverySource->getCompanyName());
+
+        if ($deliverySource->isRelayPoint()) {
+            $shippingSnapshot
+                ->setAddressKind('relay')
+                ->setIsRelayPoint(true)
+                ->setRelayPointId($deliverySource->getRelayPointId())
+                ->setRelayCarrier($deliverySource->getRelayCarrier());
+        }
+        $this->em->persist($shippingSnapshot);
+
+        // --- Order ---
+        $piAmount     = ($pi->amount_received ?: $pi->amount) / 100;
+        $shippingCost = $cart->getShippingCost() ?? (float) ($metadata['shipping_cost'] ?? 0);
+
+        $order = new Order();
+        $order
+            ->setStatus(OrderStatus::PENDING)
+            ->setCarrier($carrierMode->getCarrier())
+            ->setShippingMode($carrierMode->getShippingMode())
+            ->setCarrierMode($carrierMode)
+            ->setBillingAddress($billingSnapshot)
+            ->setShippingAddress($shippingSnapshot)
+            ->setShippingCost($shippingCost)
+            ->setCarrierShippingCost($cart->getCarrierShippingCost() ?? $shippingCost)
+            ->setTotalAmount($piAmount)
+            ->setCurrency('EUR')
+            ->setLocale('fr');
+
+        // Codes promo : priorité aux metadata (source authoritative indépendante
+        // du cart, qui a pu changer depuis la création du PaymentIntent), sinon
+        // fallback sur l'état actuel du cart pour compatibilité ascendante.
+        $codesData = [];
+        if (!empty($metadata['promo_codes'])) {
+            $decoded = json_decode($metadata['promo_codes'], true);
+            if (is_array($decoded)) {
+                $codesData = $decoded;
+            }
+        }
+        if (empty($codesData)) {
+            $codesData = $cart->getPromoCodesData() ?? [];
+        }
+        if (empty($codesData) && !empty($metadata['promo_code'])) {
+            $codesData = [['code' => $metadata['promo_code'], 'discount' => (float) ($metadata['discount_amount'] ?? 0), 'stackable' => false]];
+        }
+
+        if (!empty($codesData)) {
+            $order->setPromoCode($codesData[0]['code'] ?? null)
+                ->setDiscountAmount((float) ($metadata['discount_amount'] ?? $cart->getDiscountAmount() ?? 0))
+                ->setPromoCodesData($codesData);
+        }
+
+        if ($user) {
+            $order->setOwner($user);
+        } else {
+            $order
+                ->setGuestEmail($guestEmail)
+                ->setGuestFirstName($billingSource->getFirstName())
+                ->setGuestLastName($billingSource->getLastName())
+                ->setGuestPhone($billingSource->getPhone());
+        }
+
+        if ($deliverySource->isRelayPoint()) {
+            $order
+                ->setIsRelayPoint(true)
+                ->setRelayPointId($deliverySource->getRelayPointId())
+                ->setRelayCarrier($deliverySource->getRelayCarrier());
+        }
+
+        foreach ($cart->getItems() as $cartItem) {
+            $item = (new OrderItem())
+                ->setCustomerOrder($order)
+                ->setProduct($cartItem->getProduct())
+                ->setQuantity($cartItem->getQuantity())
+                ->setUnitPrice($cartItem->getUnitPrice());
+            $this->em->persist($item);
+        }
+
+        $payment = (new Payment())
+            ->setOrder($order)
+            ->setProvider('stripe')
+            ->setStatus(PaymentStatus::PENDING)
+            ->setProviderPaymentId($pi->id)
+            ->setClientSecret($cart->getPaymentClientSecret())
+            ->setAmount($piAmount);
+        $this->em->persist($payment);
+
+        // --- Rédemptions promo (mêmes règles que CheckoutController) ---
+        $customerEmail = $user ? $user->getEmail() : $guestEmail;
+        $customerType  = $user ? 'registered' : 'guest';
+
+        foreach ($codesData as $codeData) {
+            try {
+                $promoCode = $this->promoCodeRepository->findOneBy(['code' => $codeData['code'] ?? '']);
+                if (!$promoCode) {
+                    continue;
+                }
+
+                $redemption = (new PromoCodeRedemption())
+                    ->setPromoCode($promoCode)
+                    ->setEmail($customerEmail)
+                    ->setCustomerType($customerType)
+                    ->setOrder($order)
+                    ->setDiscountAmount((string) ($codeData['discount'] ?? 0));
+                $this->em->persist($redemption);
+
+                if ($promoCode->isSingleInstance()) {
+                    $this->promoCodeApplicationService->markAsUsed($promoCode);
+                }
+            } catch (\Exception $e) {
+                $this->logger->error('❌ Échec traitement rédemption promo (reconstruction webhook)', [
+                    'code'  => $codeData['code'] ?? '?',
+                    'error' => $e->getMessage(),
+                ]);
+                // Ne pas bloquer la création de la commande si le promo échoue
+            }
+        }
+
+        $this->em->persist($order);
+
+        try {
+            $this->em->flush();
+        } catch (UniqueConstraintViolationException $e) {
+            // Course avec /api/cart/checkout ou une autre livraison webhook
+            // concurrente : un Payment existe déjà pour ce PaymentIntent.
+            // On ne tente pas de récupérer dans la même requête (l'EntityManager
+            // n'est plus fiable après un flush en échec) — Stripe retentera ce
+            // webhook automatiquement, et findPaymentByIntentId le trouvera alors.
+            $this->logger->warning('⚠️ Course détectée sur provider_payment_id, un Payment existe déjà (contrainte unique) — laisser Stripe retenter', [
+                'payment_intent_id' => $pi->id,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+
+        $this->logger->info('✅ Commande créée depuis le webhook', [
+            'payment_intent_id' => $pi->id,
+            'order_id' => $order->getId(),
+            'order_number' => $order->getOrderNumber(),
+        ]);
+
+        return $payment;
+    }
+
+    /**
      * Nettoie le panier après paiement réussi
      */
     private function handleCartCleanup(PaymentIntent $pi): void
@@ -648,8 +950,16 @@ class StripeWebhookController extends AbstractController
     /**
      * Envoie l'email de confirmation de commande
      */
-    private function sendOrderConfirmationEmail($order): void
+    private function sendOrderConfirmationEmail(Order $order): void
     {
+        if ($order->isConfirmationEmailSent()) {
+            $this->logger->info('ℹ️ Email confirmation déjà envoyé, on ignore (idempotence)', [
+                'order_id' => $order->getId(),
+                'order_number' => $order->getOrderNumber()
+            ]);
+            return;
+        }
+
         $this->logger->info('📧 Envoi email confirmation commande', [
             'order_id' => $order->getId(),
             'order_number' => $order->getOrderNumber(),
@@ -658,6 +968,9 @@ class StripeWebhookController extends AbstractController
 
         try {
             $this->mailerService->sendOrderConfirmation($order);
+
+            $order->setConfirmationEmailSent(true);
+            $this->em->flush();
 
             $this->logger->info('✅ Email confirmation envoyé avec succès', [
                 'order_id' => $order->getId(),
