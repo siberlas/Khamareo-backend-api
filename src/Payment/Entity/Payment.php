@@ -58,7 +58,7 @@ class Payment
     #[Groups(['payment:read', 'order:read'])]
     private ?string $transactionId = null;
 
-     #[ORM\Column(length: 255, nullable: true)]
+     #[ORM\Column(length: 255, nullable: true, unique: true)]
     #[Groups(['payment:read', 'order:read'])]
     private ?string $providerPaymentId = null; // ex: Stripe PaymentIntent ID
 

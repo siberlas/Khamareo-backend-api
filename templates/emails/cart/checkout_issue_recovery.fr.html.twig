@@ -1,0 +1,25 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Un souci technique empêchait votre commande — c'est résolu !{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Nous avons constaté que vous avez récemment essayé de passer commande sur Khamareo, sans que celle-ci n'ait pu aboutir.</p>
+
+    <p>Il est possible que vous ayez rencontré une difficulté au moment du paiement, ou que notre site ait connu un problème technique passager de notre côté.</p>
+
+    <div class="highlight">
+        <p style="margin: 0;"><strong>Bonne nouvelle : tous les problèmes connus ont été résolus.</strong></p>
+    </div>
+
+    <p>N'hésitez pas à retourner sur la boutique pour finaliser votre commande, tout devrait maintenant se passer normalement.</p>
+
+    <div class="btn-wrapper">
+        <a href="{{ shopUrl }}" class="btn-primary">Retourner à la boutique</a>
+    </div>
+
+    <p class="muted">Si vous rencontrez à nouveau une difficulté, notre équipe reste à votre disposition à <a href="mailto:akwaaba@khamareo.com">akwaaba@khamareo.com</a>.</p>
+
+    <p>À très bientôt,<br>L'équipe Khamareo</p>
+{% endblock %}

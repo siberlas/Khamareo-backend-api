@@ -2,6 +2,7 @@
 
 namespace App\Shared\Service;
 
+use App\Cart\Entity\Cart;
 use App\Order\Entity\Order;
 use App\Marketing\Entity\NewsletterSubscriber;
 use App\Marketing\Entity\PromoCode;
@@ -75,6 +76,10 @@ class MailerService
         'order_cancellation' => [
             'fr' => 'Annulation de votre commande #{orderNumber} - Khamareo',
             'en' => 'Your Order #{orderNumber} Has Been Cancelled - Khamareo'
+        ],
+        'cart_checkout_issue_recovery' => [
+            'fr' => "Un souci technique empêchait votre commande — c'est résolu !",
+            'en' => 'A technical issue was blocking your order — it\'s fixed now!'
         ],
     ];
 
@@ -977,6 +982,76 @@ class MailerService
                 'error' => $e->getMessage(),
             ]);
             return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Envoie l'email de relance panier abandonné (page admin "Paniers abandonnés").
+     * Déclenchement manuel uniquement — pas de cadence automatique.
+     * Met à jour les compteurs de rappel séparément pour user connecté / invité.
+     */
+    public function sendAbandonedCartCheckoutRecovery(Cart $cart): bool
+    {
+        $owner = $cart->getOwner();
+        $recipientEmail = $owner?->getEmail();
+
+        if (!$recipientEmail) {
+            $this->logger->warning('⚠️ Relance panier impossible : aucun email disponible', [
+                'cart_id' => $cart->getId(),
+            ]);
+            return false;
+        }
+
+        try {
+            $locale = $this->getEmailLocale($owner);
+            $firstName = $owner->getFirstName();
+
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : 'Bonjour',
+                'en' => $firstName ? "Hello {$firstName}" : 'Hello',
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/cart/checkout_issue_recovery', $locale),
+                [
+                    'cart' => $cart,
+                    'greeting' => $greetings[$locale] ?? $greetings['fr'],
+                    'shopUrl' => $this->frontBaseUrl . '/boutique',
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('cart_checkout_issue_recovery', $locale))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $now = new \DateTimeImmutable();
+            if ($owner->isGuest()) {
+                $cart->setLastGuestReminderAt($now)
+                    ->setGuestReminderCount($cart->getGuestReminderCount() + 1);
+            } else {
+                $cart->setLastReminderAt($now)
+                    ->setReminderCount($cart->getReminderCount() + 1);
+            }
+            $this->em->flush();
+
+            $this->logger->info('✅ Email relance panier envoyé', [
+                'cart_id' => $cart->getId(),
+                'email' => $recipientEmail,
+                'is_guest' => $owner->isGuest(),
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('❌ Échec envoi relance panier', [
+                'cart_id' => $cart->getId(),
+                'error' => $e->getMessage(),
+            ]);
+            return false;
         }
     }
 }
