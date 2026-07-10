@@ -22,6 +22,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\HttpFoundation\Exception\BadRequestException;
 use App\Payment\Provider\StripePaymentProvider;
+use App\Shared\Service\ClientContextResolver;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\HttpFoundation\RequestStack;
 
@@ -38,6 +39,7 @@ class CheckoutController extends AbstractController
         private RequestStack $requestStack,
         private readonly CurrencyRepository $currencyRepository,
         private readonly CarrierModeRepository $carrierModeRepository,
+        private readonly ClientContextResolver $clientContext,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
@@ -296,6 +298,13 @@ class CheckoutController extends AbstractController
             ->setTotalAmount($piAmount)
             ->setCurrency('EUR')
             ->setLocale($locale);
+
+        // Provenance visiteur : copiée depuis le Cart (capturée à l'ouverture du panier)
+        $order
+            ->setSource($this->clientContext->resolveSource($cart->getGuestReferrer()))
+            ->setCountry($cart->getGuestCountry())
+            ->setOsName($cart->getOsName())
+            ->setDeviceType($cart->getDeviceType());
 
         if ($cgvVersion) {
             $order->setCgvVersion($cgvVersion)->setCgvAcceptedAt($cgvAcceptedAt);

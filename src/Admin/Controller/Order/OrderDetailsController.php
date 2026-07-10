@@ -318,6 +318,13 @@ class OrderDetailsController extends AbstractController
                     'itemsCount' => count($itemsData),
                     'shippingAddress' => $shippingAddressData,
                     'billingAddress' => $billingAddressData,
+                    // Provenance visiteur (différent de shippingAddress.country = pays de LIVRAISON)
+                    'origin' => [
+                        'source' => $order->getSource(),
+                        'country' => $order->getCountry(),
+                        'osName' => $order->getOsName(),
+                        'deviceType' => $order->getDeviceType(),
+                    ],
                     'payment' => $paymentData,
                     'carrier' => $carrierData,
                     'shippingMode' => $shippingModeData,

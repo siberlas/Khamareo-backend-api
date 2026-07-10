@@ -3,6 +3,7 @@
 namespace App\Admin\Controller\Cart;
 
 use App\Cart\Entity\Cart;
+use App\Shared\Service\ClientContextResolver;
 use App\Shared\Service\MailerService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -20,6 +21,7 @@ class AbandonedCartController extends AbstractController
         private EntityManagerInterface $em,
         private LoggerInterface $logger,
         private MailerService $mailerService,
+        private ClientContextResolver $clientContext,
     ) {}
 
     /**
@@ -138,6 +140,9 @@ class AbandonedCartController extends AbstractController
                     ] : null,
                     'guestCountry' => $country ?? $cart->getGuestCountry(),
                     'guestReferrer' => $cart->getGuestReferrer(),
+                    'source' => $this->clientContext->resolveSource($cart->getGuestReferrer()),
+                    'osName' => $cart->getOsName(),
+                    'deviceType' => $cart->getDeviceType(),
                     'paymentIntentStarted' => $cart->getPaymentIntentId() !== null,
                     'paymentLastError'     => $cart->getPaymentLastError(),
                     // Une relance ne peut être envoyée que si un email est disponible

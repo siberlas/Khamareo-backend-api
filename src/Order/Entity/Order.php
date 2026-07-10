@@ -297,6 +297,25 @@ class Order
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private bool $confirmationEmailSent = false;
 
+    // Provenance visiteur (copiée depuis le Cart au checkout) : source de trafic,
+    // pays de connexion (CF-IPCountry), OS et type d'appareil — à ne pas confondre
+    // avec shippingAddress.country (le pays de LIVRAISON, potentiellement différent).
+    #[ORM\Column(length: 50, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $source = null;
+
+    #[ORM\Column(length: 2, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $country = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $osName = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['order:read'])]
+    private ?string $deviceType = null;
+
     // Règle : soit owner, soit guestEmail doit être présent
     #[Assert\Expression(
         "this.getOwner() !== null || (this.getGuestEmail() !== null && this.getGuestEmail() !== '')",
@@ -534,6 +553,18 @@ class Order
 
     public function isConfirmationEmailSent(): bool { return $this->confirmationEmailSent; }
     public function setConfirmationEmailSent(bool $confirmationEmailSent): self { $this->confirmationEmailSent = $confirmationEmailSent; return $this; }
+
+    public function getSource(): ?string { return $this->source; }
+    public function setSource(?string $source): self { $this->source = $source; return $this; }
+
+    public function getCountry(): ?string { return $this->country; }
+    public function setCountry(?string $country): self { $this->country = $country; return $this; }
+
+    public function getOsName(): ?string { return $this->osName; }
+    public function setOsName(?string $osName): self { $this->osName = $osName; return $this; }
+
+    public function getDeviceType(): ?string { return $this->deviceType; }
+    public function setDeviceType(?string $deviceType): self { $this->deviceType = $deviceType; return $this; }
 
     public function canEditParcels(): bool
     {

@@ -319,6 +319,13 @@ class OrderListController extends AbstractController
                         'postalCode' => $order->getShippingAddress()?->getPostalCode(),
                         'country' => $order->getShippingAddress()?->getCountry(),
                     ],
+                    // Provenance visiteur (différent de shipping.country = pays de LIVRAISON)
+                    'origin' => [
+                        'source' => $order->getSource(),
+                        'country' => $order->getCountry(),
+                        'osName' => $order->getOsName(),
+                        'deviceType' => $order->getDeviceType(),
+                    ],
                     'createdAt' => $order->getCreatedAt()?->format(\DateTime::ATOM),
                     'updatedAt' => $order->getUpdatedAt()?->format(\DateTime::ATOM),
                     'isTest' => $order->isTest(),
