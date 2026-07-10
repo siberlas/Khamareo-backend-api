@@ -153,6 +153,12 @@ class Cart
     #[ORM\Column(length: 500, nullable: true)]
     private ?string $guestReferrer = null;
 
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $osName = null;
+
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $deviceType = null;
+
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastReminderAt = null;
 
@@ -416,5 +422,11 @@ class Cart
 
     public function getGuestReferrer(): ?string { return $this->guestReferrer; }
     public function setGuestReferrer(?string $guestReferrer): static { $this->guestReferrer = $guestReferrer; return $this; }
+
+    public function getOsName(): ?string { return $this->osName; }
+    public function setOsName(?string $osName): static { $this->osName = $osName; return $this; }
+
+    public function getDeviceType(): ?string { return $this->deviceType; }
+    public function setDeviceType(?string $deviceType): static { $this->deviceType = $deviceType; return $this; }
 
 }

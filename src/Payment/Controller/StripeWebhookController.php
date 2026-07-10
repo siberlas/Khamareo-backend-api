@@ -14,6 +14,7 @@ use App\Marketing\Service\PromoCodeApplicationService;
 use App\Shipping\Repository\CarrierModeRepository;
 use App\Shared\Enum\OrderStatus;
 use App\Shared\Enum\PaymentStatus;
+use App\Shared\Service\ClientContextResolver;
 use App\Shared\Service\MailerService;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
@@ -36,6 +37,7 @@ class StripeWebhookController extends AbstractController
         private readonly CarrierModeRepository $carrierModeRepository,
         private readonly PromoCodeRepository $promoCodeRepository,
         private readonly PromoCodeApplicationService $promoCodeApplicationService,
+        private readonly ClientContextResolver $clientContext,
         private readonly string $webhookSecret,
     ) {
         $this->logger->debug('🔧 StripeWebhookController initialisé');
@@ -774,6 +776,13 @@ class StripeWebhookController extends AbstractController
             ->setTotalAmount($piAmount)
             ->setCurrency('EUR')
             ->setLocale('fr');
+
+        // Provenance visiteur : copiée depuis le Cart (capturée à l'ouverture du panier)
+        $order
+            ->setSource($this->clientContext->resolveSource($cart->getGuestReferrer()))
+            ->setCountry($cart->getGuestCountry())
+            ->setOsName($cart->getOsName())
+            ->setDeviceType($cart->getDeviceType());
 
         // Codes promo : priorité aux metadata (source authoritative indépendante
         // du cart, qui a pu changer depuis la création du PaymentIntent), sinon
