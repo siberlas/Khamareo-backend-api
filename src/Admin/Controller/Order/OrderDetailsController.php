@@ -88,7 +88,7 @@ class OrderDetailsController extends AbstractController
 
             // Construire les données client
             $customerData = null;
-            if ($order->getOwner()) {
+            if ($order->getOwner() && !$order->getOwner()->isGuest()) {
                 // Client enregistré
                 $user = $order->getOwner();
                 $customerData = [
