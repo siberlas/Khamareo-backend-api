@@ -90,6 +90,34 @@ class CheckoutController extends AbstractController
         }
 
         // ============================================================
+        // 1b) Idempotence : si un Payment existe déjà pour ce
+        //     PaymentIntent (typiquement créé par le webhook Stripe,
+        //     plus rapide que cet appel front), renvoyer directement
+        //     la commande existante au lieu de tenter d'en créer une
+        //     seconde — ce qui percuterait l'index unique sur
+        //     provider_payment_id et produirait une erreur 500.
+        // ============================================================
+        $existingPayment = $this->em->getRepository(Payment::class)
+            ->findOneBy(['providerPaymentId' => $cart->getPaymentIntentId()]);
+
+        if ($existingPayment && $existingPayment->getOrder()) {
+            $existingOrder = $existingPayment->getOrder();
+
+            $this->logger->info('ℹ️ [CHECKOUT] Commande déjà créée (webhook plus rapide) — réponse idempotente', [
+                'payment_intent_id' => $cart->getPaymentIntentId(),
+                'order_id'          => $existingOrder->getId(),
+                'order_number'      => $existingOrder->getOrderNumber(),
+            ]);
+
+            return $this->json([
+                'success'     => true,
+                'orderId'     => $existingOrder->getId(),
+                'orderNumber' => $existingOrder->getOrderNumber(),
+                'currency'    => 'EUR',
+            ]);
+        }
+
+        // ============================================================
         // 2) Vérification des adresses
         // ============================================================
         if (!$billingAddressIri || !$deliveryAddressIri) {
@@ -283,6 +311,12 @@ class CheckoutController extends AbstractController
         // ============================================================
         // 6) Création Order
         // ============================================================
+        // À partir d'ici, toute erreur inattendue (ex: contrainte DB,
+        // course avec le webhook malgré le garde-fou 1b) est capturée
+        // explicitement : API Platform ne journalise pas ces erreurs en
+        // prod (debug=false), donc on ne peut pas compter sur la
+        // capture automatique de Sentry/Monolog pour ce bloc.
+        try {
         $currentRequest = $this->requestStack->getCurrentRequest();
         $locale = $currentRequest?->getLocale() ?? 'fr';
         $order = new Order();
@@ -456,6 +490,25 @@ class CheckoutController extends AbstractController
             'orderNumber' => $order->getOrderNumber(),
             'currency'    => 'EUR',
         ]);
+        } catch (BadRequestException $e) {
+            // Validation métier normale (ex: email invité manquant) : laisser
+            // Symfony la convertir en 400 comme d'habitude.
+            throw $e;
+        } catch (\Throwable $e) {
+            $this->logger->critical('🔥 [CHECKOUT] Échec inattendu lors de la création de la commande', [
+                'payment_intent_id' => $cart->getPaymentIntentId() ?? $pi->id ?? null,
+                'cart_id'           => $cart->getId(),
+                'error'             => $e->getMessage(),
+                'trace'             => $e->getTraceAsString(),
+            ]);
+
+            \Sentry\captureException($e);
+
+            return $this->json([
+                'success' => false,
+                'error'   => "Une erreur est survenue lors de la finalisation de votre commande. Si votre paiement a été débité, contactez le support avec le numéro de transaction.",
+            ], 500);
+        }
     }
 
     private function resolveAddressInput(array|string $input): Address
