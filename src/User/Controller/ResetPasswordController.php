@@ -47,6 +47,17 @@ class ResetPasswordController
         $hashedPassword = $passwordHasher->hashPassword($user, $newPassword);
         $user->setPassword($hashedPassword);
 
+        // Un invité qui réinitialise son mot de passe prouve la propriété de son
+        // email (lien reçu par mail) : on le promeut en compte réel, sinon il reste
+        // marqué isGuest=true pour toujours et échappe au check anti-doublon du
+        // checkout invité (GuestCartAddressProcessor::isGuest()).
+        if ($user->isGuest()) {
+            $user
+                ->setIsGuest(false)
+                ->setIsVerified(true)
+                ->setGuestExpiresAt(null);
+        }
+
         // On supprime le token
         $user->setResetPasswordToken(null);
 

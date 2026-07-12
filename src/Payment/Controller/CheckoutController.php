@@ -14,6 +14,7 @@ use App\Marketing\Entity\PromoCodeRedemption;
 use App\Marketing\Repository\PromoCodeRepository;
 use App\Shared\Repository\CurrencyRepository;
 use App\Marketing\Service\PromoCodeApplicationService;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -87,6 +88,34 @@ class CheckoutController extends AbstractController
 
         if (!$cart->getPaymentIntentId()) {
             throw new BadRequestException("PaymentIntent introuvable. Le paiement n’a pas été initialisé.");
+        }
+
+        // ============================================================
+        // 1b) Idempotence : si un Payment existe déjà pour ce
+        //     PaymentIntent (typiquement créé par le webhook Stripe,
+        //     plus rapide que cet appel front), renvoyer directement
+        //     la commande existante au lieu de tenter d'en créer une
+        //     seconde — ce qui percuterait l'index unique sur
+        //     provider_payment_id et produirait une erreur 500.
+        // ============================================================
+        $existingPayment = $this->em->getRepository(Payment::class)
+            ->findOneBy(['providerPaymentId' => $cart->getPaymentIntentId()]);
+
+        if ($existingPayment && $existingPayment->getOrder()) {
+            $existingOrder = $existingPayment->getOrder();
+
+            $this->logger->info('ℹ️ [CHECKOUT] Commande déjà créée (webhook plus rapide) — réponse idempotente', [
+                'payment_intent_id' => $cart->getPaymentIntentId(),
+                'order_id'          => $existingOrder->getId(),
+                'order_number'      => $existingOrder->getOrderNumber(),
+            ]);
+
+            return $this->json([
+                'success'     => true,
+                'orderId'     => $existingOrder->getId(),
+                'orderNumber' => $existingOrder->getOrderNumber(),
+                'currency'    => 'EUR',
+            ]);
         }
 
         // ============================================================
@@ -283,6 +312,12 @@ class CheckoutController extends AbstractController
         // ============================================================
         // 6) Création Order
         // ============================================================
+        // À partir d'ici, toute erreur inattendue (ex: contrainte DB,
+        // course avec le webhook malgré le garde-fou 1b) est capturée
+        // explicitement : API Platform ne journalise pas ces erreurs en
+        // prod (debug=false), donc on ne peut pas compter sur la
+        // capture automatique de Sentry/Monolog pour ce bloc.
+        try {
         $currentRequest = $this->requestStack->getCurrentRequest();
         $locale = $currentRequest?->getLocale() ?? 'fr';
         $order = new Order();
@@ -456,6 +491,69 @@ class CheckoutController extends AbstractController
             'orderNumber' => $order->getOrderNumber(),
             'currency'    => 'EUR',
         ]);
+        } catch (BadRequestException $e) {
+            // Validation métier normale (ex: email invité manquant) : laisser
+            // Symfony la convertir en 400 comme d'habitude.
+            throw $e;
+        } catch (UniqueConstraintViolationException $e) {
+            // Le webhook a gagné la course PENDANT ce traitement (entre la
+            // vérification d'idempotence en 1b et ce flush() bien plus tardif —
+            // résolution d'adresses, appel Stripe, etc. laissent largement le
+            // temps au webhook de s'exécuter en parallèle). La commande existe
+            // donc déjà : on la retrouve via une requête SQL brute, sans passer
+            // par l'EntityManager (potentiellement fermé après un flush en échec).
+            // ⚠️ Utiliser $pi->id (valeur Stripe immuable), PAS
+            // $cart->getPaymentIntentId() : le nettoyage du panier plus haut
+            // dans ce même flux met déjà ce champ à null en mémoire avant
+            // que ce flush() échoue — la valeur DB ne suit jamais puisque le
+            // flush a échoué, mais l'objet PHP, lui, reste modifié.
+            $row = $this->em->getConnection()->fetchAssociative(
+                'SELECT o.id, o.order_number FROM payment p JOIN "order" o ON o.id = p.order_id WHERE p.provider_payment_id = :pi',
+                ['pi' => $pi->id]
+            );
+
+            if ($row) {
+                $this->logger->info('ℹ️ [CHECKOUT] Course avec le webhook détectée pendant le traitement — réponse idempotente', [
+                    'payment_intent_id' => $pi->id,
+                    'order_id'          => $row['id'],
+                    'order_number'      => $row['order_number'],
+                ]);
+
+                return $this->json([
+                    'success'     => true,
+                    'orderId'     => $row['id'],
+                    'orderNumber' => $row['order_number'],
+                    'currency'    => 'EUR',
+                ]);
+            }
+
+            // Cas très improbable : contrainte violée mais commande introuvable.
+            // Retombe sur le traitement générique ci-dessous.
+            $this->logger->critical('🔥 [CHECKOUT] Violation de contrainte unique mais commande introuvable', [
+                'payment_intent_id' => $pi->id,
+                'error'             => $e->getMessage(),
+            ]);
+            \Sentry\captureException($e);
+
+            return $this->json([
+                'success' => false,
+                'error'   => "Une erreur est survenue lors de la finalisation de votre commande. Si votre paiement a été débité, contactez le support avec le numéro de transaction.",
+            ], 500);
+        } catch (\Throwable $e) {
+            $this->logger->critical('🔥 [CHECKOUT] Échec inattendu lors de la création de la commande', [
+                'payment_intent_id' => $cart->getPaymentIntentId() ?? $pi->id ?? null,
+                'cart_id'           => $cart->getId(),
+                'error'             => $e->getMessage(),
+                'trace'             => $e->getTraceAsString(),
+            ]);
+
+            \Sentry\captureException($e);
+
+            return $this->json([
+                'success' => false,
+                'error'   => "Une erreur est survenue lors de la finalisation de votre commande. Si votre paiement a été débité, contactez le support avec le numéro de transaction.",
+            ], 500);
+        }
     }
 
     private function resolveAddressInput(array|string $input): Address

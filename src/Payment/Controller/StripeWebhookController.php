@@ -679,10 +679,14 @@ class StripeWebhookController extends AbstractController
         }
 
         // Owner : user connecté (user_id) ou invité (fallback sur le guest user attaché au cart)
-        $user = null;
+        // ⚠️ cart->getOwner() n'est JAMAIS null pour un panier invité une fois passé par
+        // GuestCartAddressProcessor (il pointe vers le User "guest" créé à cette étape) :
+        // le seul critère fiable pour distinguer un vrai compte d'un invité est isGuest(),
+        // pas la simple présence d'un user_id en metadata.
+        $resolvedUser = null;
         if (!empty($metadata['user_id'])) {
-            $user = $this->em->getRepository(User::class)->find($metadata['user_id']);
-            if (!$user) {
+            $resolvedUser = $this->em->getRepository(User::class)->find($metadata['user_id']);
+            if (!$resolvedUser) {
                 $this->logger->error('❌ User introuvable pour user_id metadata, reconstruction impossible', [
                     'payment_intent_id' => $pi->id,
                     'user_id' => $metadata['user_id'],
@@ -691,9 +695,11 @@ class StripeWebhookController extends AbstractController
             }
         }
 
+        $user = ($resolvedUser && !$resolvedUser->isGuest()) ? $resolvedUser : null;
+
         $guestEmail = null;
         if (!$user) {
-            $guestUser  = $cart->getOwner();
+            $guestUser  = $resolvedUser ?? $cart->getOwner();
             $guestEmail = $guestUser?->getEmail();
             if (!$guestEmail) {
                 $this->logger->error('❌ Aucun email invité exploitable, reconstruction impossible', [
@@ -826,10 +832,14 @@ class StripeWebhookController extends AbstractController
 
         foreach ($cart->getItems() as $cartItem) {
             $item = (new OrderItem())
-                ->setCustomerOrder($order)
                 ->setProduct($cartItem->getProduct())
                 ->setQuantity($cartItem->getQuantity())
                 ->setUnitPrice($cartItem->getUnitPrice());
+            // addItem() (et non setCustomerOrder() seul) : alimente aussi la collection
+            // $order->items en mémoire, sinon l'email de confirmation envoyé plus bas dans
+            // la même requête (sendOrderConfirmationEmail → $order->getItems()) la trouve
+            // vide (0 ligne produit, sous-total à 0€) alors que les lignes sont bien en base.
+            $order->addItem($item);
             $this->em->persist($item);
         }
 
