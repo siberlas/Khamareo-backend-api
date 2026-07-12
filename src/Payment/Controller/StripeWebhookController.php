@@ -832,10 +832,14 @@ class StripeWebhookController extends AbstractController
 
         foreach ($cart->getItems() as $cartItem) {
             $item = (new OrderItem())
-                ->setCustomerOrder($order)
                 ->setProduct($cartItem->getProduct())
                 ->setQuantity($cartItem->getQuantity())
                 ->setUnitPrice($cartItem->getUnitPrice());
+            // addItem() (et non setCustomerOrder() seul) : alimente aussi la collection
+            // $order->items en mémoire, sinon l'email de confirmation envoyé plus bas dans
+            // la même requête (sendOrderConfirmationEmail → $order->getItems()) la trouve
+            // vide (0 ligne produit, sous-total à 0€) alors que les lignes sont bien en base.
+            $order->addItem($item);
             $this->em->persist($item);
         }
 
