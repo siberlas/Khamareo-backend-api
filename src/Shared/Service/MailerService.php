@@ -608,8 +608,11 @@ class MailerService
                 'en' => $firstName ? "Hello {$firstName}" : "Hello",
             ];
 
-            $trackingNumber = $order->getTrackingNumber()
-                ?? $order->getShippingLabel()?->getTrackingNumber();
+            // Pas de fallback sur getShippingLabel() : les commandes payées avant la
+            // suppression du stub PaymentStatusSubscriber/ShippingLabelService ont encore
+            // un faux numéro "TEST-..." non exploitable sur ce champ. Order::trackingNumber
+            // est la seule source fiable (saisie/génération admin réelle).
+            $trackingNumber = $order->getTrackingNumber();
 
             $html = $this->twig->render(
                 $this->getTemplate('emails/order/shipped', $locale),
@@ -701,7 +704,10 @@ class MailerService
                     'order'              => $order,
                     'parcel'             => $parcel,
                     'greeting'           => $greetings[$locale],
-                    'trackingNumber'     => $parcel->getTrackingNumber(),
+                    // Pas de numéro de suivi brut affiché : sans lien vers le site du
+                    // transporteur, ce n'est pas exploitable par le client (cf. fix
+                    // équivalent sur sendShippingNotification).
+                    'trackingNumber'     => null,
                     'parcelNumber'       => $parcel->getParcelNumber(),
                     'totalParcels'       => $totalParcels,
                     'remainingItems'     => $remainingItems,
