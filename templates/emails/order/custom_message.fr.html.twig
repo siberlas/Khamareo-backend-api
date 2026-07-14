@@ -1,0 +1,19 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Message de Khamareo{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <div class="card">
+        <p style="margin: 0; color: #4A2E20; white-space: pre-wrap;">{{ message }}</p>
+    </div>
+
+    <p class="muted" style="text-align: center;">
+        Ce message concerne votre commande <strong>#{{ order.orderNumber }}</strong>.
+    </p>
+
+    <p class="muted" style="text-align: center;">
+        Des questions ? Contactez-nous à <a href="mailto:akwaaba@khamareo.com" style="color: #D8A35D;">akwaaba@khamareo.com</a>
+    </p>
+{% endblock %}

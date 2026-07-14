@@ -27,6 +27,7 @@ use App\User\Entity\User;
 use App\Payment\Entity\Payment;
 use App\Shipping\Entity\Parcel;
 use App\Shipping\Entity\ShippingLabel;
+use App\Order\Entity\OrderMessage;
 
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: OrderRepository::class)]
@@ -231,6 +232,14 @@ class Order
     #[Groups(['order:read'])]
     private ?ShippingLabel $shippingLabel = null;
 
+    // Pas de #[Groups] : comme customerNote, ce champ ne doit pas remonter dans les
+    // réponses API génériques (order:read) — notamment PublicOrderByNumberController,
+    // consultée directement par le client sur sa page de confirmation. L'admin y accède
+    // exclusivement via OrderMessageController (GET .../orders/{id}/messages).
+    #[ORM\OneToMany(mappedBy: 'order', targetEntity: OrderMessage::class, cascade: ['persist'], orphanRemoval: true)]
+    #[ORM\OrderBy(['createdAt' => 'DESC'])]
+    private Collection $messages;
+
     #[ORM\Column(type: 'float', nullable: true)]
     #[Groups(['order:read'])]
     private ?float $shippingCost = null;
@@ -330,6 +339,7 @@ class Order
         $this->reference = 'ORD-' . strtoupper(bin2hex(random_bytes(4)));
         $this->items = new ArrayCollection();
         $this->parcels = new ArrayCollection();
+        $this->messages = new ArrayCollection();
         $this->createdAt = new \DateTimeImmutable();
     }
 
@@ -429,6 +439,13 @@ class Order
     }
     public function removeItem(OrderItem $item): static {
         if ($this->items->removeElement($item)) { if ($item->getCustomerOrder() === $this) { $item->setCustomerOrder(null); } }
+        return $this;
+    }
+
+    /** @return Collection<int, OrderMessage> */
+    public function getMessages(): Collection { return $this->messages; }
+    public function addMessage(OrderMessage $message): static {
+        if (!$this->messages->contains($message)) { $this->messages->add($message); $message->setOrder($this); }
         return $this;
     }
 
