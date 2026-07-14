@@ -938,6 +938,68 @@ class MailerService
     }
 
     /**
+     * Envoie un message libre (objet + texte, pièce jointe optionnelle) rédigé
+     * par l'admin depuis le détail d'une commande, au client propriétaire.
+     */
+    public function sendCustomOrderMessage(
+        Order $order,
+        string $subject,
+        string $message,
+        ?string $attachmentPath = null,
+        ?string $attachmentFilename = null
+    ): void {
+        $recipientEmail = $order->getOwner()?->getEmail() ?? $order->getGuestEmail();
+        if (!$recipientEmail) {
+            throw new \RuntimeException("Aucun email destinataire pour la commande {$order->getOrderNumber()}.");
+        }
+
+        try {
+            $locale = $this->getEmailLocale(null, $order);
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : "Bonjour",
+                'en' => $firstName ? "Hello {$firstName}" : "Hello",
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/custom_message', $locale),
+                [
+                    'order'    => $order,
+                    'greeting' => $greetings[$locale],
+                    'message'  => $message,
+                    'locale'   => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->replyTo($this->fromEmail)
+                ->subject($subject)
+                ->html($html);
+
+            if ($attachmentPath) {
+                $email->attachFromPath($attachmentPath, $attachmentFilename);
+            }
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Custom order message sent', [
+                'order_number' => $order->getOrderNumber(),
+                'email'        => $recipientEmail,
+                'subject'      => $subject,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send custom order message', [
+                'order_number' => $order->getOrderNumber(),
+                'error'        => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
      * Envoie l'email d'annonce de lancement avec le code promo individuel.
 
      *
