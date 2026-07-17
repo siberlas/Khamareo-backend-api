@@ -53,8 +53,8 @@ class NotifyStockAlertsCommand extends Command
                 $alert->setNotified(true);
                 $alert->setNotifiedAt(new \DateTimeImmutable());
                 
-                $io->writeln("✅ " . $alert->getEmail() . " - " . $alert->getProduct()->getName());
-            } catch (\Exception $e) {
+                $io->writeln("✅ " . $alert->getOwner()->getEmail() . " - " . $alert->getProduct()->getName());
+            } catch (\Throwable $e) {
                 $io->error("❌ Erreur: " . $e->getMessage());
             }
         }
