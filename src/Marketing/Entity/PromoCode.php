@@ -91,6 +91,10 @@ class PromoCode
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $reminderLastProductIds = null;
 
+    /** Nombre de mises à jour mensuelles déjà envoyées (codes 60j/90j/120j). */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $reminderUpdateCount = 0;
+
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
     #[Groups(['promo:read', 'promo:write'])]
     private ?string $minOrderAmount = null;
@@ -292,6 +296,9 @@ class PromoCode
 
     public function getReminderLastProductIds(): ?string { return $this->reminderLastProductIds; }
     public function setReminderLastProductIds(?string $reminderLastProductIds): static { $this->reminderLastProductIds = $reminderLastProductIds; return $this; }
+
+    public function getReminderUpdateCount(): int { return $this->reminderUpdateCount; }
+    public function setReminderUpdateCount(int $reminderUpdateCount): static { $this->reminderUpdateCount = $reminderUpdateCount; return $this; }
 
     public function getMinOrderAmount(): ?string { return $this->minOrderAmount; }
     public function setMinOrderAmount(?string $minOrderAmount): static { $this->minOrderAmount = $minOrderAmount; return $this; }

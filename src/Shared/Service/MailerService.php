@@ -109,6 +109,10 @@ class MailerService
             'fr' => 'Dernier jour pour profiter de votre code promo',
             'en' => 'Last day to use your promo code'
         ],
+        'promo_reminder_update' => [
+            'fr' => 'Il vous reste {daysLeft} pour utiliser votre code Khamareo',
+            'en' => 'You have {daysLeft} left to use your Khamareo code'
+        ],
     ];
 
     public function __construct(
@@ -411,6 +415,58 @@ class MailerService
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to send promo code reminder (urgency) email', [
+                'email' => $promoCode->getEmail(),
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Mise à jour mensuelle du temps restant (codes longs 60j/90j/120j
+     * uniquement) — Segment 3 du cron marketing, hors dernier mois avant
+     * expiration (l'urgence prend le relais à ce moment-là).
+     *
+     * @param array{id:int,name:string,slug:string,price:string} $product
+     */
+    public function sendPromoCodeReminderUpdate(PromoCode $promoCode, array $product, int $daysLeft, string $locale = 'fr'): void
+    {
+        try {
+            $discount = $promoCode->getDiscountPercentage()
+                ? $promoCode->getDiscountPercentage() . '%'
+                : $promoCode->getDiscountAmount() . '€';
+
+            $daysLeftLabel = $daysLeft . ' jour' . ($daysLeft > 1 ? 's' : '');
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/promo/reminder_update', $locale),
+                [
+                    'promoCode' => $promoCode,
+                    'discount' => $discount,
+                    'product' => $product,
+                    'daysLeft' => $daysLeft,
+                    'daysLeftLabel' => $daysLeftLabel,
+                    'shopUrl' => $this->frontBaseUrl . '/boutique',
+                    'productUrl' => $this->frontBaseUrl . '/produit/' . $product['slug'],
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($promoCode->getEmail())
+                ->subject($this->getSubject('promo_reminder_update', $locale, ['daysLeft' => $daysLeftLabel]))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Promo code reminder (update) email sent', [
+                'email' => $promoCode->getEmail(),
+                'code' => $promoCode->getCode(),
+                'days_left' => $daysLeft,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send promo code reminder (update) email', [
                 'email' => $promoCode->getEmail(),
                 'error' => $e->getMessage(),
             ]);
