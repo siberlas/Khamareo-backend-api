@@ -16,25 +16,30 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /**
- * Segment 3 (phase 1) du cron marketing : relance des codes promo "launch"
- * (AKWAABA-XXXXXXXX, 30 jours) jamais utilisés.
+ * Segment 3 du cron marketing : relance des codes promo non utilisés
+ * (launch/AKWAABA 30j, first_order 60j, newsletter 90j, registration 120j).
  *
- * Cascade : un rappel neutre (Email 1) à J+3 après création du code, puis un
- * email d'urgence (Email 2) à J-3 avant expiration. Les codes déjà anciens au
- * premier lancement de cette commande reçoivent immédiatement l'Email 1
- * (rattrapage naturel, pas de script séparé nécessaire).
+ * Cascade commune à tous les types :
+ *   - Email 1 (rappel) à J+3 après création — 3 best-sellers, Kigelia en priorité.
+ *   - Mises à jour mensuelles à J+7 et J-3 de chaque tranche de 30 jours,
+ *     SAUF le dernier mois avant expiration (codes 60j/90j/120j uniquement —
+ *     un code de 30j n'a qu'un seul mois, donc aucune mise à jour).
+ *   - Email 2 (urgence) à J-3 avant expiration, remplace la mise à jour du
+ *     dernier mois.
  *
- * Les autres types de codes (first_order/newsletter/registration, cascade
- * mensuelle) sont hors périmètre de cette phase.
+ * Les codes déjà anciens au premier lancement de cette commande reçoivent
+ * immédiatement l'Email 1 (rattrapage naturel, pas de script séparé).
  */
 #[AsCommand(
     name: 'app:send-promo-code-reminder',
-    description: 'Relance des codes promo "launch" non utilisés (rappel + urgence J-3)'
+    description: 'Relance des codes promo non utilisés (rappel, mises à jour mensuelles, urgence J-3)'
 )]
 class SendPromoCodeReminderCommand extends Command
 {
+    private const TYPES = ['launch', 'first_order', 'newsletter', 'registration'];
     private const RAPPEL_MIN_AGE_DAYS = 3;
     private const URGENCY_DAYS_BEFORE_EXPIRY = 3;
+    private const MONTH_LENGTH_DAYS = 30;
 
     public function __construct(
         private readonly PromoCodeRepository $promoCodeRepository,
@@ -51,10 +56,9 @@ class SendPromoCodeReminderCommand extends Command
         $io = new SymfonyStyle($input, $output);
         $now = new \DateTimeImmutable();
 
-        $rappelSent = 0;
-        $urgencySent = 0;
+        $sentByAction = ['rappel' => 0, 'update' => 0, 'urgency' => 0];
 
-        foreach ($this->getUnusedLaunchCodes() as $promoCode) {
+        foreach ($this->getUnusedCodes() as $promoCode) {
             $action = self::nextAction($promoCode, $now);
             if ($action === null) {
                 continue;
@@ -63,22 +67,27 @@ class SendPromoCodeReminderCommand extends Command
             try {
                 $shownIds = self::parseProductIds($promoCode->getReminderLastProductIds());
 
-                if ($action === 'urgency') {
-                    $product = $this->pickProducts(1, $shownIds)[0];
-                    $this->mailerService->sendPromoCodeReminderUrgency($promoCode, $product);
-                    $promoCode->setReminderUrgencySentAt($now);
-                    $promoCode->setReminderLastProductIds((string) $product['id']);
-                    $urgencySent++;
-                } else {
+                if ($action === 'rappel') {
                     $products = $this->pickProducts(3, $shownIds);
                     $this->mailerService->sendPromoCodeReminderRappel($promoCode, $products);
                     $promoCode->setReminderRappelSentAt($now);
                     $promoCode->setReminderLastProductIds(implode(',', array_map(fn(array $p) => (string) $p['id'], $products)));
-                    $rappelSent++;
+                } elseif ($action === 'update') {
+                    $product = $this->pickProducts(1, $shownIds)[0];
+                    $daysLeft = $now->diff($promoCode->getExpiresAt())->days;
+                    $this->mailerService->sendPromoCodeReminderUpdate($promoCode, $product, $daysLeft);
+                    $promoCode->setReminderUpdateCount($promoCode->getReminderUpdateCount() + 1);
+                    $promoCode->setReminderLastProductIds((string) $product['id']);
+                } else {
+                    $product = $this->pickProducts(1, $shownIds)[0];
+                    $this->mailerService->sendPromoCodeReminderUrgency($promoCode, $product);
+                    $promoCode->setReminderUrgencySentAt($now);
+                    $promoCode->setReminderLastProductIds((string) $product['id']);
                 }
 
                 $this->em->persist(new EmailSendLog($promoCode->getEmail(), 'promo_code_reminder_' . $action));
 
+                $sentByAction[$action]++;
                 $io->writeln("✅ {$promoCode->getEmail()} — {$promoCode->getCode()} ({$action})");
             } catch (\Throwable $e) {
                 $this->logger->error('❌ Échec relance code promo', [
@@ -92,7 +101,12 @@ class SendPromoCodeReminderCommand extends Command
 
         $this->em->flush();
 
-        $io->success("$rappelSent rappel(s) envoyé(s), $urgencySent relance(s) d'urgence envoyée(s).");
+        $io->success(sprintf(
+            "%d rappel(s), %d mise(s) à jour, %d relance(s) d'urgence envoyée(s).",
+            $sentByAction['rappel'],
+            $sentByAction['update'],
+            $sentByAction['urgency'],
+        ));
 
         return Command::SUCCESS;
     }
@@ -107,7 +121,7 @@ class SendPromoCodeReminderCommand extends Command
         $now = new \DateTimeImmutable();
 
         $count = 0;
-        foreach ($this->getUnusedLaunchCodes() as $promoCode) {
+        foreach ($this->getUnusedCodes() as $promoCode) {
             if (self::nextAction($promoCode, $now) !== null) {
                 $count++;
             }
@@ -119,39 +133,67 @@ class SendPromoCodeReminderCommand extends Command
     /**
      * @return PromoCode[]
      */
-    private function getUnusedLaunchCodes(): array
+    private function getUnusedCodes(): array
     {
         return $this->promoCodeRepository->createQueryBuilder('p')
-            ->andWhere('p.type = :type')
+            ->andWhere('p.type IN (:types)')
             ->andWhere('p.isUsed = false')
             ->andWhere('p.isActive = true')
             ->andWhere('p.expiresAt > :now')
-            ->setParameter('type', 'launch')
+            ->setParameter('types', self::TYPES)
             ->setParameter('now', new \DateTimeImmutable())
             ->getQuery()
             ->getResult();
     }
 
     /**
-     * @return 'rappel'|'urgency'|null
+     * @return 'rappel'|'update'|'urgency'|null
      */
     private static function nextAction(PromoCode $promoCode, \DateTimeImmutable $now): ?string
     {
-        // getUnusedLaunchCodes() ne retourne que des codes dont expiresAt > now.
+        // getUnusedCodes() ne retourne que des codes dont expiresAt > now.
         $daysUntilExpiry = $now->diff($promoCode->getExpiresAt())->days;
 
         if ($promoCode->getReminderUrgencySentAt() === null && $daysUntilExpiry <= self::URGENCY_DAYS_BEFORE_EXPIRY) {
             return 'urgency';
         }
 
+        $daysSinceCreation = $promoCode->getCreatedAt()->diff($now)->days;
+
         if ($promoCode->getReminderRappelSentAt() === null) {
-            $daysSinceCreation = $promoCode->getCreatedAt()->diff($now)->days;
-            if ($daysSinceCreation >= self::RAPPEL_MIN_AGE_DAYS) {
-                return 'rappel';
-            }
+            return $daysSinceCreation >= self::RAPPEL_MIN_AGE_DAYS ? 'rappel' : null;
+        }
+
+        $triggerDays = self::getUpdateTriggerDays($promoCode);
+        $nextIndex = $promoCode->getReminderUpdateCount();
+
+        if ($nextIndex < count($triggerDays) && $daysSinceCreation >= $triggerDays[$nextIndex]) {
+            return 'update';
         }
 
         return null;
+    }
+
+    /**
+     * Jours (depuis la création) auxquels envoyer une mise à jour mensuelle :
+     * J+7 et J-3 de chaque tranche de 30 jours, à l'exclusion du dernier mois
+     * avant expiration (qui reçoit l'urgence à la place). Un code de 30 jours
+     * (launch) n'a qu'un seul mois → aucune mise à jour, comportement inchangé.
+     *
+     * @return int[]
+     */
+    private static function getUpdateTriggerDays(PromoCode $promoCode): array
+    {
+        $totalDays = $promoCode->getCreatedAt()->diff($promoCode->getExpiresAt())->days;
+        $numMonths = intdiv($totalDays, self::MONTH_LENGTH_DAYS);
+
+        $days = [];
+        for ($month = 1; $month < $numMonths; $month++) {
+            $days[] = ($month - 1) * self::MONTH_LENGTH_DAYS + 7;
+            $days[] = ($month - 1) * self::MONTH_LENGTH_DAYS + (self::MONTH_LENGTH_DAYS - 3);
+        }
+
+        return $days;
     }
 
     /**

@@ -1,0 +1,35 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Il vous reste {{ daysLeftLabel }} pour utiliser votre code Khamareo{% endblock %}
+
+{% block content %}
+    <p>Bonjour,</p>
+
+    <p>Petit rappel : votre code <strong>{{ promoCode.code }}</strong> est toujours actif.</p>
+
+    <div class="promo-card">
+        <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(235,214,191,0.6); margin: 0 0 12px;">
+            Votre code promo
+        </p>
+        <div class="promo-code">
+            {{ promoCode.code }}
+        </div>
+        <p style="font-size: 22px; font-weight: 700; color: #D8A35D; margin: 12px 0 0;">
+            -{{ discount }} de réduction
+        </p>
+        <p style="font-size: 13px; color: rgba(235,214,191,0.8); margin: 8px 0 0;">
+            ⏳ Temps restant : {{ daysLeftLabel }}
+        </p>
+    </div>
+
+    <div class="card" style="text-align: center;">
+        <p style="font-size: 16px; font-weight: 700; color: #4A2E20; margin: 0 0 4px;">{{ product.name }}</p>
+        <p style="font-size: 14px; color: #7A5C47; margin: 0;">{{ product.price }} €</p>
+    </div>
+
+    <div class="btn-wrapper">
+        <a href="{{ shopUrl }}" class="btn-primary">Voir les produits</a>
+    </div>
+
+    <p>L'équipe Khamareo</p>
+{% endblock %}

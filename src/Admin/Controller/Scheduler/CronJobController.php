@@ -152,7 +152,7 @@ class CronJobController extends AbstractController
             'app:notify-stock-alerts' => 'Clients ayant une alerte de retour en stock active',
             'app:send-newsletter-reminder' => 'Contacts newsletter non confirmés (double opt-in)',
             'app:send-verification-reminder' => 'Clients inscrits dont l\'email de compte n\'est jamais confirmé',
-            'app:send-promo-code-reminder' => 'Contacts ayant un code promo de lancement (AKWAABA) jamais utilisé',
+            'app:send-promo-code-reminder' => 'Contacts ayant un code promo non utilisé (lancement, première commande, newsletter, inscription)',
             default => null,
         };
     }
@@ -168,7 +168,7 @@ class CronJobController extends AbstractController
             'app:notify-stock-alerts' => "Notification dès qu'une alerte en attente correspond à un produit dont le stock est de nouveau supérieur à 0 (vérifié toutes les heures).",
             'app:send-newsletter-reminder' => "Relance hebdomadaire tant que l'inscription n'est pas confirmée, jusqu'à 8 relances maximum puis arrêt automatique de la séquence.",
             'app:send-verification-reminder' => "Relance hebdomadaire tant que l'email du compte n'est pas confirmé (comptes invités exclus), jusqu'à 8 relances maximum puis arrêt automatique de la séquence.",
-            'app:send-promo-code-reminder' => "Rappel unique à J+3 après création du code, puis relance d'urgence à J-3 avant expiration (30 jours de validité).",
+            'app:send-promo-code-reminder' => "Rappel à J+3 après création. Codes 60j/90j/120j : mise à jour à J+7 et J-3 de chaque mois. Tous types : urgence à J-3 avant expiration.",
             default => null,
         };
     }
