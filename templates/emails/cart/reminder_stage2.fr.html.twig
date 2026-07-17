@@ -1,0 +1,33 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Encore là ? Voici pourquoi nos clientes nous font confiance{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Votre panier est toujours disponible, mais le stock peut évoluer.</p>
+
+    {% if reviews is not empty %}
+    <div class="card">
+        {% for review in reviews %}
+        <div style="{% if not loop.first %}border-top: 1px solid #E8DFD3; margin-top: 12px; padding-top: 12px;{% endif %}">
+            <p style="margin: 0; color: #D8A35D; font-size: 14px;">{% for i in range(1, 5) %}{{ i <= review.rating ? '★' : '☆' }}{% endfor %}</p>
+            <p style="margin: 4px 0; font-style: italic; color: #4A2E20;">« {{ review.comment|slice(0, 140) }}{{ review.comment|length > 140 ? '…' : '' }} »</p>
+            <p style="margin: 0; font-size: 12px; color: #7A5C47;">— {{ review.name }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="highlight">
+        <p style="margin: 0;">
+            Livraison rapide, produits naturels africains sélectionnés avec soin.
+        </p>
+    </div>
+
+    <div class="btn-wrapper">
+        <a href="{{ checkoutUrl }}" class="btn-primary">Revenir à mon panier</a>
+    </div>
+
+    <p>L'équipe Khamareo</p>
+{% endblock %}

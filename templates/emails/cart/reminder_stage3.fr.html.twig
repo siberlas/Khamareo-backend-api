@@ -1,0 +1,50 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}-10% sur votre panier, valable 48h{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Pour vous aider à finaliser votre commande, voici -10% :</p>
+
+    <div class="promo-card">
+        <p style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: rgba(235,214,191,0.6); margin: 0 0 12px;">
+            Votre code promo
+        </p>
+        <div class="promo-code">
+            {{ promoCode.code }}
+        </div>
+        <p style="font-size: 22px; font-weight: 700; color: #D8A35D; margin: 12px 0 0;">
+            -{{ discount }} de réduction
+        </p>
+        <p style="font-size: 13px; color: rgba(235,214,191,0.8); margin: 8px 0 0;">
+            Valable 48h — jusqu'au {{ promoCode.expiresAt|date('d/m/Y H:i') }}
+        </p>
+    </div>
+
+    {% if cart.items is not empty %}
+    <div class="card">
+        <table>
+            <tbody>
+                {% for item in cart.items %}
+                <tr style="border-bottom: 1px solid #E8DFD3;">
+                    <td style="padding: 10px 8px 10px 0;">
+                        <strong>{{ item.product ? item.product.name : 'Produit' }}</strong>
+                        <br><span class="muted">Qté : {{ item.quantity }}</span>
+                    </td>
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
+                        {{ (item.quantity * item.unitPrice)|format_currency('EUR', locale='fr') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="btn-wrapper">
+        <a href="{{ checkoutUrl }}" class="btn-primary">J'en profite</a>
+    </div>
+
+    <p>L'équipe Khamareo</p>
+{% endblock %}

@@ -5,6 +5,7 @@ namespace App\Admin\Controller\Scheduler;
 use App\Cart\Command\CartReminderCommand;
 use App\Marketing\Command\NotifyStockAlertsCommand;
 use App\Marketing\Command\SendNewsletterReminderCommand;
+use App\Marketing\Command\SendPromoCodeReminderCommand;
 use App\Scheduler\Entity\CronJob;
 use App\Scheduler\Repository\CronJobRepository;
 use App\Scheduler\Service\CronJobRunner;
@@ -29,6 +30,7 @@ class CronJobController extends AbstractController
         private readonly NotifyStockAlertsCommand $notifyStockAlertsCommand,
         private readonly SendNewsletterReminderCommand $sendNewsletterReminderCommand,
         private readonly SendVerificationReminderCommand $sendVerificationReminderCommand,
+        private readonly SendPromoCodeReminderCommand $sendPromoCodeReminderCommand,
     ) {}
 
     /**
@@ -61,6 +63,7 @@ class CronJobController extends AbstractController
             'app:notify-stock-alerts' => $this->notifyStockAlertsCommand->countPending(),
             'app:send-newsletter-reminder' => $this->sendNewsletterReminderCommand->countPending(),
             'app:send-verification-reminder' => $this->sendVerificationReminderCommand->countPending(),
+            'app:send-promo-code-reminder' => $this->sendPromoCodeReminderCommand->countPending(),
             default => null,
         };
 
@@ -149,6 +152,7 @@ class CronJobController extends AbstractController
             'app:notify-stock-alerts' => 'Clients ayant une alerte de retour en stock active',
             'app:send-newsletter-reminder' => 'Contacts newsletter non confirmés (double opt-in)',
             'app:send-verification-reminder' => 'Clients inscrits dont l\'email de compte n\'est jamais confirmé',
+            'app:send-promo-code-reminder' => 'Contacts ayant un code promo de lancement (AKWAABA) jamais utilisé',
             default => null,
         };
     }
@@ -160,10 +164,11 @@ class CronJobController extends AbstractController
     private function getRules(string $commandName): ?string
     {
         return match ($commandName) {
-            'cart:reminder' => "Invités : relance hebdomadaire, puis quotidienne durant les 3 derniers jours avant suppression du panier (30 jours). Connectés : relance tous les 10 jours, 4 relances maximum.",
+            'cart:reminder' => "Séquence en 3 étapes : rappel simple à J+1h, réassurance (avis clients) à J+1j, code -10% valable 48h à J+3j.",
             'app:notify-stock-alerts' => "Notification dès qu'une alerte en attente correspond à un produit dont le stock est de nouveau supérieur à 0 (vérifié toutes les heures).",
             'app:send-newsletter-reminder' => "Relance hebdomadaire tant que l'inscription n'est pas confirmée, jusqu'à 8 relances maximum puis arrêt automatique de la séquence.",
             'app:send-verification-reminder' => "Relance hebdomadaire tant que l'email du compte n'est pas confirmé (comptes invités exclus), jusqu'à 8 relances maximum puis arrêt automatique de la séquence.",
+            'app:send-promo-code-reminder' => "Rappel unique à J+3 après création du code, puis relance d'urgence à J-3 avant expiration (30 jours de validité).",
             default => null,
         };
     }

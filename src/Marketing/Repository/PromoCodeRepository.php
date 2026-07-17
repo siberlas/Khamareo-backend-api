@@ -40,4 +40,24 @@ class PromoCodeRepository extends ServiceEntityRepository
     //            ->getOneOrNullResult()
     //        ;
     //    }
+
+    /**
+     * Code promo actif, non utilisé, non expiré, associé à cet email —
+     * utilisé pour éviter de générer un doublon (ex: relance panier J+3
+     * réutilisant un reliquat du Segment 3).
+     */
+    public function findActiveUnusedByEmail(string $email): ?PromoCode
+    {
+        return $this->createQueryBuilder('p')
+            ->andWhere('p.email = :email')
+            ->andWhere('p.isUsed = false')
+            ->andWhere('p.isActive = true')
+            ->andWhere('p.expiresAt > :now')
+            ->setParameter('email', $email)
+            ->setParameter('now', new \DateTimeImmutable())
+            ->orderBy('p.expiresAt', 'ASC')
+            ->setMaxResults(1)
+            ->getQuery()
+            ->getOneOrNullResult();
+    }
 }

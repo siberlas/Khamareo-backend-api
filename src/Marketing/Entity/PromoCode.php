@@ -41,7 +41,7 @@ class PromoCode
 
     #[ORM\Column(type: 'string', length: 50)]
     #[Groups(['promo:read', 'promo:write'])]
-    #[Assert\Choice(choices: ['newsletter', 'first_order', 'registration', 'launch', 'manual'])]
+    #[Assert\Choice(choices: ['newsletter', 'first_order', 'registration', 'launch', 'manual', 'cart_recovery'])]
     private ?string $type = null;
 
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
@@ -80,6 +80,16 @@ class PromoCode
     #[ORM\Column(nullable: true)]
     #[Groups(['promo:read', 'promo:write'])]
     private ?\DateTimeImmutable $startsAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $reminderRappelSentAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $reminderUrgencySentAt = null;
+
+    /** IDs (UUID) séparés par des virgules des produits montrés à la dernière relance. */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $reminderLastProductIds = null;
 
     #[ORM\Column(type: 'decimal', precision: 10, scale: 2, nullable: true)]
     #[Groups(['promo:read', 'promo:write'])]
@@ -273,6 +283,15 @@ class PromoCode
 
     public function getStartsAt(): ?\DateTimeImmutable { return $this->startsAt; }
     public function setStartsAt(?\DateTimeImmutable $startsAt): static { $this->startsAt = $startsAt; return $this; }
+
+    public function getReminderRappelSentAt(): ?\DateTimeImmutable { return $this->reminderRappelSentAt; }
+    public function setReminderRappelSentAt(?\DateTimeImmutable $reminderRappelSentAt): static { $this->reminderRappelSentAt = $reminderRappelSentAt; return $this; }
+
+    public function getReminderUrgencySentAt(): ?\DateTimeImmutable { return $this->reminderUrgencySentAt; }
+    public function setReminderUrgencySentAt(?\DateTimeImmutable $reminderUrgencySentAt): static { $this->reminderUrgencySentAt = $reminderUrgencySentAt; return $this; }
+
+    public function getReminderLastProductIds(): ?string { return $this->reminderLastProductIds; }
+    public function setReminderLastProductIds(?string $reminderLastProductIds): static { $this->reminderLastProductIds = $reminderLastProductIds; return $this; }
 
     public function getMinOrderAmount(): ?string { return $this->minOrderAmount; }
     public function setMinOrderAmount(?string $minOrderAmount): static { $this->minOrderAmount = $minOrderAmount; return $this; }
