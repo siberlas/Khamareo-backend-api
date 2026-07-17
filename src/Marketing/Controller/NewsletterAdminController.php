@@ -69,12 +69,15 @@ class NewsletterAdminController extends AbstractController
             ->getResult();
 
         $data = array_map(fn($s) => [
-            'id'                  => (string) $s->getId(),
-            'email'               => $s->getEmail(),
-            'subscribedAt'        => $s->getSubscribedAt()?->format(\DateTimeInterface::ATOM),
-            'confirmedAt'         => $s->getConfirmedAt()?->format(\DateTimeInterface::ATOM),
-            'confirmationSentAt'  => $s->getConfirmationSentAt()?->format(\DateTimeInterface::ATOM),
-            'isConfirmed'         => $s->isConfirmed(),
+            'id'                   => (string) $s->getId(),
+            'email'                => $s->getEmail(),
+            'subscribedAt'         => $s->getSubscribedAt()?->format(\DateTimeInterface::ATOM),
+            'confirmedAt'          => $s->getConfirmedAt()?->format(\DateTimeInterface::ATOM),
+            'confirmationSentAt'   => $s->getConfirmationSentAt()?->format(\DateTimeInterface::ATOM),
+            'isConfirmed'          => $s->isConfirmed(),
+            'reminderCount'        => $s->getReminderCount(),
+            'reminderFirstSentAt'  => $s->getReminderFirstSentAt()?->format(\DateTimeInterface::ATOM),
+            'reminderStopped'      => $s->isReminderStopped(),
         ], $subscribers);
 
         return $this->json([

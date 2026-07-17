@@ -84,6 +84,21 @@ class NewsletterSubscriber
     #[Groups(['newsletter:read'])]
     private ?\DateTimeImmutable $confirmationSentAt = null;
 
+    #[ORM\Column(options: ['default' => 0])]
+    #[Groups(['newsletter:read'])]
+    private int $reminderCount = 0;
+
+    #[ORM\Column(nullable: true)]
+    #[Groups(['newsletter:read'])]
+    private ?\DateTimeImmutable $reminderFirstSentAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $reminderLastSentAt = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    #[Groups(['newsletter:read'])]
+    private bool $reminderStopped = false;
+
     // Propriété transiente pour le code promo (non stockée en BDD)
     #[Groups(['newsletter:read'])]
     private ?string $promoCode = null;
@@ -178,6 +193,18 @@ class NewsletterSubscriber
 
         return $this;
     }
+
+    public function getReminderCount(): int { return $this->reminderCount; }
+    public function setReminderCount(int $reminderCount): static { $this->reminderCount = $reminderCount; return $this; }
+
+    public function getReminderFirstSentAt(): ?\DateTimeImmutable { return $this->reminderFirstSentAt; }
+    public function setReminderFirstSentAt(?\DateTimeImmutable $reminderFirstSentAt): static { $this->reminderFirstSentAt = $reminderFirstSentAt; return $this; }
+
+    public function getReminderLastSentAt(): ?\DateTimeImmutable { return $this->reminderLastSentAt; }
+    public function setReminderLastSentAt(?\DateTimeImmutable $reminderLastSentAt): static { $this->reminderLastSentAt = $reminderLastSentAt; return $this; }
+
+    public function isReminderStopped(): bool { return $this->reminderStopped; }
+    public function setReminderStopped(bool $reminderStopped): static { $this->reminderStopped = $reminderStopped; return $this; }
 
     /**
      * Get the value of promoCode

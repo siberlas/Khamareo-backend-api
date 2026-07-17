@@ -1,0 +1,27 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Il ne reste qu'une étape avant de rejoindre Khamareo{% endblock %}
+
+{% block content %}
+    <p>Bonjour,</p>
+
+    <p>Vous avez récemment laissé votre email chez Khamareo, mais votre inscription n'est pas encore confirmée.</p>
+
+    <p>Sans cette dernière étape, vous ne recevrez pas :</p>
+    <ul style="padding-left: 20px; color: #4A2E20;">
+        <li>nos offres et codes promo réservés aux abonnés</li>
+        <li>les nouveautés produits (Kigelia, soins naturels...)</li>
+        <li>nos conseils bien-être</li>
+    </ul>
+
+    <div style="text-align: center; margin: 32px 0;">
+        <a href="{{ confirmUrl }}" class="btn-primary" style="display:inline-block; background:#D8A35D; color:#fff; padding:14px 32px; border-radius:6px; text-decoration:none; font-weight:bold; font-size:16px; letter-spacing:0.5px;">
+            Confirmer mon inscription
+        </a>
+    </div>
+
+    <p class="muted" style="text-align:center; margin-top:32px; font-size:11px; border-top:1px solid #E8DFD3; padding-top:16px;">
+        Si vous ne souhaitez plus recevoir nos emails, vous pouvez ignorer ce message ou
+        <a href="{{ unsubscribeUrl }}" style="color:#888;">vous désabonner ici</a>.
+    </p>
+{% endblock %}
