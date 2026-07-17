@@ -1,0 +1,48 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Your cart is still waiting for you{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>You left a few items in your cart on Khamareo — they're still reserved for you.</p>
+
+    {% if cart.items is not empty %}
+    <div class="card">
+        <table>
+            <tbody>
+                {% for item in cart.items %}
+                {% set outOfStock = not item.product or item.product.stock <= 0 %}
+                <tr style="border-bottom: 1px solid #E8DFD3;">
+                    <td style="padding: 10px 8px 10px 0;">
+                        <strong>{{ item.product ? item.product.name : 'Product' }}</strong>
+                        <br><span class="muted">Qty: {{ item.quantity }}</span>
+                        {% if outOfStock %}
+                        <br><span style="color: #B3261E; font-size: 12px; font-weight: 600;">This product is no longer available</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding: 10px 0; text-align: right; font-weight: 600; color: #D8A35D; white-space: nowrap;">
+                        {{ (item.quantity * item.unitPrice)|format_currency('EUR', locale='en') }}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="divider"></div>
+        <table>
+            <tr>
+                <td style="padding: 4px 0; color: #7A5C47; text-align: right;">Subtotal</td>
+                <td style="padding: 4px 0; text-align: right; font-weight: 600; white-space: nowrap; padding-left: 16px;">{{ cart.subtotal|format_currency('EUR', locale='en') }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="btn-wrapper">
+        <a href="{{ shopUrl }}" class="btn-primary">Back to the shop</a>
+    </div>
+
+    <p class="muted">Any question about a product or your order? Our team is reachable at <a href="mailto:akwaaba@khamareo.com">akwaaba@khamareo.com</a>.</p>
+
+    <p>See you soon,<br>The Khamareo team</p>
+{% endblock %}

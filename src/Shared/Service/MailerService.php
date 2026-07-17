@@ -69,6 +69,10 @@ class MailerService
             'fr' => 'Confirmez votre inscription à la newsletter - Khamareo',
             'en' => 'Confirm Your Newsletter Subscription - Khamareo'
         ],
+        'newsletter_reminder' => [
+            'fr' => 'Il ne reste qu\'une étape avant de rejoindre Khamareo',
+            'en' => 'One last step to join Khamareo'
+        ],
         'order_refund' => [
             'fr' => 'Remboursement effectué #{orderNumber} - Khamareo',
             'en' => 'Refund Processed #{orderNumber} - Khamareo'
@@ -78,8 +82,8 @@ class MailerService
             'en' => 'Your Order #{orderNumber} Has Been Cancelled - Khamareo'
         ],
         'cart_checkout_issue_recovery' => [
-            'fr' => "Un souci technique empêchait votre commande — c'est résolu !",
-            'en' => 'A technical issue was blocking your order — it\'s fixed now!'
+            'fr' => 'Votre panier vous attend toujours',
+            'en' => 'Your cart is still waiting for you'
         ],
     ];
 
@@ -503,8 +507,8 @@ class MailerService
                 [
                     'user' => $user,
                     'product' => $product,
-                    'productUrl' => $this->frontBaseUrl . '/boutique/' . $product->getSlug(),
-                    'manageAlertsUrl' => $this->frontBaseUrl . '/mon-compte/alertes',
+                    'productUrl' => $this->frontBaseUrl . '/product/' . $product->getSlug(),
+                    'manageAlertsUrl' => $this->frontBaseUrl . '/account/alerts',
                     'frontendUrl' => $this->frontBaseUrl,
                     'locale' => $locale,
                 ]
@@ -825,6 +829,46 @@ class MailerService
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to send newsletter confirmation email', [
+                'email' => $subscriber->getEmail(),
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Envoie un rappel hebdomadaire à un abonné newsletter qui n'a pas confirmé
+     * son inscription (double opt-in). Segment 1 du cron marketing.
+     */
+    public function sendNewsletterReminderEmail(
+        NewsletterSubscriber $subscriber,
+        string $confirmUrl,
+        string $unsubscribeUrl
+    ): void {
+        try {
+            $html = $this->twig->render(
+                'emails/newsletter/reminder.fr.html.twig',
+                [
+                    'email'          => $subscriber->getEmail(),
+                    'confirmUrl'     => $confirmUrl,
+                    'unsubscribeUrl' => $unsubscribeUrl,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($subscriber->getEmail())
+                ->subject($this->getSubject('newsletter_reminder', 'fr'))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Newsletter reminder email sent', [
+                'email' => $subscriber->getEmail(),
+                'reminder_count' => $subscriber->getReminderCount() + 1,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send newsletter reminder email', [
                 'email' => $subscriber->getEmail(),
                 'error' => $e->getMessage(),
             ]);

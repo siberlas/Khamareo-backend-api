@@ -8,6 +8,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\Attribute\AsController;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -68,12 +69,15 @@ class NewsletterAdminController extends AbstractController
             ->getResult();
 
         $data = array_map(fn($s) => [
-            'id'                  => (string) $s->getId(),
-            'email'               => $s->getEmail(),
-            'subscribedAt'        => $s->getSubscribedAt()?->format(\DateTimeInterface::ATOM),
-            'confirmedAt'         => $s->getConfirmedAt()?->format(\DateTimeInterface::ATOM),
-            'confirmationSentAt'  => $s->getConfirmationSentAt()?->format(\DateTimeInterface::ATOM),
-            'isConfirmed'         => $s->isConfirmed(),
+            'id'                   => (string) $s->getId(),
+            'email'                => $s->getEmail(),
+            'subscribedAt'         => $s->getSubscribedAt()?->format(\DateTimeInterface::ATOM),
+            'confirmedAt'          => $s->getConfirmedAt()?->format(\DateTimeInterface::ATOM),
+            'confirmationSentAt'   => $s->getConfirmationSentAt()?->format(\DateTimeInterface::ATOM),
+            'isConfirmed'          => $s->isConfirmed(),
+            'reminderCount'        => $s->getReminderCount(),
+            'reminderFirstSentAt'  => $s->getReminderFirstSentAt()?->format(\DateTimeInterface::ATOM),
+            'reminderStopped'      => $s->isReminderStopped(),
         ], $subscribers);
 
         return $this->json([
@@ -88,6 +92,44 @@ class NewsletterAdminController extends AbstractController
                 'totalPending'   => $totalPending,
             ],
         ]);
+    }
+
+    /**
+     * GET /api/admin/newsletter/export
+     * Export CSV de tous les abonnés (confirmés + en attente).
+     */
+    #[Route('/api/admin/newsletter/export', name: 'admin_newsletter_export', methods: ['GET'])]
+    public function export(): StreamedResponse
+    {
+        $subscribers = $this->repository->createQueryBuilder('n')
+            ->orderBy('n.subscribedAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+
+        $response = new StreamedResponse(function () use ($subscribers) {
+            $handle = fopen('php://output', 'w');
+            // BOM UTF-8 pour qu'Excel affiche correctement les accents
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['Email', 'Statut', "Date d'inscription", 'Date de confirmation'], ';');
+
+            foreach ($subscribers as $s) {
+                fputcsv($handle, [
+                    $s->getEmail(),
+                    $s->isConfirmed() ? 'Confirmé' : 'En attente',
+                    $s->getSubscribedAt()?->format('Y-m-d H:i:s'),
+                    $s->getConfirmedAt()?->format('Y-m-d H:i:s') ?? '',
+                ], ';');
+            }
+
+            fclose($handle);
+        });
+
+        $filename = 'newsletter-abonnes-' . (new \DateTimeImmutable())->format('Y-m-d') . '.csv';
+
+        $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
+        $response->headers->set('Content-Disposition', 'attachment; filename="' . $filename . '"');
+
+        return $response;
     }
 
     /**

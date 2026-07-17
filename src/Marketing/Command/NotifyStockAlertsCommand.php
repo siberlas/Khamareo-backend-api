@@ -53,8 +53,8 @@ class NotifyStockAlertsCommand extends Command
                 $alert->setNotified(true);
                 $alert->setNotifiedAt(new \DateTimeImmutable());
                 
-                $io->writeln("✅ " . $alert->getEmail() . " - " . $alert->getProduct()->getName());
-            } catch (\Exception $e) {
+                $io->writeln("✅ " . $alert->getOwner()->getEmail() . " - " . $alert->getProduct()->getName());
+            } catch (\Throwable $e) {
                 $io->error("❌ Erreur: " . $e->getMessage());
             }
         }
@@ -64,5 +64,20 @@ class NotifyStockAlertsCommand extends Command
         $io->success("$count notifications envoyées");
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Nombre d'alertes qui seraient notifiées si la commande s'exécutait maintenant.
+     * Utilisé pour l'aperçu admin (aucun email envoyé, aucune écriture en base).
+     */
+    public function countPending(): int
+    {
+        return (int) $this->alertRepository->createQueryBuilder('a')
+            ->select('COUNT(a.id)')
+            ->join('a.product', 'p')
+            ->where('a.notified = false')
+            ->andWhere('p.stock > 0')
+            ->getQuery()
+            ->getSingleScalarResult();
     }
 }

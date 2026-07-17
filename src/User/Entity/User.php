@@ -161,6 +161,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Column(type: 'boolean', options: ['default' => false])]
     private bool $isVerified = false;
 
+    #[ORM\Column(options: ['default' => 0])]
+    private int $verificationReminderCount = 0;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $verificationReminderFirstSentAt = null;
+
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $verificationReminderLastSentAt = null;
+
+    #[ORM\Column(options: ['default' => false])]
+    private bool $verificationReminderStopped = false;
+
     #[ORM\Column(nullable: true)]
     private ?string $resetPasswordToken = null;
 
@@ -558,6 +570,18 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         $this->isVerified = $isVerified;
         return $this;
     }
+
+    public function getVerificationReminderCount(): int { return $this->verificationReminderCount; }
+    public function setVerificationReminderCount(int $verificationReminderCount): static { $this->verificationReminderCount = $verificationReminderCount; return $this; }
+
+    public function getVerificationReminderFirstSentAt(): ?\DateTimeImmutable { return $this->verificationReminderFirstSentAt; }
+    public function setVerificationReminderFirstSentAt(?\DateTimeImmutable $verificationReminderFirstSentAt): static { $this->verificationReminderFirstSentAt = $verificationReminderFirstSentAt; return $this; }
+
+    public function getVerificationReminderLastSentAt(): ?\DateTimeImmutable { return $this->verificationReminderLastSentAt; }
+    public function setVerificationReminderLastSentAt(?\DateTimeImmutable $verificationReminderLastSentAt): static { $this->verificationReminderLastSentAt = $verificationReminderLastSentAt; return $this; }
+
+    public function isVerificationReminderStopped(): bool { return $this->verificationReminderStopped; }
+    public function setVerificationReminderStopped(bool $verificationReminderStopped): static { $this->verificationReminderStopped = $verificationReminderStopped; return $this; }
 
     public function getResetPasswordToken(): ?string
     {

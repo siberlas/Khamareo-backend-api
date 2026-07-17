@@ -72,7 +72,26 @@ class CheckoutPaymentIntentController extends AbstractController
             throw new BadRequestException("Panier vide ou introuvable.");
         }
 
-        // Vérification que chaque produit a un prix
+        // Retirer automatiquement les produits passés en rupture depuis leur ajout au
+        // panier — sinon rien n'empêche de payer pour un produit indisponible (aucun
+        // contrôle de stock n'existe ailleurs dans le tunnel de paiement).
+        $removedOutOfStock = [];
+        foreach ($cart->getItems()->toArray() as $item) {
+            if ($item->getProduct()->getStock() <= 0) {
+                $removedOutOfStock[] = $item->getProduct()->getName();
+                $cart->removeItem($item);
+                $this->em->remove($item);
+            }
+        }
+
+        if ($cart->getItems()->isEmpty()) {
+            throw new BadRequestException(
+                'Tous les produits de votre panier sont désormais en rupture de stock : '
+                . implode(', ', $removedOutOfStock) . '.'
+            );
+        }
+
+        // Vérification que chaque produit restant a un prix
         foreach ($cart->getItems() as $item) {
             if (!$item->getProduct()->getPrice()) {
                 throw new BadRequestException(
@@ -189,6 +208,7 @@ class CheckoutPaymentIntentController extends AbstractController
             'freeShipping'          => $shippingCost === 0.0,
             'freeShippingThreshold' => $zoneThreshold,
             'shippingZone'          => $zone,
+            'removedOutOfStock'     => $removedOutOfStock,
         ]);
     }
 
