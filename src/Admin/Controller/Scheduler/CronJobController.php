@@ -2,6 +2,9 @@
 
 namespace App\Admin\Controller\Scheduler;
 
+use App\Cart\Command\CartReminderCommand;
+use App\Marketing\Command\NotifyStockAlertsCommand;
+use App\Marketing\Command\SendNewsletterReminderCommand;
 use App\Scheduler\Entity\CronJob;
 use App\Scheduler\Repository\CronJobRepository;
 use App\Scheduler\Service\CronJobRunner;
@@ -20,6 +23,9 @@ class CronJobController extends AbstractController
         private readonly CronJobRepository $cronJobRepository,
         private readonly EntityManagerInterface $em,
         private readonly CronJobRunner $runner,
+        private readonly CartReminderCommand $cartReminderCommand,
+        private readonly NotifyStockAlertsCommand $notifyStockAlertsCommand,
+        private readonly SendNewsletterReminderCommand $sendNewsletterReminderCommand,
     ) {}
 
     /**
@@ -31,6 +37,30 @@ class CronJobController extends AbstractController
         $jobs = $this->cronJobRepository->findBy([], ['id' => 'ASC']);
 
         return $this->json(array_map($this->serialize(...), $jobs));
+    }
+
+    /**
+     * GET /api/admin/cron-jobs/{id}/preview
+     *
+     * Nombre de destinataires qui seraient touchés si la tâche s'exécutait
+     * maintenant. Aucun email n'est envoyé, aucune écriture en base.
+     */
+    #[Route('/{id}/preview', name: 'preview', methods: ['GET'], requirements: ['id' => '\d+'])]
+    public function preview(int $id): JsonResponse
+    {
+        $job = $this->cronJobRepository->find($id);
+        if (!$job) {
+            return $this->json(['error' => 'Cron job introuvable'], 404);
+        }
+
+        $pendingCount = match ($job->getCommandName()) {
+            'cart:reminder' => $this->cartReminderCommand->countPending(),
+            'app:notify-stock-alerts' => $this->notifyStockAlertsCommand->countPending(),
+            'app:send-newsletter-reminder' => $this->sendNewsletterReminderCommand->countPending(),
+            default => null,
+        };
+
+        return $this->json(['pendingCount' => $pendingCount]);
     }
 
     /**
