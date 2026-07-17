@@ -171,6 +171,22 @@ class Cart
     #[ORM\Column(options: ['default' => 0])]
     private int $guestReminderCount = 0;
 
+    /** Étape atteinte dans la séquence de relance : 0 (aucune), 1, 2 ou 3. */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $reminderStage = 0;
+
+    /**
+     * Date d'envoi de la dernière étape — sert de référence pour calculer la
+     * suivante. Ne pas confondre avec `updatedAt`, qui est réinitialisé par
+     * onPreUpdate() à chaque écriture (y compris celles de cette séquence).
+     */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $reminderStageLastSentAt = null;
+
+    /** Code promo -10% associé à l'étape 3 (généré ou réutilisé). */
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $reminderPromoCodeId = null;
+
     public function __construct()
     {
         $this->id = Uuid::v7();
@@ -273,6 +289,15 @@ class Cart
 
     public function getGuestReminderCount(): int { return $this->guestReminderCount; }
     public function setGuestReminderCount(int $guestReminderCount): static { $this->guestReminderCount = $guestReminderCount; return $this; }
+
+    public function getReminderStage(): int { return $this->reminderStage; }
+    public function setReminderStage(int $reminderStage): static { $this->reminderStage = $reminderStage; return $this; }
+
+    public function getReminderStageLastSentAt(): ?\DateTimeImmutable { return $this->reminderStageLastSentAt; }
+    public function setReminderStageLastSentAt(?\DateTimeImmutable $reminderStageLastSentAt): static { $this->reminderStageLastSentAt = $reminderStageLastSentAt; return $this; }
+
+    public function getReminderPromoCodeId(): ?string { return $this->reminderPromoCodeId; }
+    public function setReminderPromoCodeId(?string $reminderPromoCodeId): static { $this->reminderPromoCodeId = $reminderPromoCodeId; return $this; }
 
     #[ORM\PrePersist]
     public function onPrePersist(): void

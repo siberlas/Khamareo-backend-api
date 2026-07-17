@@ -85,6 +85,30 @@ class MailerService
             'fr' => 'Votre panier vous attend toujours',
             'en' => 'Your cart is still waiting for you'
         ],
+        'cart_reminder_stage1_guest' => [
+            'fr' => 'Vous avez oublié quelque chose chez Khamareo',
+            'en' => 'You forgot something at Khamareo'
+        ],
+        'cart_reminder_stage1_user' => [
+            'fr' => 'Votre panier vous attend',
+            'en' => 'Your cart is waiting for you'
+        ],
+        'cart_reminder_stage2' => [
+            'fr' => 'Encore là ? Voici pourquoi nos clientes nous font confiance',
+            'en' => 'Still here? Here\'s why our customers trust us'
+        ],
+        'cart_reminder_stage3' => [
+            'fr' => '-10% sur votre panier, valable 48h',
+            'en' => '-10% on your cart, valid for 48h'
+        ],
+        'promo_reminder_rappel' => [
+            'fr' => 'Votre code promo Khamareo vous attend',
+            'en' => 'Your Khamareo promo code is waiting'
+        ],
+        'promo_reminder_urgency' => [
+            'fr' => 'Dernier jour pour profiter de votre code promo',
+            'en' => 'Last day to use your promo code'
+        ],
     ];
 
     public function __construct(
@@ -296,6 +320,97 @@ class MailerService
             ]);
         } catch (\Exception $e) {
             $this->logger->error('Failed to send promo code email', [
+                'email' => $promoCode->getEmail(),
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Relance "rappel" (Email 1) pour un code promo non utilisé — Segment 3
+     * du cron marketing. Ton neutre, met en avant les best-sellers du moment.
+     *
+     * @param array{id:mixed,name:string,slug:string,price:string}[] $products
+     */
+    public function sendPromoCodeReminderRappel(PromoCode $promoCode, array $products, string $locale = 'fr'): void
+    {
+        try {
+            $discount = $promoCode->getDiscountPercentage()
+                ? $promoCode->getDiscountPercentage() . '%'
+                : $promoCode->getDiscountAmount() . '€';
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/promo/reminder_rappel', $locale),
+                [
+                    'promoCode' => $promoCode,
+                    'discount' => $discount,
+                    'products' => $products,
+                    'shopUrl' => $this->frontBaseUrl . '/boutique',
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($promoCode->getEmail())
+                ->subject($this->getSubject('promo_reminder_rappel', $locale))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Promo code reminder (rappel) email sent', [
+                'email' => $promoCode->getEmail(),
+                'code' => $promoCode->getCode(),
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send promo code reminder (rappel) email', [
+                'email' => $promoCode->getEmail(),
+                'error' => $e->getMessage(),
+            ]);
+            throw $e;
+        }
+    }
+
+    /**
+     * Relance "urgence" (Email 2) pour un code promo non utilisé, à J-3 avant
+     * expiration — Segment 3 du cron marketing. Ton direct, assumé.
+     *
+     * @param array{id:int,name:string,slug:string,price:string} $product
+     */
+    public function sendPromoCodeReminderUrgency(PromoCode $promoCode, array $product, string $locale = 'fr'): void
+    {
+        try {
+            $discount = $promoCode->getDiscountPercentage()
+                ? $promoCode->getDiscountPercentage() . '%'
+                : $promoCode->getDiscountAmount() . '€';
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/promo/reminder_urgency', $locale),
+                [
+                    'promoCode' => $promoCode,
+                    'discount' => $discount,
+                    'product' => $product,
+                    'shopUrl' => $this->frontBaseUrl . '/boutique',
+                    'productUrl' => $this->frontBaseUrl . '/produit/' . $product['slug'],
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($promoCode->getEmail())
+                ->subject($this->getSubject('promo_reminder_urgency', $locale))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('Promo code reminder (urgency) email sent', [
+                'email' => $promoCode->getEmail(),
+                'code' => $promoCode->getCode(),
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->error('Failed to send promo code reminder (urgency) email', [
                 'email' => $promoCode->getEmail(),
                 'error' => $e->getMessage(),
             ]);
@@ -1163,6 +1278,166 @@ class MailerService
                 'cart_id' => $cart->getId(),
                 'error' => $e->getMessage(),
             ]);
+            return false;
+        }
+    }
+
+    /**
+     * Segment 4, Email 1 (J+1h) — rappel simple. Contenu différent invité/inscrit.
+     */
+    public function sendCartReminderStage1(Cart $cart): bool
+    {
+        $owner = $cart->getOwner();
+        $recipientEmail = $owner?->getEmail();
+
+        if (!$recipientEmail) {
+            return false;
+        }
+
+        try {
+            $locale = $this->getEmailLocale($owner);
+            $isGuest = $owner->isGuest();
+            $firstName = $owner->getFirstName();
+
+            $greetings = [
+                'fr' => $firstName && !$isGuest ? "Bonjour {$firstName}" : 'Bonjour',
+                'en' => $firstName && !$isGuest ? "Hello {$firstName}" : 'Hello',
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/cart/reminder_stage1', $locale),
+                [
+                    'cart' => $cart,
+                    'greeting' => $greetings[$locale] ?? $greetings['fr'],
+                    'isGuest' => $isGuest,
+                    'firstName' => $isGuest ? null : $firstName,
+                    'checkoutUrl' => $this->frontBaseUrl . '/cart',
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject($isGuest ? 'cart_reminder_stage1_guest' : 'cart_reminder_stage1_user', $locale))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('✅ Relance panier étape 1 envoyée', ['cart_id' => $cart->getId(), 'email' => $recipientEmail]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('❌ Échec relance panier étape 1', ['cart_id' => $cart->getId(), 'error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Segment 4, Email 2 (J+1 jour) — réassurance (avis clients).
+     *
+     * @param Review[] $reviews
+     */
+    public function sendCartReminderStage2(Cart $cart, array $reviews): bool
+    {
+        $owner = $cart->getOwner();
+        $recipientEmail = $owner?->getEmail();
+
+        if (!$recipientEmail) {
+            return false;
+        }
+
+        try {
+            $locale = $this->getEmailLocale($owner);
+            $firstName = $owner->getFirstName();
+
+            $greetings = [
+                'fr' => $firstName && !$owner->isGuest() ? "Bonjour {$firstName}" : 'Bonjour',
+                'en' => $firstName && !$owner->isGuest() ? "Hello {$firstName}" : 'Hello',
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/cart/reminder_stage2', $locale),
+                [
+                    'cart' => $cart,
+                    'greeting' => $greetings[$locale] ?? $greetings['fr'],
+                    'reviews' => $reviews,
+                    'checkoutUrl' => $this->frontBaseUrl . '/cart',
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('cart_reminder_stage2', $locale))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('✅ Relance panier étape 2 envoyée', ['cart_id' => $cart->getId(), 'email' => $recipientEmail]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('❌ Échec relance panier étape 2', ['cart_id' => $cart->getId(), 'error' => $e->getMessage()]);
+            return false;
+        }
+    }
+
+    /**
+     * Segment 4, Email 3 (J+3 jours) — code -10% valable 48h.
+     */
+    public function sendCartReminderStage3(Cart $cart, PromoCode $promoCode): bool
+    {
+        $owner = $cart->getOwner();
+        $recipientEmail = $owner?->getEmail();
+
+        if (!$recipientEmail) {
+            return false;
+        }
+
+        try {
+            $locale = $this->getEmailLocale($owner);
+            $firstName = $owner->getFirstName();
+
+            $greetings = [
+                'fr' => $firstName && !$owner->isGuest() ? "Bonjour {$firstName}" : 'Bonjour',
+                'en' => $firstName && !$owner->isGuest() ? "Hello {$firstName}" : 'Hello',
+            ];
+
+            $discount = $promoCode->getDiscountPercentage()
+                ? $promoCode->getDiscountPercentage() . '%'
+                : $promoCode->getDiscountAmount() . '€';
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/cart/reminder_stage3', $locale),
+                [
+                    'cart' => $cart,
+                    'greeting' => $greetings[$locale] ?? $greetings['fr'],
+                    'promoCode' => $promoCode,
+                    'discount' => $discount,
+                    'checkoutUrl' => $this->frontBaseUrl . '/cart',
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($recipientEmail)
+                ->subject($this->getSubject('cart_reminder_stage3', $locale))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $this->logger->info('✅ Relance panier étape 3 envoyée', [
+                'cart_id' => $cart->getId(),
+                'email' => $recipientEmail,
+                'promo_code' => $promoCode->getCode(),
+            ]);
+
+            return true;
+        } catch (\Exception $e) {
+            $this->logger->error('❌ Échec relance panier étape 3', ['cart_id' => $cart->getId(), 'error' => $e->getMessage()]);
             return false;
         }
     }
