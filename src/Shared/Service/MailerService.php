@@ -78,8 +78,8 @@ class MailerService
             'en' => 'Your Order #{orderNumber} Has Been Cancelled - Khamareo'
         ],
         'cart_checkout_issue_recovery' => [
-            'fr' => "Un souci technique empêchait votre commande — c'est résolu !",
-            'en' => 'A technical issue was blocking your order — it\'s fixed now!'
+            'fr' => 'Votre panier vous attend toujours',
+            'en' => 'Your cart is still waiting for you'
         ],
     ];
 
@@ -503,8 +503,8 @@ class MailerService
                 [
                     'user' => $user,
                     'product' => $product,
-                    'productUrl' => $this->frontBaseUrl . '/boutique/' . $product->getSlug(),
-                    'manageAlertsUrl' => $this->frontBaseUrl . '/mon-compte/alertes',
+                    'productUrl' => $this->frontBaseUrl . '/product/' . $product->getSlug(),
+                    'manageAlertsUrl' => $this->frontBaseUrl . '/account/alerts',
                     'frontendUrl' => $this->frontBaseUrl,
                     'locale' => $locale,
                 ]
