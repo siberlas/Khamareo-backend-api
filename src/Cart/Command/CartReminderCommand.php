@@ -40,18 +40,13 @@ class CartReminderCommand extends Command
         foreach ($guestCarts as $cart) {
             $created = $cart->getCreatedAt();
             $last = $cart->getLastGuestReminderAt();
-            $count = $cart->getGuestReminderCount();
             $days = $created ? $created->diff($now)->days : null;
-            // 3j avant suppression
-            if ($days !== null && $days >= 27 && $days < 30 && (!$last || $last->diff($now)->days >= 1)) {
-                $this->mailerService->sendCartGuestFinalReminder($cart);
-                $cart->setLastGuestReminderAt($now);
-                $cart->setGuestReminderCount($count + 1);
-                $remindedGuests++;
-            } elseif ($days !== null && $days < 27 && (!$last || $last->diff($now)->days >= 7)) {
-                $this->mailerService->sendCartGuestWeeklyReminder($cart);
-                $cart->setLastGuestReminderAt($now);
-                $cart->setGuestReminderCount($count + 1);
+            // 3j avant suppression, ou rappel hebdo sinon — sendAbandonedCartCheckoutRecovery()
+            // gère déjà la mise à jour de lastGuestReminderAt/guestReminderCount et son propre flush.
+            $shouldRemind = ($days !== null && $days >= 27 && $days < 30 && (!$last || $last->diff($now)->days >= 1))
+                || ($days !== null && $days < 27 && (!$last || $last->diff($now)->days >= 7));
+
+            if ($shouldRemind && $this->mailerService->sendAbandonedCartCheckoutRecovery($cart)) {
                 $remindedGuests++;
             }
         }
@@ -66,10 +61,9 @@ class CartReminderCommand extends Command
             $last = $cart->getLastReminderAt();
             $count = $cart->getReminderCount();
             if ($count < 4 && (!$last || $last->diff($now)->days >= 10)) {
-                $this->mailerService->sendCartUserReminder($cart);
-                $cart->setLastReminderAt($now);
-                $cart->setReminderCount($count + 1);
-                $remindedUsers++;
+                if ($this->mailerService->sendAbandonedCartCheckoutRecovery($cart)) {
+                    $remindedUsers++;
+                }
             }
         }
 
