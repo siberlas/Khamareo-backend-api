@@ -47,6 +47,7 @@ class CheckoutPaymentIntentController extends AbstractController
         $billingInput   = $data['billingAddress']  ?? null;
         $deliveryInput  = $data['deliveryAddress'] ?? null;
         $shippingRateId = $data['shippingRateId']  ?? null;
+        $deliveryPhoneOverride = trim((string) ($data['deliveryPhone'] ?? ''));
 
         if (!$carrierModeId || !$billingInput || !$deliveryInput) {
             throw new BadRequestException("carrierModeId, billingAddress et deliveryAddress sont requis.");
@@ -103,6 +104,17 @@ class CheckoutPaymentIntentController extends AbstractController
         // 2) Résolution des adresses
         $billingAddress  = $this->resolveAddressInput($billingInput);
         $deliveryAddress = $this->resolveAddressInput($deliveryInput);
+
+        // Mondial Relay Domicile exige un mobile dédié (SMS de suivi + code de livraison),
+        // distinct du téléphone de l'adresse résolue. On ne mute jamais l'adresse résolue
+        // en place (elle peut être l'adresse par défaut sauvegardée du client) : on clone
+        // dans une nouvelle Address avec le mobile fourni, utilisée pour cette commande only.
+        if ($deliveryPhoneOverride !== '' && $deliveryPhoneOverride !== $deliveryAddress->getPhone()) {
+            $deliveryAddress = $this->cloneAddressWithPhone($deliveryAddress, $deliveryPhoneOverride);
+            // Flush immédiat : il faut l'ID généré du clone pour le mettre dans les
+            // métadonnées Stripe juste après (delivery_address_id).
+            $this->em->flush();
+        }
 
         // 3) Récupération du CarrierMode
         $carrierMode = $this->carrierModeRepository->find((int) $carrierModeId);
@@ -254,6 +266,34 @@ class CheckoutPaymentIntentController extends AbstractController
         }
 
         throw new BadRequestException("Format d'adresse invalide.");
+    }
+
+    private function cloneAddressWithPhone(Address $source, string $phone): Address
+    {
+        $clone = (new Address())
+            ->setLabel($source->getLabel())
+            ->setCivility($source->getCivility())
+            ->setFirstName($source->getFirstName())
+            ->setLastName($source->getLastName())
+            ->setStreetAddress($source->getStreetAddress())
+            ->setAddressComplement($source->getAddressComplement())
+            ->setPostalCode($source->getPostalCode())
+            ->setCity($source->getCity())
+            ->setCountry($source->getCountry())
+            ->setState($source->getState())
+            ->setPhone($phone)
+            ->setOwner(null)
+            ->setIsDefault(false);
+
+        if ($source->isRelayPoint()) {
+            $clone->setAddressKind('relay');
+            $clone->setIsRelayPoint(true);
+            $clone->setRelayPointId($source->getRelayPointId());
+            $clone->setRelayCarrier($source->getRelayCarrier());
+        }
+
+        $this->em->persist($clone);
+        return $clone;
     }
 
     private function extractIdFromIri(string $iri): int

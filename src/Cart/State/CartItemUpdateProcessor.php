@@ -24,11 +24,14 @@ final class CartItemUpdateProcessor implements ProcessorInterface
 
         if ($data instanceof CartItem) {
             $cart = $data->getCart();
-            if ($cart && !empty($cart->getPromoCodesData())) {
-                $changed = $this->promoService->recalculatePercentageDiscounts($cart);
-                if ($changed) {
-                    $this->em->flush();
+            if ($cart) {
+                $cart->touch();
+
+                if (!empty($cart->getPromoCodesData())) {
+                    $this->promoService->recalculatePercentageDiscounts($cart);
                 }
+
+                $this->em->flush();
             }
         }
 

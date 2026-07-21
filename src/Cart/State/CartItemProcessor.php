@@ -42,12 +42,14 @@ final class CartItemProcessor implements ProcessorInterface
 
         if ($existingItem) {
             $existingItem->setQuantity($existingItem->getQuantity() + $data->getQuantity());
+            $cart->touch();
             $this->em->flush();
             $this->recalculatePromos($cart);
             return $existingItem;
         }
 
         $this->em->persist($data);
+        $cart->touch();
         $this->em->flush();
         $this->recalculatePromos($cart);
 

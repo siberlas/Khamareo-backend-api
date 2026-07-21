@@ -63,13 +63,13 @@ final class GuestCartAddressProcessor implements ProcessorInterface
             $user = $existingOwner;
 
         } else {
-            // Cas 2 : checkout initial → email + téléphone + CGV obligatoires
+            // Cas 2 : checkout initial → email + CGV obligatoires.
+            // Le téléphone n'est PAS obligatoire ici : Colissimo et Mondial Relay
+            // Point Relais n'en ont pas besoin. Seul Mondial Relay Domicile l'exige
+            // (mobile, pour le SMS de code de livraison) — géré séparément via le
+            // champ deliveryPhone à l'étape de livraison, pas ici.
             if (!$data->email) {
                 throw new BadRequestException("L'adresse email est obligatoire pour continuer.");
-            }
-
-            if (!$data->phone) {
-                throw new BadRequestException("Le numéro de téléphone est obligatoire pour continuer.");
             }
 
             if (!$data->hasAcceptedTerms) {

@@ -10,6 +10,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity]
 #[UniqueEntity(fields: ['code'], message: 'Un badge avec ce code existe déjà.')]
+#[UniqueEntity(fields: ['label'], message: 'Un badge avec ce libellé existe déjà.')]
 #[ApiResource(
     normalizationContext: ['groups' => ['badge:read']],
     denormalizationContext: ['groups' => ['badge:write']],
@@ -34,7 +35,7 @@ class Badge
     #[Assert\Length(max: 100, maxMessage: 'Le code ne peut pas dépasser {{ limit }} caractères.')]
     private string $code;
 
-    #[ORM\Column(length: 255)]
+    #[ORM\Column(length: 255, unique: true)]
     #[Groups(['badge:read', 'badge:write', 'product:read'])]
     #[Assert\NotBlank(message: 'Le label est obligatoire.')]
     private string $label;
