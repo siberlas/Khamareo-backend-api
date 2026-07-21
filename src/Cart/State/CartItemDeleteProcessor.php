@@ -24,11 +24,14 @@ final class CartItemDeleteProcessor implements ProcessorInterface
 
         $result = $this->removeProcessor->process($data, $operation, $uriVariables, $context);
 
-        if ($cart && !empty($cart->getPromoCodesData())) {
-            $changed = $this->promoService->recalculatePercentageDiscounts($cart);
-            if ($changed) {
-                $this->em->flush();
+        if ($cart) {
+            $cart->touch();
+
+            if (!empty($cart->getPromoCodesData())) {
+                $this->promoService->recalculatePercentageDiscounts($cart);
             }
+
+            $this->em->flush();
         }
 
         return $result;

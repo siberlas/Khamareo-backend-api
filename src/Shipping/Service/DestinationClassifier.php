@@ -53,7 +53,7 @@ class DestinationClassifier
                 return DestinationZone::FRANCE_METRO;
             }
 
-            if ($countryCode === 'AD') {
+            if ($countryCode === 'AD' || $countryCode === 'MC') {
                 return DestinationZone::FRANCE_METRO;
             }
 

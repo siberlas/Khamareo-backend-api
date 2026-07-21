@@ -408,17 +408,18 @@ class ColissimoApiServiceV
     }
 
     /**
-     * Récupère le poids du produit de manière sécurisée
+     * Récupère le poids du produit de manière sécurisée.
+     * Product::$weightGrams est le champ réellement renseigné (cf. ColissimoApiService).
      */
     private function safeProductWeightGrams($product): int
     {
-        $w = $product->getWeight();
+        $grams = $product->getWeightGrams();
 
-        if ($w === null || !is_numeric($w) || $w <= 0) {
+        if ($grams === null || $grams <= 0) {
             return 500; // Default 500g
         }
 
-        return (int) $w;
+        return $grams;
     }
 
     /**

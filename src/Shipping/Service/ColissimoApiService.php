@@ -168,7 +168,9 @@ class ColissimoApiService
             'line2' => $this->normalizeAddressField($address->getStreetAddress()),
             'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
             'city' => $this->normalizeAddressField($address->getCity()),
-            'countryCode' => 'FR',
+            // Andorre (CP "ADxxx") n'est pas un format postal FR : Colissimo rejette
+            // sinon la combinaison avec un "Le code postal est inconnu/incorrect".
+            'countryCode' => $this->resolveCountryCodeFromPostalCode($address->getPostalCode()) ?? 'FR',
             'email' => $customerData['email'],
             'mobileNumber' => $customerData['phone'],
         ];
@@ -181,39 +183,85 @@ class ColissimoApiService
             $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
 
+        $letter = [
+            'service' => [
+                'productCode' => 'DOM',
+                'depositDate' => (new \DateTime())->format('Y-m-d'),
+                'orderNumber' => $parcelRef,
+                'transportationAmount' => (float) ($order->getShippingCost() ?? 0),
+                'totalAmount' => (float) $order->getTotalAmount(),
+            ],
+            'parcel' => [
+                'weight' => $parcelWeightKg,
+            ],
+            'sender' => [
+                'address' => [
+                    'companyName' => $this->senderInfo['company'],
+                    'lastName' => $this->senderInfo['lastname'],
+                    'firstName' => $this->senderInfo['firstname'],
+                    'line2' => $this->senderInfo['address'],
+                    'zipCode' => $this->senderInfo['zipcode'],
+                    'city' => $this->senderInfo['city'],
+                    'countryCode' => $this->senderInfo['country'],
+                    'email' => $this->senderInfo['email'],
+                    'mobileNumber' => $this->senderInfo['phone'],
+                ],
+            ],
+            'addressee' => [
+                'address' => $addresseeAddress,
+            ],
+        ];
+
+        // Andorre (hors FR malgré le produit DOM) : Colissimo rejette avec l'erreur
+        // 30500 "Le contenu du colis n'a pas été transmis" si customsDeclarations
+        // est absent, alors même que la doc officielle l'indique "non requis" pour
+        // ce produit — comportement constaté empiriquement, pas documenté.
+        if ($addresseeAddress['countryCode'] !== 'FR') {
+            $letter['customsDeclarations'] = $this->buildParcelCustomsContents($parcel);
+        }
+
         return [
             'outputFormat' => [
                 'x' => 0,
                 'y' => 0,
                 'outputPrintingType' => 'PDF_A4_300dpi',
             ],
-            'letter' => [
-                'service' => [
-                    'productCode' => 'DOM',
-                    'depositDate' => (new \DateTime())->format('Y-m-d'),
-                    'orderNumber' => $parcelRef,
-                    'transportationAmount' => (float) ($order->getShippingCost() ?? 0),
-                    'totalAmount' => (float) $order->getTotalAmount(),
-                ],
-                'parcel' => [
-                    'weight' => $parcelWeightKg,
-                ],
-                'sender' => [
-                    'address' => [
-                        'companyName' => $this->senderInfo['company'],
-                        'lastName' => $this->senderInfo['lastname'],
-                        'firstName' => $this->senderInfo['firstname'],
-                        'line2' => $this->senderInfo['address'],
-                        'zipCode' => $this->senderInfo['zipcode'],
-                        'city' => $this->senderInfo['city'],
-                        'countryCode' => $this->senderInfo['country'],
-                        'email' => $this->senderInfo['email'],
-                        'mobileNumber' => $this->senderInfo['phone'],
-                    ],
-                ],
-                'addressee' => [
-                    'address' => $addresseeAddress,
-                ],
+            'letter' => $letter,
+        ];
+    }
+
+    /**
+     * Bloc customsDeclarations minimal pour un colis dont le produit est DOM
+     * mais la destination hors France (cf. Andorre dans buildDomesticParcelPayload).
+     */
+    private function buildParcelCustomsContents(Parcel $parcel): array
+    {
+        $articles = [];
+        foreach ($parcel->getItems() as $parcelItem) {
+            $orderItem = $parcelItem->getOrderItem();
+            $product = $orderItem?->getProduct();
+            if (!$product) {
+                continue;
+            }
+
+            $unitWeightGrams = $this->safeProductWeightGrams($product);
+
+            $articles[] = [
+                'description' => $this->getProductDescription($product),
+                'quantity' => $parcelItem->getQuantity(),
+                'weight' => $this->gramsToKgCN23($unitWeightGrams),
+                'value' => (float) $orderItem->getUnitPrice(),
+                'hsCode' => self::HS_CODE_PLANTS,
+                'originCountry' => 'FR',
+                'currency' => 'EUR',
+            ];
+        }
+
+        return [
+            'includeCustomsDeclarations' => 0,
+            'contents' => [
+                'article' => $articles,
+                'category' => ['value' => 1],
             ],
         ];
     }
@@ -522,7 +570,9 @@ class ColissimoApiService
             'line2' => $this->normalizeAddressField($address->getStreetAddress()),
             'zipCode' => $this->normalizePostalCode($address->getPostalCode()),
             'city' => $this->normalizeAddressField($address->getCity()),
-            'countryCode' => 'FR',
+            // Andorre (CP "ADxxx") n'est pas un format postal FR : Colissimo rejette
+            // sinon la combinaison avec un "Le code postal est inconnu/incorrect".
+            'countryCode' => $this->resolveCountryCodeFromPostalCode($address->getPostalCode()) ?? 'FR',
             'email' => $customerData['email'],
             'mobileNumber' => $customerData['phone'],
         ];
@@ -535,39 +585,81 @@ class ColissimoApiService
             $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
 
+        $letter = [
+            'service' => [
+                'productCode' => 'DOM',
+                'depositDate' => (new \DateTime())->format('Y-m-d'),
+                'orderNumber' => $order->getOrderNumber(),
+                'transportationAmount' => (float) ($order->getShippingCost() ?? 0),
+                'totalAmount' => (float) $order->getTotalAmount(),
+            ],
+            'parcel' => [
+                'weight' => $parcelWeightKg,
+            ],
+            'sender' => [
+                'address' => [
+                    'companyName' => $this->senderInfo['company'],
+                    'lastName' => $this->senderInfo['lastname'],
+                    'firstName' => $this->senderInfo['firstname'],
+                    'line2' => $this->senderInfo['address'],
+                    'zipCode' => $this->senderInfo['zipcode'],
+                    'city' => $this->senderInfo['city'],
+                    'countryCode' => $this->senderInfo['country'],
+                    'email' => $this->senderInfo['email'],
+                    'mobileNumber' => $this->senderInfo['phone'],
+                ],
+            ],
+            'addressee' => [
+                'address' => $addresseeAddress,
+            ],
+        ];
+
+        // Andorre (hors FR malgré le produit DOM) : cf. buildDomesticParcelPayload.
+        if ($addresseeAddress['countryCode'] !== 'FR') {
+            $letter['customsDeclarations'] = $this->buildOrderCustomsContents($order);
+        }
+
         return [
             'outputFormat' => [
                 'x' => 0,
                 'y' => 0,
                 'outputPrintingType' => 'PDF_A4_300dpi',
             ],
-            'letter' => [
-                'service' => [
-                    'productCode' => 'DOM',
-                    'depositDate' => (new \DateTime())->format('Y-m-d'),
-                    'orderNumber' => $order->getOrderNumber(),
-                    'transportationAmount' => (float) ($order->getShippingCost() ?? 0),
-                    'totalAmount' => (float) $order->getTotalAmount(),
-                ],
-                'parcel' => [
-                    'weight' => $parcelWeightKg,
-                ],
-                'sender' => [
-                    'address' => [
-                        'companyName' => $this->senderInfo['company'],
-                        'lastName' => $this->senderInfo['lastname'],
-                        'firstName' => $this->senderInfo['firstname'],
-                        'line2' => $this->senderInfo['address'],
-                        'zipCode' => $this->senderInfo['zipcode'],
-                        'city' => $this->senderInfo['city'],
-                        'countryCode' => $this->senderInfo['country'],
-                        'email' => $this->senderInfo['email'],
-                        'mobileNumber' => $this->senderInfo['phone'],
-                    ],
-                ],
-                'addressee' => [
-                    'address' => $addresseeAddress,
-                ],
+            'letter' => $letter,
+        ];
+    }
+
+    /**
+     * Bloc customsDeclarations minimal pour une commande dont le produit est DOM
+     * mais la destination hors France (cf. Andorre dans buildDomesticPayload).
+     */
+    private function buildOrderCustomsContents(Order $order): array
+    {
+        $articles = [];
+        foreach ($order->getItems() as $item) {
+            $product = $item->getProduct();
+            if (!$product) {
+                continue;
+            }
+
+            $unitWeightGrams = $this->safeProductWeightGrams($product);
+
+            $articles[] = [
+                'description' => $this->getProductDescription($product),
+                'quantity' => (int) $item->getQuantity(),
+                'weight' => $this->gramsToKgCN23($unitWeightGrams),
+                'value' => (float) $item->getUnitPrice(),
+                'hsCode' => self::HS_CODE_PLANTS,
+                'originCountry' => 'FR',
+                'currency' => 'EUR',
+            ];
+        }
+
+        return [
+            'includeCustomsDeclarations' => 0,
+            'contents' => [
+                'article' => $articles,
+                'category' => ['value' => 1],
             ],
         ];
     }
@@ -1002,25 +1094,20 @@ class ColissimoApiService
 
     /**
      * Retourne un poids unitaire en GRAMMES (int), robuste.
-     * - null => 500g
-     * - si <= 30 => considéré comme KG (fixtures Faker 0.1..5.0) => converti en g
-     * - sinon => considéré comme grammes déjà
+     * Utilise Product::$weightGrams — le champ réellement renseigné et déjà utilisé
+     * partout ailleurs (frais de port, colis, étiquettes). Product::$weight (float,
+     * legacy) n'est jamais rempli en pratique, d'où un fallback 500g systématique
+     * si on le lisait à la place.
      */
     private function safeProductWeightGrams($product): int
     {
-        $w = $product->getWeight();
+        $grams = $product->getWeightGrams();
 
-        if ($w === null || !is_numeric($w)) {
+        if ($grams === null || $grams <= 0) {
             return 500;
         }
 
-        $w = (float) $w;
-
-        if ($w > 0 && $w <= 30) {
-            return max(1, (int) round($w * 1000));
-        }
-
-        return max(1, (int) round($w));
+        return $grams;
     }
 
     /**

@@ -306,8 +306,17 @@ class Cart
         $this->createdAt = $now;
     }
 
-    #[ORM\PreUpdate]
-    public function onPreUpdate(): void
+    /**
+     * Marque une vraie activité client (ajout/modif/suppression d'article).
+     * Volontairement PAS automatique via #[ORM\PreUpdate] : ce hook se
+     * déclenchait sur N'IMPORTE QUELLE écriture (relances cron, codes promo
+     * appliqués côté serveur...), rendant `updatedAt` inexploitable pour
+     * mesurer une vraie durée de session ou détecter l'abandon (cf.
+     * CartReminderCommand::nextAction, qui l'utilise comme référence J+1h).
+     * Les seuls appelants légitimes sont CartItemProcessor,
+     * CartItemUpdateProcessor et CartItemDeleteProcessor.
+     */
+    public function touch(): void
     {
         $this->updatedAt = new \DateTimeImmutable();
     }
