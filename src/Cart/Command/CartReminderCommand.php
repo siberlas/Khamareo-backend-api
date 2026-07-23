@@ -161,13 +161,60 @@ class CartReminderCommand extends Command
      */
     private function getEligibleCarts(): array
     {
-        return $this->cartRepository->createQueryBuilder('c')
+        $carts = $this->cartRepository->createQueryBuilder('c')
             ->join('c.owner', 'u')
             ->andWhere('c.isActive = true')
             ->andWhere('c.items IS NOT EMPTY')
             ->andWhere('c.reminderStage < 3')
             ->getQuery()
             ->getResult();
+
+        if (empty($carts)) {
+            return [];
+        }
+
+        // Un panier "actif" en base peut être une simple session/guestToken
+        // différente de celle utilisée pour commander (invité qui revient sur
+        // un autre appareil, cookies effacés, etc.) — sans lien direct entre
+        // les deux paniers. On exclut donc tout panier dont le client (même
+        // email) a déjà commandé depuis la dernière activité de CE panier,
+        // pour ne pas relancer quelqu'un qui vient de passer commande.
+        $latestOrderByEmail = $this->latestOrderDateByEmail();
+
+        return array_values(array_filter($carts, function (Cart $cart) use ($latestOrderByEmail) {
+            $email = strtolower(trim($cart->getOwner()?->getEmail() ?? ''));
+            if ($email === '' || !isset($latestOrderByEmail[$email])) {
+                return true;
+            }
+
+            $reference = $cart->getUpdatedAt() ?? $cart->getCreatedAt();
+            return $reference === null || $latestOrderByEmail[$email] < $reference;
+        }));
+    }
+
+    /**
+     * @return array<string, \DateTimeImmutable> email (minuscule) => date de la commande la plus récente
+     */
+    private function latestOrderDateByEmail(): array
+    {
+        $rows = $this->em->createQuery(
+            'SELECT LOWER(COALESCE(u.email, o.guestEmail)) AS email, MAX(o.createdAt) AS lastOrderAt
+             FROM App\Order\Entity\Order o
+             LEFT JOIN o.owner u
+             GROUP BY email'
+        )->getArrayResult();
+
+        $map = [];
+        foreach ($rows as $row) {
+            if ($row['email'] === null || $row['lastOrderAt'] === null) {
+                continue;
+            }
+            $map[$row['email']] = $row['lastOrderAt'] instanceof \DateTimeInterface
+                ? \DateTimeImmutable::createFromInterface($row['lastOrderAt'])
+                : new \DateTimeImmutable($row['lastOrderAt']);
+        }
+
+        return $map;
     }
 
     /**
