@@ -4,3 +4,7 @@ sentry:
         environment: '%kernel.environment%'
         send_default_pii: true
         traces_sample_rate: 0.2
+        ignore_exceptions:
+            # Bruit de scanners/bots (favicon.ico, sondes WebDAV PROPFIND, etc.)
+            # frappant l'IP brute du serveur — 404 attendu, pas une erreur applicative.
+            - 'Symfony\Component\HttpKernel\Exception\NotFoundHttpException'
