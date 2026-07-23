@@ -895,7 +895,7 @@ class ColissimoApiService
                 'email' => $owner->getEmail(),
                 'firstName' => $owner->getFirstName(),
                 'lastName' => $owner->getLastName(),
-                'phone' => $owner->getPhone() ?? '0600000000',
+                'phone' => $this->phoneOrFallback($owner->getPhone()),
                 'companyName' => null,
             ];
         }
@@ -909,7 +909,7 @@ class ColissimoApiService
                 'email' => $order->getGuestEmail(),
                 'firstName' => $order->getGuestFirstName(),
                 'lastName' => $order->getGuestLastName(),
-                'phone' => $order->getGuestPhone() ?? '0600000000',
+                'phone' => $this->phoneOrFallback($order->getGuestPhone()),
                 'companyName' => null,
             ];
         }
@@ -920,7 +920,7 @@ class ColissimoApiService
                 'email' => $owner->getEmail(),
                 'firstName' => $owner->getFirstName(),
                 'lastName' => $owner->getLastName(),
-                'phone' => $owner->getPhone() ?? '0600000000',
+                'phone' => $this->phoneOrFallback($owner->getPhone()),
                 'companyName' => null,
             ];
         }
@@ -929,9 +929,20 @@ class ColissimoApiService
             'email' => 'noreply@khamareo.com',
             'firstName' => $address->getFirstName() ?? 'Client',
             'lastName' => $address->getLastName() ?? 'Khamareo',
-            'phone' => $address->getPhone() ?? '0600000000',
+            'phone' => $this->phoneOrFallback($address->getPhone()),
             'companyName' => $address->getCompanyName(),
         ];
+    }
+
+    /**
+     * Colissimo rejette un mobileNumber vide avec "Le numéro de portable du
+     * destinataire n'a pas été transmis" — mais le téléphone est facultatif
+     * côté checkout invité, donc souvent enregistré comme chaîne vide '' (pas
+     * null). `??` ne rattrape pas '', d'où ce garde-fou dédié.
+     */
+    private function phoneOrFallback(?string $phone): string
+    {
+        return ($phone !== null && trim($phone) !== '') ? $phone : '0600000000';
     }
 
     // ------------------------------------------------------------------
