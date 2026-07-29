@@ -156,6 +156,12 @@ final class GuestCartAddressProcessor implements ProcessorInterface
         // 5️⃣ Adresse de facturation = livraison
         $billingAddress = $deliveryAddress;
 
+        // Attacher au panier pour permettre la reprise d'une session interrompue
+        // (relance après échec de paiement) même si le client n'a jamais atteint
+        // l'étape de création du PaymentIntent — voir ResumeGuestCartController.
+        $cart->setDeliveryAddress($deliveryAddress);
+        $cart->setBillingAddress($billingAddress);
+
         // 6️⃣ Sauvegarder
         $this->em->flush();
 
