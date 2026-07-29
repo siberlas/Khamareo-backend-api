@@ -1,11 +1,13 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block subject %}Votre panier vous attend toujours{% endblock %}
+{% block subject %}Le règlement de votre commande n'a pas abouti{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
 
-    <p>Vous avez laissé quelques articles dans votre panier sur Khamareo — ils sont toujours réservés pour vous.</p>
+    <p>Nous avons constaté que le règlement de votre commande n'a pas abouti. <strong>Rassurez-vous, votre compte n'a pas été débité.</strong></p>
+
+    <p>Vos articles sont toujours dans votre panier, nous les mettons de côté pour vous :</p>
 
     {% if cart.items is not empty %}
     <div class="card">
@@ -39,10 +41,16 @@
     {% endif %}
 
     <div class="btn-wrapper">
-        <a href="{{ shopUrl }}" class="btn-primary">Retourner à la boutique</a>
+        <a href="{{ checkoutUrl }}" class="btn-primary">Réessayer le paiement</a>
     </div>
 
-    <p class="muted">Une question sur un produit ou votre commande ? Notre équipe est joignable à <a href="mailto:akwaaba@khamareo.com">akwaaba@khamareo.com</a>.</p>
+    <p class="muted">Vos informations de livraison sont déjà enregistrées — il ne vous reste plus qu'à réessayer de régler votre commande.</p>
+
+    <p class="muted">
+        Une question ou un doute ? Notre équipe est joignable à
+        <a href="mailto:akwaaba@khamareo.com">akwaaba@khamareo.com</a>
+        ou <a href="https://wa.me/33613627010?text={{ 'Bonjour, j\'ai une question concernant ma commande.'|url_encode }}">envoyez-nous un message sur WhatsApp</a>.
+    </p>
 
     <p>À très bientôt,<br>L'équipe Khamareo</p>
 {% endblock %}

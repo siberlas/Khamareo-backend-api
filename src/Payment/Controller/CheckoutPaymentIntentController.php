@@ -202,6 +202,8 @@ class CheckoutPaymentIntentController extends AbstractController
         $cart->setPaymentClientSecret($resp->clientSecret);
         $cart->setShippingCost($shippingCost);
         $cart->setCarrierShippingCost($carrierShippingCost);
+        $cart->setDeliveryAddress($deliveryAddress);
+        $cart->setBillingAddress($billingAddress);
 
         $this->em->flush();
 

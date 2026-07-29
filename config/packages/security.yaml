@@ -109,6 +109,7 @@ security:
         # PANIER INVITÉ (PUBLIC) ✅ AJOUTÉ
         # ============================================================
         - { path: ^/api/cart$, roles: PUBLIC_ACCESS }  # ✅ Route principale du panier
+        - { path: ^/api/cart/resume, roles: PUBLIC_ACCESS }  # Reprise session invité (lien email)
         - { path: ^/api/carts, roles: PUBLIC_ACCESS }
         - { path: ^/api/cart_items, roles: PUBLIC_ACCESS }
         - { path: ^/api/guest, roles: PUBLIC_ACCESS }  # ✅ CRITICAL - Routes guest
