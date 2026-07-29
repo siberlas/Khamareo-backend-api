@@ -1294,12 +1294,23 @@ class MailerService
                 'en' => $firstName ? "Hello {$firstName}" : 'Hello',
             ];
 
+            // Lien de reprise directe à l'étape livraison : le guestToken (identité
+            // + dernière adresse saisie, cf. ResumeGuestCartController) permet au
+            // frontend de pré-remplir la session sans tout ressaisir. Pour un compte
+            // connecté (pas de guestToken sur le panier), le lien nu suffit : sa
+            // session le rattache automatiquement à son panier une fois authentifié.
+            $checkoutUrl = $this->frontBaseUrl . '/checkout/delivery';
+            if ($cart->getGuestToken()) {
+                $checkoutUrl .= '?guestToken=' . urlencode($cart->getGuestToken());
+            }
+
             $html = $this->twig->render(
                 $this->getTemplate('emails/cart/checkout_issue_recovery', $locale),
                 [
                     'cart' => $cart,
                     'greeting' => $greetings[$locale] ?? $greetings['fr'],
                     'shopUrl' => $this->frontBaseUrl . '/boutique',
+                    'checkoutUrl' => $checkoutUrl,
                     'locale' => $locale,
                 ]
             );

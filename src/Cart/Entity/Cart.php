@@ -3,6 +3,7 @@
 namespace App\Cart\Entity;
 
 use App\Cart\Repository\CartRepository;
+use App\User\Entity\Address;
 use Doctrine\ORM\Mapping as ORM;
 use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Uid\Uuid;
@@ -186,6 +187,21 @@ class Cart
     /** Code promo -10% associé à l'étape 3 (généré ou réutilisé). */
     #[ORM\Column(length: 36, nullable: true)]
     private ?string $reminderPromoCodeId = null;
+
+    /**
+     * Snapshot de la dernière adresse saisie à l'étape paiement (voir
+     * CheckoutPaymentIntentController) — permet de reprendre une session
+     * invité interrompue (ex: relance après échec de paiement) sans faire
+     * ressaisir l'adresse. Purement informatif : pas la source de vérité
+     * pour la commande finale (celle-ci recrée son propre snapshot figé).
+     */
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Address $deliveryAddress = null;
+
+    #[ORM\ManyToOne]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    private ?Address $billingAddress = null;
 
     public function __construct()
     {
@@ -385,6 +401,28 @@ class Cart
     public function setDiscountAmount(?string $discountAmount): static
     {
         $this->discountAmount = $discountAmount;
+        return $this;
+    }
+
+    public function getDeliveryAddress(): ?Address
+    {
+        return $this->deliveryAddress;
+    }
+
+    public function setDeliveryAddress(?Address $deliveryAddress): self
+    {
+        $this->deliveryAddress = $deliveryAddress;
+        return $this;
+    }
+
+    public function getBillingAddress(): ?Address
+    {
+        return $this->billingAddress;
+    }
+
+    public function setBillingAddress(?Address $billingAddress): self
+    {
+        $this->billingAddress = $billingAddress;
         return $this;
     }
 

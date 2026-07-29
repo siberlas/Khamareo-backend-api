@@ -1,11 +1,13 @@
 {% extends 'emails/layout/base.html.twig' %}
 
-{% block subject %}Your cart is still waiting for you{% endblock %}
+{% block subject %}Payment for your order didn't go through{% endblock %}
 
 {% block content %}
     <p>{{ greeting }},</p>
 
-    <p>You left a few items in your cart on Khamareo — they're still reserved for you.</p>
+    <p>We noticed that payment for your order didn't go through. <strong>Rest assured, your account has not been charged.</strong></p>
+
+    <p>Your items are still in your cart — we're setting them aside for you:</p>
 
     {% if cart.items is not empty %}
     <div class="card">
@@ -39,10 +41,16 @@
     {% endif %}
 
     <div class="btn-wrapper">
-        <a href="{{ shopUrl }}" class="btn-primary">Back to the shop</a>
+        <a href="{{ checkoutUrl }}" class="btn-primary">Try payment again</a>
     </div>
 
-    <p class="muted">Any question about a product or your order? Our team is reachable at <a href="mailto:akwaaba@khamareo.com">akwaaba@khamareo.com</a>.</p>
+    <p class="muted">Your delivery details are already saved — all you need to do is try paying again.</p>
+
+    <p class="muted">
+        Any question or doubt? Our team is reachable at
+        <a href="mailto:akwaaba@khamareo.com">akwaaba@khamareo.com</a>
+        or <a href="https://wa.me/33613627010?text={{ 'Hello, I have a question about my order.'|url_encode }}">send us a message on WhatsApp</a>.
+    </p>
 
     <p>See you soon,<br>The Khamareo team</p>
 {% endblock %}
