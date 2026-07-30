@@ -227,4 +227,59 @@ class AbandonedCartController extends AbstractController
             'results'      => $results,
         ]);
     }
+
+    /**
+     * Envoie l'email de rappel panier simple (même contenu que l'étape 1 de la
+     * séquence auto cart:reminder) pour les paniers sélectionnés depuis la page
+     * admin. Contrairement à /send-reminder (dédié aux paniers "paiement échoué"),
+     * ce rappel ne mentionne pas de problème de paiement.
+     *
+     * POST /api/admin/carts/send-cart-reminder
+     * Body: { "cartIds": ["uuid1", "uuid2", ...] }
+     */
+    #[Route('/send-cart-reminder', name: 'send_cart_reminder', methods: ['POST'])]
+    public function sendCartReminder(Request $request): JsonResponse
+    {
+        $cartIds = json_decode($request->getContent(), true)['cartIds'] ?? [];
+
+        if (!is_array($cartIds) || empty($cartIds)) {
+            return $this->json([
+                'success' => false,
+                'error' => 'cartIds requis (tableau non vide).',
+            ], 400);
+        }
+
+        $results = [];
+        foreach ($cartIds as $cartId) {
+            $cart = $this->em->getRepository(Cart::class)->find($cartId);
+
+            if (!$cart) {
+                $results[] = ['cartId' => $cartId, 'success' => false, 'error' => 'cart_not_found'];
+                continue;
+            }
+
+            $email = $cart->getOwner()?->getEmail();
+            if (!$email) {
+                $results[] = ['cartId' => $cartId, 'success' => false, 'error' => 'no_email_available'];
+                continue;
+            }
+
+            $sent = $this->mailerService->sendCartReminderStage1($cart);
+            $results[] = [
+                'cartId'  => $cartId,
+                'email'   => $email,
+                'success' => $sent,
+                'error'   => $sent ? null : 'send_failed',
+            ];
+        }
+
+        $successCount = count(array_filter($results, fn($r) => $r['success']));
+
+        return $this->json([
+            'success'      => true,
+            'sentCount'    => $successCount,
+            'failedCount'  => count($results) - $successCount,
+            'results'      => $results,
+        ]);
+    }
 }

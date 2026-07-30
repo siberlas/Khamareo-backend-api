@@ -1371,6 +1371,15 @@ class MailerService
                 'en' => $firstName && !$isGuest ? "Hello {$firstName}" : 'Hello',
             ];
 
+            // Lien de reprise directe à l'étape livraison, avec guestToken pour
+            // restaurer panier + adresse + transporteur + code promo (cf.
+            // sendAbandonedCartCheckoutRecovery : /cart seul ne recharge rien
+            // côté frontend, CartContext ne lit le guestToken que via cette page).
+            $checkoutUrl = $this->frontBaseUrl . '/checkout/delivery';
+            if ($cart->getGuestToken()) {
+                $checkoutUrl .= '?guestToken=' . urlencode($cart->getGuestToken());
+            }
+
             $html = $this->twig->render(
                 $this->getTemplate('emails/cart/reminder_stage1', $locale),
                 [
@@ -1378,7 +1387,7 @@ class MailerService
                     'greeting' => $greetings[$locale] ?? $greetings['fr'],
                     'isGuest' => $isGuest,
                     'firstName' => $isGuest ? null : $firstName,
-                    'checkoutUrl' => $this->frontBaseUrl . '/cart',
+                    'checkoutUrl' => $checkoutUrl,
                     'locale' => $locale,
                 ]
             );
@@ -1423,13 +1432,18 @@ class MailerService
                 'en' => $firstName && !$owner->isGuest() ? "Hello {$firstName}" : 'Hello',
             ];
 
+            $checkoutUrl = $this->frontBaseUrl . '/checkout/delivery';
+            if ($cart->getGuestToken()) {
+                $checkoutUrl .= '?guestToken=' . urlencode($cart->getGuestToken());
+            }
+
             $html = $this->twig->render(
                 $this->getTemplate('emails/cart/reminder_stage2', $locale),
                 [
                     'cart' => $cart,
                     'greeting' => $greetings[$locale] ?? $greetings['fr'],
                     'reviews' => $reviews,
-                    'checkoutUrl' => $this->frontBaseUrl . '/cart',
+                    'checkoutUrl' => $checkoutUrl,
                     'locale' => $locale,
                 ]
             );
@@ -1476,6 +1490,11 @@ class MailerService
                 ? $promoCode->getDiscountPercentage() . '%'
                 : $promoCode->getDiscountAmount() . '€';
 
+            $checkoutUrl = $this->frontBaseUrl . '/checkout/delivery';
+            if ($cart->getGuestToken()) {
+                $checkoutUrl .= '?guestToken=' . urlencode($cart->getGuestToken());
+            }
+
             $html = $this->twig->render(
                 $this->getTemplate('emails/cart/reminder_stage3', $locale),
                 [
@@ -1483,7 +1502,7 @@ class MailerService
                     'greeting' => $greetings[$locale] ?? $greetings['fr'],
                     'promoCode' => $promoCode,
                     'discount' => $discount,
-                    'checkoutUrl' => $this->frontBaseUrl . '/cart',
+                    'checkoutUrl' => $checkoutUrl,
                     'locale' => $locale,
                 ]
             );
