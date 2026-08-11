@@ -170,7 +170,6 @@ class ColissimoApiService
             $unitWeightGrams = $this->safeProductWeightGrams($product);
             $sumArticlesKg += ($unitWeightGrams / 1000) * $parcelItem->getQuantity();
         }
-        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg);
 
         // Référence unique par colis
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
@@ -195,6 +194,11 @@ class ColissimoApiService
         if ($customerData['companyName'] !== null) {
             $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
+
+        // Andorre (hors FR malgré le produit DOM) déclenche un CN23 (cf. plus bas) :
+        // même marge d'emballage "international" (+30g) que le chemin OM.
+        $requiresCn23Margin = $addresseeAddress['countryCode'] !== 'FR';
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, $requiresCn23Margin);
 
         $letter = [
             'service' => [
@@ -410,7 +414,9 @@ class ColissimoApiService
             $sumArticlesKg += ($unitWeightKg * $qty);
         }
 
-        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg);
+        // Chemin OM/international : CN23 toujours inclus (cf. customsDeclarations
+        // plus bas, non conditionnel) — marge d'emballage "international" (+30g).
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, true);
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
 
         $countryCode = $this->resolveAddresseeCountryCode($order);
@@ -872,35 +878,65 @@ class ColissimoApiService
     }
 
     /**
-     * Poids déclaré pour l'étiquette : priorité au poids réel pesé
-     * (Parcel::manualWeightGrams, emballage inclus) s'il est renseigné,
-     * sinon estimation automatique (somme articles + marge forfaitaire).
+     * Poids déclaré pour l'étiquette.
+     *
+     * - Poids réel pesé (Parcel::manualWeightGrams) prioritaire s'il est
+     *   renseigné : c'est déjà une donnée terrain fiable, aucun carton requis
+     *   pour générer dans ce cas.
+     * - Sinon, poids estimé = somme articles + poids à vide du carton choisi
+     *   + 5g (scotch) + 30g (CN23) si le colis nécessite une déclaration en
+     *   douane. Un carton doit alors être sélectionné — sans quoi on ne peut
+     *   pas estimer l'emballage, donc on bloque plutôt que de deviner.
+     * - Dans tous les cas, le poids retenu final est le plus élevé entre le
+     *   poids réel (pesé ou estimé) et le poids volumétrique du carton, si un
+     *   carton est choisi.
      */
-    private function resolveParcelWeightKg(Parcel $parcel, float $sumArticlesKg): float
+    private function resolveParcelWeightKg(Parcel $parcel, float $sumArticlesKg, bool $requiresCn23Margin): float
     {
+        $carton = $parcel->getCarton();
+
         if ($parcel->getManualWeightGrams() !== null) {
-            $kg = round($parcel->getManualWeightGrams() / 1000, 2);
-            return min(30.00, max(0.10, $kg));
+            $realKg = $parcel->getManualWeightGrams() / 1000;
+        } else {
+            if ($carton === null) {
+                throw new \RuntimeException(
+                    "Aucun format de carton sélectionné pour ce colis : choisissez un carton (page Emballage) "
+                    . "ou saisissez le poids réel pesé avant de générer l'étiquette."
+                );
+            }
+
+            $marginGrams = $carton->getEmptyWeightGrams() + 5 + ($requiresCn23Margin ? 30 : 0);
+            $realKg = $sumArticlesKg + ($marginGrams / 1000);
         }
 
-        return $this->finalParcelWeightKg($sumArticlesKg);
-    }
+        $volumetricKg = $carton !== null ? $carton->getVolumetricWeightGrams() / 1000 : 0.0;
+        $kg = round(max($realKg, $volumetricKg), 2);
 
-    private function finalParcelWeightKg(float $sumArticlesKg): float
-    {
-        // ✅ Marge de sécurité augmentée à 0.10 kg (100g) pour éviter les problèmes d'arrondi
-        // Colissimo peut arrondir différemment de notre côté, donc on garde une marge confortable
-        $kg = $sumArticlesKg + 0.10;
-
-        // arrondi 2 décimales pour le colis
-        $kg = round($kg, 2);
-
-        // minimum "safe" (évite poids trop faible refusé)
         if ($kg < 0.10) {
             $kg = 0.10;
         }
+        if ($kg > 30.00) {
+            $kg = 30.00;
+        }
 
-        // max 30 kg Colissimo
+        return $kg;
+    }
+
+    /**
+     * Ancien calcul forfaitaire (+100g), conservé uniquement pour les chemins
+     * de génération par commande entière (generateLabel/generateOMLabel) —
+     * non utilisés par le flux actuel (multi-colis via generateLabelForParcel,
+     * seul point d'entrée appelé par l'admin), donc non concernés par la
+     * nouvelle formule carton/CN23 ci-dessus.
+     */
+    private function finalParcelWeightKg(float $sumArticlesKg): float
+    {
+        $kg = $sumArticlesKg + 0.10;
+        $kg = round($kg, 2);
+
+        if ($kg < 0.10) {
+            $kg = 0.10;
+        }
         if ($kg > 30.00) {
             $kg = 30.00;
         }

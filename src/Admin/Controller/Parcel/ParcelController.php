@@ -12,6 +12,8 @@ use App\Shipping\Repository\ParcelRepository;
 use App\Shipping\Repository\CartonRepository;
 use App\Shipping\Exception\MondialRelayApiException;
 use App\Shipping\Service\ParcelManager;
+use App\Shipping\Service\DestinationClassifier;
+use App\Shipping\Enum\DestinationZone;
 use App\Shipping\Service\LabelGenerator\LabelGeneratorFactory;
 use App\Media\Service\CloudinaryService;
 use App\Order\Service\Pdf\OrderPdfService;
@@ -41,6 +43,7 @@ class ParcelController extends AbstractController
         private MailerService $mailerService,
         private CloudinaryService $cloudinaryService,
         private CartonRepository $cartonRepository,
+        private DestinationClassifier $destinationClassifier,
     ) {}
 
     #[Route('/parcels/{parcelId}/delivery-note', name: 'generate_parcel_delivery_note', methods: ['POST'])]
@@ -557,26 +560,44 @@ class ParcelController extends AbstractController
      * uniquement (pas la valeur d'autorité envoyée à Colissimo — voir
      * ColissimoApiService::resolveParcelWeightKg()).
      */
+    /**
+     * Aperçu admin du poids retenu — reflète la même formule que la valeur
+     * d'autorité envoyée à Colissimo (ColissimoApiService::resolveParcelWeightKg()) :
+     * poids réel (pesé, sinon produits + emballage carton + 5g + 30g CN23
+     * si international) comparé au poids volumétrique, le plus élevé gagnant.
+     * Contrairement à la génération d'étiquette, ne bloque jamais si aucun
+     * carton n'est choisi — ceci n'est qu'un aperçu, pas l'appel transporteur.
+     */
     private function computeParcelWeightPreview(Parcel $parcel): array
     {
         $carton = $parcel->getCarton();
         $volumetricWeightGrams = $carton?->getVolumetricWeightGrams();
 
+        $productsWeightGrams = 0;
+        foreach ($parcel->getItems() as $parcelItem) {
+            $product = $parcelItem->getOrderItem()?->getProduct();
+            if (!$product) {
+                continue;
+            }
+            $unitWeightGrams = $product->getWeightGrams();
+            if ($unitWeightGrams === null || $unitWeightGrams <= 0) {
+                $unitWeightGrams = 500;
+            }
+            $productsWeightGrams += $unitWeightGrams * $parcelItem->getQuantity();
+        }
+
         if ($parcel->getManualWeightGrams() !== null) {
             $realWeightGrams = $parcel->getManualWeightGrams();
+        } elseif ($carton !== null) {
+            $requiresCn23Margin = $this->parcelRequiresCn23Margin($parcel);
+            $realWeightGrams = $productsWeightGrams
+                + $carton->getEmptyWeightGrams()
+                + 5
+                + ($requiresCn23Margin ? 30 : 0);
         } else {
-            $realWeightGrams = 0;
-            foreach ($parcel->getItems() as $parcelItem) {
-                $product = $parcelItem->getOrderItem()?->getProduct();
-                if (!$product) {
-                    continue;
-                }
-                $unitWeightGrams = $product->getWeightGrams();
-                if ($unitWeightGrams === null || $unitWeightGrams <= 0) {
-                    $unitWeightGrams = 500;
-                }
-                $realWeightGrams += $unitWeightGrams * $parcelItem->getQuantity();
-            }
+            // Ni pesée ni carton : seule estimation possible, sans marge
+            // d'emballage (la génération d'étiquette bloquera dans ce cas).
+            $realWeightGrams = $productsWeightGrams;
         }
 
         $billableWeightGrams = $volumetricWeightGrams !== null
@@ -587,6 +608,24 @@ class ParcelController extends AbstractController
             'volumetricWeightGrams' => $volumetricWeightGrams,
             'billableWeightGrams' => $billableWeightGrams,
         ];
+    }
+
+    /**
+     * Même critère que ColissimoApiService : le colis nécessite-t-il une
+     * déclaration en douane (zone hors France métro, ou Andorre) ?
+     */
+    private function parcelRequiresCn23Margin(Parcel $parcel): bool
+    {
+        $address = $parcel->getOrder()->getShippingAddress();
+        if (!$address) {
+            return false;
+        }
+        $zone = $this->destinationClassifier->classify($address->getPostalCode(), $address->getCountry());
+        if ($zone !== DestinationZone::FRANCE_METRO) {
+            return true;
+        }
+        // France métro selon la zone, mais Andorre reste hors FR au sens Colissimo.
+        return strtoupper((string) $address->getCountry()) === 'AD';
     }
 
      /**
