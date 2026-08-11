@@ -29,8 +29,11 @@ class ShippingConfigController extends AbstractController
         $data = json_decode($request->getContent(), true) ?? [];
         $settings = $this->getOrCreate();
 
-        if (array_key_exists('caePercent', $data)) {
-            $settings->setCaePercent($data['caePercent'] !== null && $data['caePercent'] !== '' ? (float) $data['caePercent'] : null);
+        if (array_key_exists('caePercentRoutier', $data)) {
+            $settings->setCaePercentRoutier($data['caePercentRoutier'] !== null && $data['caePercentRoutier'] !== '' ? (float) $data['caePercentRoutier'] : null);
+        }
+        if (array_key_exists('caePercentAerien', $data)) {
+            $settings->setCaePercentAerien($data['caePercentAerien'] !== null && $data['caePercentAerien'] !== '' ? (float) $data['caePercentAerien'] : null);
         }
         if (array_key_exists('caeExcludedCarrierModeIds', $data) && is_array($data['caeExcludedCarrierModeIds'])) {
             $settings->setCaeExcludedCarrierModeIds(array_map('intval', $data['caeExcludedCarrierModeIds']));
@@ -67,8 +70,34 @@ class ShippingConfigController extends AbstractController
                     'id' => $cm->getId(),
                     'name' => $detail ? "{$name} ({$detail})" : $name,
                     'carrierName' => $cm->getCarrier()?->getName(),
+                    'energyCoefficientType' => $cm->getEnergyCoefficientType(),
                 ];
             }, $carrierModes),
+        ]);
+    }
+
+    #[Route('/carrier-modes/{id}', name: 'update_carrier_mode', methods: ['PATCH'])]
+    public function updateCarrierMode(int $id, Request $request): JsonResponse
+    {
+        $carrierMode = $this->em->getRepository(CarrierMode::class)->find($id);
+        if (!$carrierMode) {
+            return $this->json(['error' => 'Mode de transport introuvable'], 404);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        if (array_key_exists('energyCoefficientType', $data)) {
+            $type = $data['energyCoefficientType'];
+            if ($type !== null && !in_array($type, ['routier', 'aerien'], true)) {
+                return $this->json(['error' => 'energyCoefficientType doit être "routier", "aerien" ou null'], 400);
+            }
+            $carrierMode->setEnergyCoefficientType($type);
+            $this->em->flush();
+        }
+
+        return $this->json([
+            'success' => true,
+            'id' => $carrierMode->getId(),
+            'energyCoefficientType' => $carrierMode->getEnergyCoefficientType(),
         ]);
     }
 
@@ -86,7 +115,8 @@ class ShippingConfigController extends AbstractController
     private function serialize(StoreSettings $s): array
     {
         return [
-            'caePercent' => $s->getCaePercent(),
+            'caePercentRoutier' => $s->getCaePercentRoutier(),
+            'caePercentAerien' => $s->getCaePercentAerien(),
             'caeExcludedCarrierModeIds' => $s->getCaeExcludedCarrierModeIds(),
             'supplementInternationalSecurity' => $s->getSupplementInternationalSecurity(),
             'supplementUs' => $s->getSupplementUs(),

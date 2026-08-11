@@ -112,6 +112,16 @@ class CarrierMode
     #[Groups(['carrierMode:read', 'carrierMode:write'])]
     private ?array $allowedCountries = null;
 
+    /**
+     * Type de coefficient d'ajustement énergie applicable ('routier' ou
+     * 'aerien') — la grille tarifaire Colissimo distingue deux taux CAE
+     * selon le mode de transport réel, indépendamment de la zone. Null =
+     * non renseigné, aucun CAE appliqué tant que ce n'est pas configuré.
+     */
+    #[ORM\Column(length: 20, nullable: true)]
+    #[Groups(['carrierMode:read', 'carrierMode:write'])]
+    private ?string $energyCoefficientType = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     #[Groups(['carrierMode:read'])]
     private ?\DateTimeImmutable $createdAt = null;
@@ -213,6 +223,13 @@ class CarrierMode
     public function setAllowedCountries(?array $allowedCountries): self
     {
         $this->allowedCountries = $allowedCountries;
+        return $this;
+    }
+
+    public function getEnergyCoefficientType(): ?string { return $this->energyCoefficientType; }
+    public function setEnergyCoefficientType(?string $energyCoefficientType): self
+    {
+        $this->energyCoefficientType = $energyCoefficientType;
         return $this;
     }
 

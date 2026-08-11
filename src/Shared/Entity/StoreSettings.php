@@ -79,9 +79,16 @@ class StoreSettings
 
     // ── Frais de port (CAE + suppléments) ───────────────────────────────────
 
-    /** Coefficient d'Ajustement Énergie La Poste, en pourcentage (ex: 15.50). */
+    /**
+     * Coefficient d'Ajustement Énergie La Poste, en pourcentage — deux taux
+     * distincts selon le mode de transport réel (cf. CarrierMode::energyCoefficientType),
+     * la grille Colissimo n'a jamais un taux unique.
+     */
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
-    private ?string $caePercent = null;
+    private ?string $caePercentRoutier = null;
+
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $caePercentAerien = null;
 
     /** IDs de CarrierMode exclus du CAE (ex: Colissimo Eco Outre-mer). */
     #[ORM\Column(type: 'json', nullable: true)]
@@ -185,8 +192,11 @@ class StoreSettings
 
     // ── Getters/setters Frais de port ─────────────────────────────────────
 
-    public function getCaePercent(): ?float { return $this->caePercent !== null ? (float) $this->caePercent : null; }
-    public function setCaePercent(?float $v): self { $this->caePercent = $v !== null ? (string) $v : null; return $this; }
+    public function getCaePercentRoutier(): ?float { return $this->caePercentRoutier !== null ? (float) $this->caePercentRoutier : null; }
+    public function setCaePercentRoutier(?float $v): self { $this->caePercentRoutier = $v !== null ? (string) $v : null; return $this; }
+
+    public function getCaePercentAerien(): ?float { return $this->caePercentAerien !== null ? (float) $this->caePercentAerien : null; }
+    public function setCaePercentAerien(?float $v): self { $this->caePercentAerien = $v !== null ? (string) $v : null; return $this; }
 
     public function getCaeExcludedCarrierModeIds(): array { return $this->caeExcludedCarrierModeIds ?? []; }
     public function setCaeExcludedCarrierModeIds(?array $v): self { $this->caeExcludedCarrierModeIds = $v; return $this; }
