@@ -195,7 +195,10 @@ class ColissimoApiService
         // Andorre (hors FR malgré le produit DOM) déclenche un CN23 (cf. plus bas) :
         // même marge d'emballage "international" (+30g) que le chemin OM.
         $requiresCn23Margin = $addresseeAddress['countryCode'] !== 'FR';
-        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, $requiresCn23Margin);
+        // France métro (et Andorre via ce même produit DOM) : jamais de poids
+        // volumétrique facturé, quelle que soit la destination — cf. grille
+        // Colissimo 2026 (routier/national exclu de cette règle).
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, $requiresCn23Margin, false);
 
         $letter = [
             'service' => [
@@ -415,7 +418,10 @@ class ColissimoApiService
 
         // Chemin OM/international : CN23 toujours inclus (cf. customsDeclarations
         // plus bas, non conditionnel) — marge d'emballage "international" (+30g).
-        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, true);
+        // Poids volumétrique : uniquement Outre-mer/International (hors Eco),
+        // jamais sur Union Européenne/Europe hors UE — cf. grille Colissimo 2026.
+        $appliesVolumetricWeight = $this->resolveVolumetricWeightApplicability($parcel, $zone);
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, true, $appliesVolumetricWeight);
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
 
         $countryCode = $this->resolveAddresseeCountryCode($order);
@@ -888,11 +894,14 @@ class ColissimoApiService
      *   + 5g (scotch) + 30g (CN23) si le colis nécessite une déclaration en
      *   douane. Un carton doit alors être sélectionné — sans quoi on ne peut
      *   pas estimer l'emballage, donc on bloque plutôt que de deviner.
-     * - Dans tous les cas, le poids retenu final est le plus élevé entre le
-     *   poids réel (pesé ou estimé) et le poids volumétrique du carton, si un
-     *   carton est choisi.
+     * - Le poids volumétrique du carton n'est comparé (max) au poids réel
+     *   que si $appliesVolumetricWeight est vrai — cf. resolveVolumetricWeightApplicability().
+     *   Grille tarifaire Colissimo 2026 : le poids volumétrique ne conditionne
+     *   la facturation que sur Outre-mer et International **aérien**, jamais
+     *   sur Colissimo Eco Outre-mer, jamais sur France métro/UE/Suisse/UK
+     *   (là il n'existe qu'un supplément fixe de 0,20€ à part, non géré ici).
      */
-    private function resolveParcelWeightKg(Parcel $parcel, float $sumArticlesKg, bool $requiresCn23Margin): float
+    private function resolveParcelWeightKg(Parcel $parcel, float $sumArticlesKg, bool $requiresCn23Margin, bool $appliesVolumetricWeight): float
     {
         $carton = $parcel->getCarton();
 
@@ -910,8 +919,13 @@ class ColissimoApiService
             $realKg = $sumArticlesKg + ($marginGrams / 1000);
         }
 
-        $volumetricKg = $carton !== null ? $carton->getVolumetricWeightGrams() / 1000 : 0.0;
-        $kg = round(max($realKg, $volumetricKg), 2);
+        if ($appliesVolumetricWeight && $carton !== null) {
+            $volumetricKg = $carton->getVolumetricWeightGrams() / 1000;
+            $kg = max($realKg, $volumetricKg);
+        } else {
+            $kg = $realKg;
+        }
+        $kg = round($kg, 2);
 
         if ($kg < 0.10) {
             $kg = 0.10;
@@ -921,6 +935,22 @@ class ColissimoApiService
         }
 
         return $kg;
+    }
+
+    /**
+     * Le poids volumétrique ne conditionne la facturation que sur les offres
+     * Outre-mer et International (aérien) — jamais sur Colissimo Eco
+     * Outre-mer, ni sur France métro/UE/Suisse/UK (grille Colissimo 2026,
+     * liste de pays exclus = exactement notre zone union_europeenne).
+     */
+    private function resolveVolumetricWeightApplicability(Parcel $parcel, DestinationZone $zone): bool
+    {
+        if ($zone !== DestinationZone::OUTRE_MER && $zone !== DestinationZone::INTERNATIONAL) {
+            return false;
+        }
+
+        $productCodeKey = $parcel->getOrder()->getCarrierMode()?->getColissimoProductCodeKey();
+        return $productCodeKey !== 'outre_mer_eco';
     }
 
     /**

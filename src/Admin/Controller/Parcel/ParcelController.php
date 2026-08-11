@@ -564,14 +564,24 @@ class ParcelController extends AbstractController
      * Aperçu admin du poids retenu — reflète la même formule que la valeur
      * d'autorité envoyée à Colissimo (ColissimoApiService::resolveParcelWeightKg()) :
      * poids réel (pesé, sinon produits + emballage carton + 5g + 30g CN23
-     * si international) comparé au poids volumétrique, le plus élevé gagnant.
+     * si international) comparé au poids volumétrique — uniquement sur les
+     * offres Outre-mer/International (hors Eco), jamais France métro/UE,
+     * comme dans ColissimoApiService::resolveVolumetricWeightApplicability().
      * Contrairement à la génération d'étiquette, ne bloque jamais si aucun
      * carton n'est choisi — ceci n'est qu'un aperçu, pas l'appel transporteur.
      */
     private function computeParcelWeightPreview(Parcel $parcel): array
     {
         $carton = $parcel->getCarton();
-        $volumetricWeightGrams = $carton?->getVolumetricWeightGrams();
+        $address = $parcel->getOrder()->getShippingAddress();
+        $zone = $address ? $this->destinationClassifier->classify($address->getPostalCode(), $address->getCountry()) : null;
+
+        $appliesVolumetricWeight = $carton !== null
+            && $zone !== null
+            && ($zone === DestinationZone::OUTRE_MER || $zone === DestinationZone::INTERNATIONAL)
+            && $parcel->getOrder()->getCarrierMode()?->getColissimoProductCodeKey() !== 'outre_mer_eco';
+
+        $volumetricWeightGrams = $appliesVolumetricWeight ? $carton->getVolumetricWeightGrams() : null;
 
         $productsWeightGrams = 0;
         foreach ($parcel->getItems() as $parcelItem) {
