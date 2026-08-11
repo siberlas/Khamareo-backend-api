@@ -1339,13 +1339,6 @@ class ColissimoApiService
 
     private function getProductDescription($product): string
     {
-        $name = strtolower((string) $product->getName());
-
-        if (str_contains($name, 'huile')) return 'Huile végétale naturelle';
-        if (str_contains($name, 'beurre')) return 'Beurre végétal';
-        if (str_contains($name, 'poudre')) return 'Poudre végétale';
-        if (str_contains($name, 'savon')) return 'Savon naturel';
-
-        return 'Produit naturel';
+        return (string) $product->getName();
     }
 }
