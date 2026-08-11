@@ -3,6 +3,7 @@
 namespace App\Admin\Controller\Shipping;
 
 use App\Shipping\Entity\Carton;
+use App\Shipping\Entity\Parcel;
 use App\Shipping\Repository\CartonRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -75,6 +76,24 @@ class CartonController extends AbstractController
         $carton = $this->cartonRepository->find($id);
         if (!$carton) {
             return $this->json(['error' => 'Carton introuvable'], 404);
+        }
+
+        $usageCount = (int) $this->em->getRepository(Parcel::class)
+            ->createQueryBuilder('p')
+            ->select('COUNT(p.id)')
+            ->andWhere('p.carton = :carton')
+            ->setParameter('carton', $carton)
+            ->getQuery()
+            ->getSingleScalarResult();
+
+        if ($usageCount > 0) {
+            return $this->json([
+                'error' => sprintf(
+                    'Ce carton est utilisé par %d colis en cours et ne peut pas être supprimé. '
+                    . 'Changez d\'abord le carton sur ces colis, ou modifiez celui-ci au lieu de le supprimer.',
+                    $usageCount
+                ),
+            ], 409);
         }
 
         $this->em->remove($carton);
