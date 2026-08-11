@@ -77,6 +77,25 @@ class StoreSettings
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $communityVignettes = null;
 
+    // ── Frais de port (CAE + suppléments) ───────────────────────────────────
+
+    /** Coefficient d'Ajustement Énergie La Poste, en pourcentage (ex: 15.50). */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $caePercent = null;
+
+    /** IDs de CarrierMode exclus du CAE (ex: Colissimo Eco Outre-mer). */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $caeExcludedCarrierModeIds = null;
+
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementInternationalSecurity = null;
+
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementUs = null;
+
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementDecarbonation = null;
+
     // ── Timestamp ─────────────────────────────────────────────────────────────
 
     #[ORM\Column(type: 'datetime_immutable')]
@@ -163,6 +182,23 @@ class StoreSettings
 
     public function getCommunityVignettes(): ?array { return $this->communityVignettes; }
     public function setCommunityVignettes(?array $v): self { $this->communityVignettes = $v; return $this; }
+
+    // ── Getters/setters Frais de port ─────────────────────────────────────
+
+    public function getCaePercent(): ?float { return $this->caePercent !== null ? (float) $this->caePercent : null; }
+    public function setCaePercent(?float $v): self { $this->caePercent = $v !== null ? (string) $v : null; return $this; }
+
+    public function getCaeExcludedCarrierModeIds(): array { return $this->caeExcludedCarrierModeIds ?? []; }
+    public function setCaeExcludedCarrierModeIds(?array $v): self { $this->caeExcludedCarrierModeIds = $v; return $this; }
+
+    public function getSupplementInternationalSecurity(): ?float { return $this->supplementInternationalSecurity !== null ? (float) $this->supplementInternationalSecurity : null; }
+    public function setSupplementInternationalSecurity(?float $v): self { $this->supplementInternationalSecurity = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSupplementUs(): ?float { return $this->supplementUs !== null ? (float) $this->supplementUs : null; }
+    public function setSupplementUs(?float $v): self { $this->supplementUs = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSupplementDecarbonation(): ?float { return $this->supplementDecarbonation !== null ? (float) $this->supplementDecarbonation : null; }
+    public function setSupplementDecarbonation(?float $v): self { $this->supplementDecarbonation = $v !== null ? (string) $v : null; return $this; }
 
     // ── Timestamp ─────────────────────────────────────────────────────────
 
