@@ -164,6 +164,28 @@ class Product
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $weightGrams = null;
 
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $lengthCm = null;
+
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $widthCm = null;
+
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $heightCm = null;
+
+    /** Code SH (tarif douanier), 6 chiffres — requis pour le CN23 international. */
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'string', length: 6, nullable: true)]
+    private ?string $codeSh = null;
+
+    /** Pays d'origine (ISO 3166-1 alpha-2) — requis pour le CN23 international. */
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'string', length: 2, nullable: true)]
+    private ?string $paysOrigine = null;
+
     #[Groups(['product:read'])]
     private ?Currency $currency = null;
 
@@ -321,6 +343,31 @@ class Product
 
     public function getWeightGrams(): ?int { return $this->weightGrams; }
     public function setWeightGrams(?int $weightGrams): static { $this->weightGrams = $weightGrams; return $this; }
+
+    public function getLengthCm(): ?int { return $this->lengthCm; }
+    public function setLengthCm(?int $v): static { $this->lengthCm = $v; return $this; }
+
+    public function getWidthCm(): ?int { return $this->widthCm; }
+    public function setWidthCm(?int $v): static { $this->widthCm = $v; return $this; }
+
+    public function getHeightCm(): ?int { return $this->heightCm; }
+    public function setHeightCm(?int $v): static { $this->heightCm = $v; return $this; }
+
+    public function getCodeSh(): ?string { return $this->codeSh; }
+    public function setCodeSh(?string $v): static { $this->codeSh = $v; return $this; }
+
+    public function getPaysOrigine(): ?string { return $this->paysOrigine; }
+    public function setPaysOrigine(?string $v): static { $this->paysOrigine = $v; return $this; }
+
+    /** Volume dérivé des dimensions (cm³) — null tant que L/l/h ne sont pas toutes renseignées. */
+    #[Groups(['product:read'])]
+    public function getVolumeCm3(): ?int
+    {
+        if ($this->lengthCm === null || $this->widthCm === null || $this->heightCm === null) {
+            return null;
+        }
+        return $this->lengthCm * $this->widthCm * $this->heightCm;
+    }
 
     public function getBadge(): ?Badge { return $this->badge; }
     public function setBadge(?Badge $badge): static { $this->badge = $badge; return $this; }

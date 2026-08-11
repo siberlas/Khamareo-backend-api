@@ -139,6 +139,34 @@ class ProductCreationController extends AbstractController
             
             $product->setWeightGrams((int) $weightGramsRaw);
 
+            // Dimensions et douane (optionnels à la création)
+            if ($request->request->has('lengthCm')) {
+                $v = $request->request->get('lengthCm');
+                $product->setLengthCm($v !== null && $v !== '' ? (int) $v : null);
+            }
+            if ($request->request->has('widthCm')) {
+                $v = $request->request->get('widthCm');
+                $product->setWidthCm($v !== null && $v !== '' ? (int) $v : null);
+            }
+            if ($request->request->has('heightCm')) {
+                $v = $request->request->get('heightCm');
+                $product->setHeightCm($v !== null && $v !== '' ? (int) $v : null);
+            }
+            if ($request->request->has('codeSh')) {
+                $codeSh = trim((string) $request->request->get('codeSh'));
+                if ($codeSh !== '' && !preg_match('/^\d{6}$/', $codeSh)) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'Le code SH doit contenir exactement 6 chiffres'
+                    ], 400);
+                }
+                $product->setCodeSh($codeSh !== '' ? $codeSh : null);
+            }
+            if ($request->request->has('paysOrigine')) {
+                $paysOrigine = strtoupper(trim((string) $request->request->get('paysOrigine')));
+                $product->setPaysOrigine($paysOrigine !== '' ? $paysOrigine : null);
+            }
+
             // Champs optionnels
             if ($originalPrice = $request->request->get('originalPrice')) {
                 $product->setOriginalPrice((float) $originalPrice);

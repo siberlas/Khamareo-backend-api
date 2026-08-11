@@ -11,9 +11,6 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class ColissimoApiService
 {
-    // ✅ Ton HS code constant (plantes)
-    private const HS_CODE_PLANTS = '121190';
-
     public function __construct(
         private HttpClientInterface $httpClient,
         private LoggerInterface $logger,
@@ -262,14 +259,15 @@ class ColissimoApiService
             }
 
             $unitWeightGrams = $this->safeProductWeightGrams($product);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => $parcelItem->getQuantity(),
                 'weight' => $this->gramsToKgCN23($unitWeightGrams),
                 'value' => (float) $orderItem->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
         }
@@ -400,14 +398,15 @@ class ColissimoApiService
             $qty = $parcelItem->getQuantity();
             $unitWeightGrams = $this->safeProductWeightGrams($product);
             $unitWeightKg = $this->gramsToKgCN23($unitWeightGrams);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => $qty,
                 'weight' => $unitWeightKg,
                 'value' => (float) $orderItem->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
 
@@ -662,14 +661,15 @@ class ColissimoApiService
             }
 
             $unitWeightGrams = $this->safeProductWeightGrams($product);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => (int) $item->getQuantity(),
                 'weight' => $this->gramsToKgCN23($unitWeightGrams),
                 'value' => (float) $item->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
         }
@@ -779,14 +779,15 @@ class ColissimoApiService
 
             // ✅ poids CN23 unitaire (kg) arrondi à 3 décimales (stable)
             $unitWeightKg = $this->gramsToKgCN23($unitWeightGrams);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => $qty,
                 'weight' => $unitWeightKg,                // ✅ kg
                 'value' => (float) $item->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
 
@@ -1282,6 +1283,29 @@ class ColissimoApiService
     // ------------------------------------------------------------------
     // Product description
     // ------------------------------------------------------------------
+
+    /**
+     * Code SH et pays d'origine réels du produit pour la déclaration CN23.
+     * Bloque explicitement (pas de valeur par défaut silencieuse) si l'un des
+     * deux manque — une déclaration douanière fausse risque un colis bloqué
+     * chez le destinataire.
+     */
+    private function resolveCn23ArticleFields($product): array
+    {
+        $codeSh = $product->getCodeSh();
+        $paysOrigine = $product->getPaysOrigine();
+
+        if (!$codeSh || !$paysOrigine) {
+            throw new \RuntimeException(sprintf(
+                "Le produit « %s » n'a pas de code SH et/ou de pays d'origine renseigné "
+                . "(obligatoire pour une déclaration douanière internationale) : complétez sa fiche produit "
+                . "avant de générer l'étiquette.",
+                $product->getName()
+            ));
+        }
+
+        return ['hsCode' => $codeSh, 'originCountry' => $paysOrigine];
+    }
 
     private function getProductDescription($product): string
     {

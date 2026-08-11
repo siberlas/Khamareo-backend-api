@@ -171,6 +171,30 @@ class ProductUpdateController extends AbstractController
                 $product->setWeightGrams($wg);
             }
 
+            if (array_key_exists('lengthCm', $data)) {
+                $product->setLengthCm($data['lengthCm'] !== null && $data['lengthCm'] !== '' ? (int) $data['lengthCm'] : null);
+            }
+            if (array_key_exists('widthCm', $data)) {
+                $product->setWidthCm($data['widthCm'] !== null && $data['widthCm'] !== '' ? (int) $data['widthCm'] : null);
+            }
+            if (array_key_exists('heightCm', $data)) {
+                $product->setHeightCm($data['heightCm'] !== null && $data['heightCm'] !== '' ? (int) $data['heightCm'] : null);
+            }
+            if (array_key_exists('codeSh', $data)) {
+                $codeSh = trim((string) ($data['codeSh'] ?? ''));
+                if ($codeSh !== '' && !preg_match('/^\d{6}$/', $codeSh)) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'Le code SH doit contenir exactement 6 chiffres'
+                    ], 400);
+                }
+                $product->setCodeSh($codeSh !== '' ? $codeSh : null);
+            }
+            if (array_key_exists('paysOrigine', $data)) {
+                $paysOrigine = strtoupper(trim((string) ($data['paysOrigine'] ?? '')));
+                $product->setPaysOrigine($paysOrigine !== '' ? $paysOrigine : null);
+            }
+
             if (array_key_exists('badge', $data)) {
                 if ($data['badge'] === null) {
                     $product->setBadge(null);
@@ -387,6 +411,33 @@ class ProductUpdateController extends AbstractController
                     ], 400);
                 }
                 $product->setWeightGrams($wg);
+            }
+
+            if ($request->request->has('lengthCm')) {
+                $v = $request->request->get('lengthCm');
+                $product->setLengthCm($v !== null && $v !== '' ? (int) $v : null);
+            }
+            if ($request->request->has('widthCm')) {
+                $v = $request->request->get('widthCm');
+                $product->setWidthCm($v !== null && $v !== '' ? (int) $v : null);
+            }
+            if ($request->request->has('heightCm')) {
+                $v = $request->request->get('heightCm');
+                $product->setHeightCm($v !== null && $v !== '' ? (int) $v : null);
+            }
+            if ($request->request->has('codeSh')) {
+                $codeSh = trim((string) $request->request->get('codeSh'));
+                if ($codeSh !== '' && !preg_match('/^\d{6}$/', $codeSh)) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'Le code SH doit contenir exactement 6 chiffres'
+                    ], 400);
+                }
+                $product->setCodeSh($codeSh !== '' ? $codeSh : null);
+            }
+            if ($request->request->has('paysOrigine')) {
+                $paysOrigine = strtoupper(trim((string) $request->request->get('paysOrigine')));
+                $product->setPaysOrigine($paysOrigine !== '' ? $paysOrigine : null);
             }
 
             if ($request->request->has('ingredients')) {
