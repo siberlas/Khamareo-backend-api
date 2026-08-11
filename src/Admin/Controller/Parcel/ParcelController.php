@@ -9,6 +9,7 @@ use App\Shared\Enum\OrderStatus;
 use App\Shipping\Entity\Parcel;
 use App\Shipping\Entity\ParcelItem;
 use App\Shipping\Repository\ParcelRepository;
+use App\Shipping\Repository\CartonRepository;
 use App\Shipping\Exception\MondialRelayApiException;
 use App\Shipping\Service\ParcelManager;
 use App\Shipping\Service\LabelGenerator\LabelGeneratorFactory;
@@ -39,6 +40,7 @@ class ParcelController extends AbstractController
         private LoggerInterface $logger,
         private MailerService $mailerService,
         private CloudinaryService $cloudinaryService,
+        private CartonRepository $cartonRepository,
     ) {}
 
     #[Route('/parcels/{parcelId}/delivery-note', name: 'generate_parcel_delivery_note', methods: ['POST'])]
@@ -500,6 +502,93 @@ class ParcelController extends AbstractController
         ]);
     }
 
+    /**
+     * Affecte un format de carton à un colis et retourne un aperçu du poids
+     * volumétrique / poids retenu pour la facturation / prix estimé.
+     * PATCH /api/admin/parcels/{parcelId}/carton
+     *
+     * Aperçu à l'étape de préparation, avant génération d'étiquette — la
+     * valeur réellement envoyée à Colissimo est recalculée indépendamment au
+     * moment de la génération (ColissimoApiService::resolveParcelWeightKg()).
+     */
+    #[Route('/parcels/{parcelId}/carton', name: 'set_parcel_carton', methods: ['PATCH'])]
+    public function setCarton(string $parcelId, Request $request): JsonResponse
+    {
+        $parcel = $this->getParcel($parcelId);
+        if (!$parcel) {
+            return $this->json(['error' => 'Colis introuvable'], 404);
+        }
+
+        if (!in_array($parcel->getStatus(), ['confirmed', 'labeled'], true)) {
+            return $this->json([
+                'success' => false,
+                'error' => 'Le carton ne peut être choisi que sur un colis confirmé ou déjà étiqueté'
+            ], 400);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $cartonId = $data['cartonId'] ?? null;
+
+        if ($cartonId === null) {
+            $parcel->setCarton(null);
+        } else {
+            $carton = $this->cartonRepository->find($cartonId);
+            if (!$carton) {
+                return $this->json(['error' => 'Carton introuvable'], 404);
+            }
+            $parcel->setCarton($carton);
+        }
+
+        $this->em->flush();
+
+        $preview = $this->computeParcelWeightPreview($parcel);
+
+        return $this->json([
+            'success' => true,
+            'cartonId' => $parcel->getCarton()?->getId()->toRfc4122(),
+            'volumetricWeightGrams' => $preview['volumetricWeightGrams'],
+            'billableWeightGrams' => $preview['billableWeightGrams'],
+            'estimatedPrice' => null,
+        ]);
+    }
+
+    /**
+     * Aperçu poids volumétrique / poids retenu, pour l'affichage admin
+     * uniquement (pas la valeur d'autorité envoyée à Colissimo — voir
+     * ColissimoApiService::resolveParcelWeightKg()).
+     */
+    private function computeParcelWeightPreview(Parcel $parcel): array
+    {
+        $carton = $parcel->getCarton();
+        $volumetricWeightGrams = $carton?->getVolumetricWeightGrams();
+
+        if ($parcel->getManualWeightGrams() !== null) {
+            $realWeightGrams = $parcel->getManualWeightGrams();
+        } else {
+            $realWeightGrams = 0;
+            foreach ($parcel->getItems() as $parcelItem) {
+                $product = $parcelItem->getOrderItem()?->getProduct();
+                if (!$product) {
+                    continue;
+                }
+                $unitWeightGrams = $product->getWeightGrams();
+                if ($unitWeightGrams === null || $unitWeightGrams <= 0) {
+                    $unitWeightGrams = 500;
+                }
+                $realWeightGrams += $unitWeightGrams * $parcelItem->getQuantity();
+            }
+        }
+
+        $billableWeightGrams = $volumetricWeightGrams !== null
+            ? max($realWeightGrams, $volumetricWeightGrams)
+            : $realWeightGrams;
+
+        return [
+            'volumetricWeightGrams' => $volumetricWeightGrams,
+            'billableWeightGrams' => $billableWeightGrams,
+        ];
+    }
+
      /**
      * Produits disponibles pour la répartition manuelle
      * GET /api/admin/orders/{orderId}/parcels/available-products
@@ -577,12 +666,17 @@ class ParcelController extends AbstractController
                 'name' => $carrier?->getName(),
                 'code' => $carrier?->getCode(),
             ],
-            'parcels' => array_map(static function (Parcel $parcel) {
+            'parcels' => array_map(function (Parcel $parcel) {
+                $weightPreview = $this->computeParcelWeightPreview($parcel);
                 return [
                     'id' => $parcel->getId()->toRfc4122(),
                     'parcelNumber' => $parcel->getParcelNumber(),
                     'weightGrams' => $parcel->getWeightGrams(),
                     'manualWeightGrams' => $parcel->getManualWeightGrams(),
+                    'cartonId' => $parcel->getCarton()?->getId()->toRfc4122(),
+                    'volumetricWeightGrams' => $weightPreview['volumetricWeightGrams'],
+                    'billableWeightGrams' => $weightPreview['billableWeightGrams'],
+                    'estimatedPrice' => null,
                     'trackingNumber' => $parcel->getTrackingNumber(),
                     'labelPdfPath' => $parcel->getLabelPdfPath(),
                     'deliverySlipPdfPath' => $parcel->getDeliverySlipPdfPath(),
