@@ -425,6 +425,14 @@ class ParcelController extends AbstractController
             ], 400);
         }
 
+        $carrierCode = strtolower($parcel->getOrder()->getCarrier()?->getCode() ?? '');
+        if ($carrierCode !== 'colissimo') {
+            return $this->json([
+                'success' => false,
+                'error' => 'La régénération d\'étiquette n\'est disponible que pour Colissimo (les autres transporteurs facturent dès la génération)'
+            ], 400);
+        }
+
         try {
             $parcel->setStatus('confirmed');
             $parcel->setTrackingNumber(null);
@@ -449,6 +457,47 @@ class ParcelController extends AbstractController
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Enregistre le poids réel pesé (emballage inclus) avant génération
+     * d'étiquette. Prioritaire sur l'estimation automatique.
+     * PATCH /api/admin/parcels/{parcelId}/weight
+     */
+    #[Route('/parcels/{parcelId}/weight', name: 'set_parcel_manual_weight', methods: ['PATCH'])]
+    public function setManualWeight(string $parcelId, Request $request): JsonResponse
+    {
+        $parcel = $this->getParcel($parcelId);
+        if (!$parcel) {
+            return $this->json(['error' => 'Colis introuvable'], 404);
+        }
+
+        if (!in_array($parcel->getStatus(), ['confirmed', 'labeled'], true)) {
+            return $this->json([
+                'success' => false,
+                'error' => 'Le poids ne peut être ajusté que sur un colis confirmé ou déjà étiqueté'
+            ], 400);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $weightGrams = $data['weightGrams'] ?? null;
+
+        if (!is_numeric($weightGrams) || (int) $weightGrams <= 0) {
+            return $this->json(['error' => 'Poids invalide (grammes attendus)'], 400);
+        }
+
+        $parcel->setManualWeightGrams((int) $weightGrams);
+        $this->em->flush();
+
+        $this->logger->info('Manual parcel weight set', [
+            'parcel_id' => $parcel->getId()->toRfc4122(),
+            'manual_weight_grams' => $parcel->getManualWeightGrams(),
+        ]);
+
+        return $this->json([
+            'success' => true,
+            'manualWeightGrams' => $parcel->getManualWeightGrams(),
+        ]);
     }
 
      /**
@@ -533,6 +582,7 @@ class ParcelController extends AbstractController
                     'id' => $parcel->getId()->toRfc4122(),
                     'parcelNumber' => $parcel->getParcelNumber(),
                     'weightGrams' => $parcel->getWeightGrams(),
+                    'manualWeightGrams' => $parcel->getManualWeightGrams(),
                     'trackingNumber' => $parcel->getTrackingNumber(),
                     'labelPdfPath' => $parcel->getLabelPdfPath(),
                     'deliverySlipPdfPath' => $parcel->getDeliverySlipPdfPath(),

@@ -17,10 +17,10 @@ class ColissimoApiService
     public function __construct(
         private HttpClientInterface $httpClient,
         private LoggerInterface $logger,
+        private DestinationClassifier $destinationClassifier,
         private string $apiUrl,
         private string $apiKey,
         private array $senderInfo,
-        private DestinationClassifier $destinationClassifier,
         private array $productCodes = [],
     ) {}
 
@@ -156,8 +156,21 @@ class ColissimoApiService
         $address = $order->getShippingAddress();
         $customerData = $this->getCustomerData($order, $address);
 
-        $totalWeightGrams = max(1, (int) ($parcel->getWeightGrams() ?? 500));
-        $parcelWeightKg   = $this->finalParcelWeightKg($totalWeightGrams / 1000);
+        // Recalcul en direct depuis le contenu réel du colis (identique au principe
+        // du chemin OM/international dans buildOMParcelPayload()) plutôt que de faire
+        // confiance à Parcel::weightGrams, qui peut être périmé si le contenu a changé
+        // sans déclencher ParcelManager::recalculateParcelWeight().
+        $sumArticlesKg = 0.0;
+        foreach ($parcel->getItems() as $parcelItem) {
+            $orderItem = $parcelItem->getOrderItem();
+            $product = $orderItem?->getProduct();
+            if (!$product) {
+                continue;
+            }
+            $unitWeightGrams = $this->safeProductWeightGrams($product);
+            $sumArticlesKg += ($unitWeightGrams / 1000) * $parcelItem->getQuantity();
+        }
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg);
 
         // Référence unique par colis
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
@@ -397,7 +410,7 @@ class ColissimoApiService
             $sumArticlesKg += ($unitWeightKg * $qty);
         }
 
-        $parcelWeightKg = $this->finalParcelWeightKg($sumArticlesKg);
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg);
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
 
         $countryCode = $this->resolveAddresseeCountryCode($order);
@@ -856,6 +869,21 @@ class ColissimoApiService
                 ],
             ],
         ];
+    }
+
+    /**
+     * Poids déclaré pour l'étiquette : priorité au poids réel pesé
+     * (Parcel::manualWeightGrams, emballage inclus) s'il est renseigné,
+     * sinon estimation automatique (somme articles + marge forfaitaire).
+     */
+    private function resolveParcelWeightKg(Parcel $parcel, float $sumArticlesKg): float
+    {
+        if ($parcel->getManualWeightGrams() !== null) {
+            $kg = round($parcel->getManualWeightGrams() / 1000, 2);
+            return min(30.00, max(0.10, $kg));
+        }
+
+        return $this->finalParcelWeightKg($sumArticlesKg);
     }
 
     private function finalParcelWeightKg(float $sumArticlesKg): float
