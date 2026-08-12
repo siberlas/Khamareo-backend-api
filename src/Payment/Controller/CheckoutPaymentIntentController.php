@@ -9,7 +9,9 @@ use App\Shipping\Repository\CarrierModeRepository;
 use App\Cart\Service\CartWeightCalculator;
 use App\Shipping\Service\ShippingZoneMapper;
 use App\Payment\Provider\StripePaymentProvider;
+use App\Shipping\Service\CheckoutEstimationService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -32,6 +34,8 @@ class CheckoutPaymentIntentController extends AbstractController
         private readonly StripePaymentProvider   $stripeProvider,
         private readonly CurrencyRepository      $currencyRepository,
         private readonly ShippingZoneMapper      $zoneMapper,
+        private readonly CheckoutEstimationService $checkoutEstimationService,
+        private readonly LoggerInterface         $shippingLogger,
     ) {}
 
     #[Route('/api/checkout/payment-intent', name: 'checkout_payment_intent', methods: ['POST'])]
@@ -147,6 +151,26 @@ class CheckoutPaymentIntentController extends AbstractController
         $shippingCost = $rate
             ? (float) $rate->getPrice()
             : (float) ($carrierMode->getBasePrice() ?? 0);
+
+        // Recalcul précis (colisage + poids volumétrique + CAE + suppléments —
+        // mêmes règles que la génération réelle de l'étiquette), avec repli
+        // silencieux sur le calcul ci-dessus si l'estimation échoue (ex :
+        // produit sans dimensions renseignées) — pour ne jamais bloquer un
+        // paiement à cause d'une fiche produit incomplète.
+        $cartItems = array_map(fn ($item) => [
+            'product' => $item->getProduct(),
+            'quantity' => $item->getQuantity(),
+        ], $cart->getItems()->toArray());
+
+        $estimation = $this->checkoutEstimationService->estimate($cartItems, $carrierMode, $countryCode, $deliveryAddress->getPostalCode());
+        if ($estimation->success) {
+            $shippingCost = $estimation->totalPrice;
+        } else {
+            $this->shippingLogger->warning('Estimation checkout précise indisponible au paiement, repli sur le tarif de base', [
+                'carrierModeId' => $carrierMode->getId(),
+                'reason' => $estimation->error,
+            ]);
+        }
 
         // Tarif réel que Khamareo paie au transporteur (avant toute remise livraison offerte)
         $carrierShippingCost = $shippingCost;

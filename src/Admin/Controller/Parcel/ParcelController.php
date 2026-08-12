@@ -44,6 +44,8 @@ class ParcelController extends AbstractController
         private CloudinaryService $cloudinaryService,
         private CartonRepository $cartonRepository,
         private DestinationClassifier $destinationClassifier,
+        private \App\Shipping\Repository\ShippingRateRepository $shippingRateRepository,
+        private \App\Shipping\Service\ShippingZoneMapper $zoneMapper,
     ) {}
 
     #[Route('/parcels/{parcelId}/delivery-note', name: 'generate_parcel_delivery_note', methods: ['POST'])]
@@ -551,7 +553,7 @@ class ParcelController extends AbstractController
             'cartonId' => $parcel->getCarton()?->getId()->toRfc4122(),
             'volumetricWeightGrams' => $preview['volumetricWeightGrams'],
             'billableWeightGrams' => $preview['billableWeightGrams'],
-            'estimatedPrice' => null,
+            'estimatedPrice' => $this->computeEstimatedPrice($parcel, $preview['billableWeightGrams']),
         ]);
     }
 
@@ -618,6 +620,58 @@ class ParcelController extends AbstractController
             'volumetricWeightGrams' => $volumetricWeightGrams,
             'billableWeightGrams' => $billableWeightGrams,
         ];
+    }
+
+    /**
+     * Prix estimé du colis (port net + CAE + suppléments), pour l'aperçu
+     * admin uniquement — même formule que CheckoutEstimationService, mais
+     * appliquée à un colis déjà constitué (carton et répartition figés),
+     * pas à une simulation de colisage. Dupliquée plutôt que partagée : les
+     * deux services opèrent sur des données différentes (Parcel persisté vs
+     * panier simulé) — toute évolution de la règle doit être répercutée des
+     * deux côtés.
+     */
+    private function computeEstimatedPrice(Parcel $parcel, int $billableWeightGrams): ?float
+    {
+        $carrierMode = $parcel->getOrder()->getCarrierMode();
+        $address = $parcel->getOrder()->getShippingAddress();
+        if ($carrierMode === null || $address === null) {
+            return null;
+        }
+
+        $countryCode = $address->getCountry();
+        $rateZone = $this->zoneMapper->mapCountryToZone($countryCode);
+        $rate = $this->shippingRateRepository->findBestRate($carrierMode, $rateZone, $billableWeightGrams, $countryCode);
+        $portNet = $rate ? (float) $rate->getPrice() : (float) ($carrierMode->getBasePrice() ?? 0.0);
+
+        $settings = $this->em->getRepository(\App\Shared\Entity\StoreSettings::class)->findOneBy([]);
+        if ($settings === null) {
+            return round($portNet, 2);
+        }
+
+        $cae = 0.0;
+        if (!in_array($carrierMode->getId(), $settings->getCaeExcludedCarrierModeIds(), true)) {
+            $caePercent = match ($carrierMode->getEnergyCoefficientType()) {
+                'routier' => $settings->getCaePercentRoutier(),
+                'aerien' => $settings->getCaePercentAerien(),
+                default => null,
+            };
+            if ($caePercent !== null) {
+                $cae = round($portNet * $caePercent / 100, 2);
+            }
+        }
+
+        $zone = $this->destinationClassifier->classify($address->getPostalCode(), $countryCode);
+        $supplements = 0.0;
+        if (in_array($zone, [DestinationZone::UNION_EUROPEENNE, DestinationZone::EUROPE_HORS_UE, DestinationZone::INTERNATIONAL], true)) {
+            $supplements += $settings->getSupplementInternationalSecurity() ?? 0.0;
+        }
+        if (strtoupper($countryCode) === 'US') {
+            $supplements += $settings->getSupplementUs() ?? 0.0;
+        }
+        $supplements += $settings->getSupplementDecarbonation() ?? 0.0;
+
+        return round($portNet + $cae + $supplements, 2);
     }
 
     /**
@@ -725,7 +779,7 @@ class ParcelController extends AbstractController
                     'cartonId' => $parcel->getCarton()?->getId()->toRfc4122(),
                     'volumetricWeightGrams' => $weightPreview['volumetricWeightGrams'],
                     'billableWeightGrams' => $weightPreview['billableWeightGrams'],
-                    'estimatedPrice' => null,
+                    'estimatedPrice' => $this->computeEstimatedPrice($parcel, $weightPreview['billableWeightGrams']),
                     'trackingNumber' => $parcel->getTrackingNumber(),
                     'labelPdfPath' => $parcel->getLabelPdfPath(),
                     'deliverySlipPdfPath' => $parcel->getDeliverySlipPdfPath(),

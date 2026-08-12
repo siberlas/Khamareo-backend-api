@@ -84,9 +84,14 @@ class ShippingOptionsController extends AbstractController
         $weightGrams = (int) round($weightKg * 1000);
         $this->shippingLogger->info('Poids calculé', ['weightGrams' => $weightGrams, 'weightKg' => $weightKg]);
         
-        // 5. Résoudre les options disponibles
+        // 5. Résoudre les options disponibles (avec estimation précise par colis)
+        $cartItems = array_map(fn ($item) => [
+            'product' => $item->getProduct(),
+            'quantity' => $item->getQuantity(),
+        ], $cart->getItems()->toArray());
+
         $this->shippingLogger->info('Récupération des options disponibles', ['country' => $countryCode, 'weightGrams' => $weightGrams]);
-        $options = $this->optionsResolver->getAvailableOptions($countryCode, $weightGrams);
+        $options = $this->optionsResolver->getAvailableOptions($countryCode, $weightGrams, $cartItems, $postalCode);
         $this->shippingLogger->info('Options disponibles', ['count' => count($options)]);
 
         // 6. Retourner les options

@@ -61,9 +61,15 @@ class Carton
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
+    /** Volume brut en cm³ (L×l×h) — utilisé pour le remplissage/capacité. */
+    public function getVolumeCm3(): int
+    {
+        return $this->lengthCm * $this->widthCm * $this->heightCm;
+    }
+
     /** Poids volumétrique Colissimo : L×l×h (cm) / 5000 = poids en kg. */
     public function getVolumetricWeightGrams(): int
     {
-        return (int) round(($this->lengthCm * $this->widthCm * $this->heightCm) / 5000 * 1000);
+        return (int) round($this->getVolumeCm3() / 5000 * 1000);
     }
 }

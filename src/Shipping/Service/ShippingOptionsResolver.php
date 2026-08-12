@@ -6,6 +6,7 @@ use App\Shipping\Entity\CarrierMode;
 use App\Shipping\Entity\ShippingRate;
 use App\Shipping\Repository\CarrierModeRepository;
 use App\Shipping\Repository\ShippingRateRepository;
+use Psr\Log\LoggerInterface;
 
 /**
  * Service qui résout les options de livraison disponibles
@@ -19,14 +20,27 @@ class ShippingOptionsResolver
         private CarrierModeRepository $carrierModeRepository,
         private ShippingRateRepository $shippingRateRepository,
         private ShippingZoneMapper $zoneMapper,
+        private CheckoutEstimationService $checkoutEstimationService,
+        private LoggerInterface $shippingLogger,
     ) {}
 
     /**
      * Retourne toutes les options de livraison disponibles
      * pour une destination et un poids donnés
-     * 
+     *
+     * Quand $cartItems est fourni, le prix de chaque option est recalculé
+     * par CheckoutEstimationService (répartition en colis + poids
+     * volumétrique + CAE + suppléments — les mêmes règles que la génération
+     * réelle de l'étiquette). En cas d'échec de cette estimation (ex :
+     * produit sans dimensions renseignées), l'option retombe silencieusement
+     * sur l'ancien calcul au tarif de base (poids total, sans colisage) —
+     * pour ne jamais faire disparaître une option de livraison au checkout
+     * à cause d'une fiche produit incomplète.
+     *
      * @param string $countryCode Code pays (FR, GP, BE, etc.)
      * @param int $weightGrams Poids total en grammes
+     * @param array<array{product: \App\Catalog\Entity\Product, quantity: int}> $cartItems
+     * @param string|null $postalCode
      * @return array [
      *   {
      *     'carrierMode': CarrierMode,
@@ -34,17 +48,19 @@ class ShippingOptionsResolver
      *     'estimatedDays': int,
      *     'carrierName': string,
      *     'modeName': string,
-     *     'requiresPickupPoint': bool
+     *     'requiresPickupPoint': bool,
+     *     'accuratePricing': bool,
+     *     'parcels': array|null
      *   }
      * ]
      */
-    public function getAvailableOptions(string $countryCode, int $weightGrams): array
+    public function getAvailableOptions(string $countryCode, int $weightGrams, array $cartItems = [], ?string $postalCode = null): array
     {
         $zone = $this->zoneMapper->mapCountryToZone($countryCode);
-        return $this->resolveOptions($countryCode, $weightGrams, $zone);
+        return $this->resolveOptions($countryCode, $weightGrams, $zone, $cartItems, $postalCode);
     }
 
-    private function resolveOptions(string $countryCode, int $weightGrams, string $zone): array
+    private function resolveOptions(string $countryCode, int $weightGrams, string $zone, array $cartItems, ?string $postalCode): array
     {
         // 1. Zone déjà calculée par l'appelant
 
@@ -77,9 +93,32 @@ class ShippingOptionsResolver
             );
 
             // Prix = tarif trouvé OU prix de base du CarrierMode
-            $price = $shippingRate 
-                ? $shippingRate->getPrice() 
+            // (repli utilisé aussi si l'estimation précise échoue ci-dessous)
+            $price = $shippingRate
+                ? $shippingRate->getPrice()
                 : $carrierMode->getBasePrice();
+
+            $accuratePricing = false;
+            $parcels = null;
+            if (!empty($cartItems)) {
+                $estimation = $this->checkoutEstimationService->estimate($cartItems, $carrierMode, $countryCode, $postalCode);
+                if ($estimation->success) {
+                    $price = $estimation->totalPrice;
+                    $accuratePricing = true;
+                    $parcels = array_map(fn ($p) => [
+                        'cartonName' => $p->cartonName,
+                        'productNames' => $p->productNames,
+                        'weightGrams' => $p->weightGrams,
+                        'billableWeightGrams' => $p->billableWeightGrams,
+                        'price' => $p->price,
+                    ], $estimation->parcels);
+                } else {
+                    $this->shippingLogger->warning('Estimation checkout précise indisponible, repli sur le tarif de base', [
+                        'carrierModeId' => $carrierMode->getId(),
+                        'reason' => $estimation->error,
+                    ]);
+                }
+            }
 
             $estimatedDays = $carrierMode->getEstimatedDeliveryDays()
                 ?? $carrierMode->getDeliveryMaxDays()
@@ -89,6 +128,8 @@ class ShippingOptionsResolver
                 'carrierMode' => $carrierMode,
                 'carrierModeId' => $carrierMode->getId(),
                 'price' => $price,
+                'accuratePricing' => $accuratePricing,
+                'parcels' => $parcels,
                 'estimatedDays' => $estimatedDays,
                 'deliveryDelay' => [
                     'minDays' => $carrierMode->getDeliveryMinDays(),

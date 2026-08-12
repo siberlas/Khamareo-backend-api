@@ -6,7 +6,14 @@ class ShippingZoneMapper
 {
     private const OM1 = ['GP', 'MQ', 'GF', 'RE', 'YT', 'PM', 'MF', 'BL'];
     private const OM2 = ['NC', 'PF', 'WF', 'TF'];
-    private const EU  = ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE'];
+    // Membres UE + pays européens hors UE partageant la même grille tarifaire
+    // Colissimo "Reste des destinations Europe & Monde" (zones 1-4 du
+    // document 07/08/2026) — Groenland (GL) et Îles Féroé (FO) via le
+    // Danemark, Liechtenstein (LI) via la Suisse, Guernesey (GG) / Jersey
+    // (JE) via le Royaume-Uni, Turquie (TR) / Islande (IS) explicitement
+    // listés en zone 4. Avant ce correctif, ces pays retombaient à tort
+    // dans le même panier tarifaire que les USA/Chine/Australie (zone C).
+    private const EU  = ['AT','BE','BG','HR','CY','CZ','DK','EE','FI','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE','GL','FO','LI','GG','JE','TR','IS'];
     private const ZONE_B = ['NO','MA','DZ','TN','LY','EG','AL','BA','MK','ME','RS','XK','MD','UA','BY','GE','AM','AZ'];
 
     /**

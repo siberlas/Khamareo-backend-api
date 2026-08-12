@@ -71,6 +71,7 @@ class ShippingConfigController extends AbstractController
                     'name' => $detail ? "{$name} ({$detail})" : $name,
                     'carrierName' => $cm->getCarrier()?->getName(),
                     'energyCoefficientType' => $cm->getEnergyCoefficientType(),
+                    'isActive' => $cm->isActive(),
                 ];
             }, $carrierModes),
         ]);
@@ -91,13 +92,17 @@ class ShippingConfigController extends AbstractController
                 return $this->json(['error' => 'energyCoefficientType doit être "routier", "aerien" ou null'], 400);
             }
             $carrierMode->setEnergyCoefficientType($type);
-            $this->em->flush();
         }
+        if (array_key_exists('isActive', $data)) {
+            $carrierMode->setIsActive((bool) $data['isActive']);
+        }
+        $this->em->flush();
 
         return $this->json([
             'success' => true,
             'id' => $carrierMode->getId(),
             'energyCoefficientType' => $carrierMode->getEnergyCoefficientType(),
+            'isActive' => $carrierMode->isActive(),
         ]);
     }
 
