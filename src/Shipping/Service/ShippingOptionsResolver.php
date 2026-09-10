@@ -98,10 +98,14 @@ class ShippingOptionsResolver
 
             $accuratePricing = false;
             $parcels = null;
+            $totalHt = null;
+            $totalVat = null;
             if (!empty($cartItems)) {
                 $estimation = $this->checkoutEstimationService->estimate($cartItems, $carrierMode, $countryCode, $postalCode);
                 if ($estimation->success) {
                     $price = $estimation->totalPrice;
+                    $totalHt = $estimation->totalHt;
+                    $totalVat = $estimation->totalVat;
                     $accuratePricing = true;
                     $parcels = array_map(fn ($p) => [
                         'cartonName' => $p->cartonName,
@@ -145,6 +149,8 @@ class ShippingOptionsResolver
                 'carrierModeId' => $carrierMode->getId(),
                 'price' => $price,
                 'accuratePricing' => $accuratePricing,
+                'shippingHt' => $totalHt,
+                'shippingVat' => $totalVat,
                 'parcels' => $parcels,
                 'estimatedDays' => $estimatedDays,
                 'deliveryDelay' => [

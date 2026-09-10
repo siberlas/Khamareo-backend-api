@@ -119,7 +119,18 @@ class CheckoutEstimationService
             );
         }
 
-        return CheckoutEstimationResult::success($estimates);
+        // TVA répercutée : appliquée UNE seule fois sur le total HT de la
+        // commande (port net + CAE + SMIC + suppléments de tous les colis),
+        // comme sur la facture La Poste — pas colis par colis.
+        $totalHt = round(array_sum(array_map(fn (ParcelEstimate $p) => $p->price, $estimates)), 2);
+        $vatRate = ($settings !== null
+            && $settings->getShippingVatRatePercent() !== null
+            && $this->zoneMapper->isFrenchVatApplicable($countryCode))
+            ? (float) $settings->getShippingVatRatePercent()
+            : 0.0;
+        $totalVat = round($totalHt * $vatRate / 100, 2);
+
+        return CheckoutEstimationResult::success($estimates, $totalHt, $totalVat);
     }
 
     /**
@@ -300,7 +311,8 @@ class CheckoutEstimationService
         [$cae, $smicCompensation, $supplements, $vat] =
             $this->computeSurcharges($portNet, $carrierMode, $countryCode, $zone, $settings);
 
-        $price = round($portNet + $cae + $smicCompensation + $supplements + $vat, 2);
+        // Montant HT du colis (hors TVA — celle-ci est agrégée au niveau commande).
+        $price = round($portNet + $cae + $smicCompensation + $supplements, 2);
 
         return new ParcelEstimate(
             cartonId: $carton->getId()->toRfc4122(),
