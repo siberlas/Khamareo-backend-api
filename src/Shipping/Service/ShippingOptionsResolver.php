@@ -118,9 +118,20 @@ class ShippingOptionsResolver
                         'price' => $p->price,
                     ], $estimation->parcels);
                 } else {
-                    $this->shippingLogger->warning('Estimation checkout précise indisponible, repli sur le tarif de base', [
+                    // Repli : le colisage précis a échoué (dimensions produit ou
+                    // cartons manquants), mais on applique quand même les
+                    // surcharges Colissimo sur le port net de la grille — sinon
+                    // le tarif affiché chute au port net nu (perte sèche).
+                    $price = $this->checkoutEstimationService->surchargedPortNet(
+                        (float) $price,
+                        $carrierMode,
+                        $countryCode,
+                        $postalCode
+                    );
+                    $this->shippingLogger->warning('Estimation checkout précise indisponible, repli sur le port net + surcharges', [
                         'carrierModeId' => $carrierMode->getId(),
                         'reason' => $estimation->error,
+                        'fallbackPrice' => $price,
                     ]);
                 }
             }

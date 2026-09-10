@@ -498,6 +498,49 @@ class CheckoutEstimationServiceTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Repli : surchargedPortNet() applique les mêmes surcharges Colissimo
+    // que l'estimation complète, pour que désactiver un carton / omettre
+    // les dimensions ne fasse pas chuter le tarif au port net nu.
+    // ------------------------------------------------------------------
+
+    public function testSurchargedPortNetAppliesColissimoSurchargesOnFallbackPrice(): void
+    {
+        $settings = (new StoreSettings())
+            ->setCaePercentRoutier(13.83)
+            ->setSmicCompensationPercent(1.0)
+            ->setShippingVatRatePercent(20.0)
+            ->setSupplementDecarbonation(0.05);
+        $service = $this->serviceWithSettings($settings);
+
+        // Port net 7,71 € (repli grille France) :
+        //   CAE  = 7,71 × 13,83 % = 1,07
+        //   SMIC = 7,71 × 1 %     = 0,08
+        //   décarbonation         = 0,05
+        //   TVA  = (7,71+1,07+0,08+0,05) × 20 % = 1,78
+        //   total = 10,69
+        $total = $service->surchargedPortNet(
+            7.71,
+            $this->makeCarrierMode('france_metro', 'routier'),
+            'FR',
+            '75001',
+        );
+
+        $this->assertSame(10.69, $total);
+    }
+
+    public function testSurchargedPortNetLeavesNonColissimoUntouched(): void
+    {
+        $settings = (new StoreSettings())
+            ->setCaePercentRoutier(13.83)
+            ->setShippingVatRatePercent(20.0);
+        $service = $this->serviceWithSettings($settings);
+
+        $total = $service->surchargedPortNet(7.49, $this->makeCarrierMode(null), 'FR', '75001');
+
+        $this->assertSame(7.49, $total);
+    }
+
+    // ------------------------------------------------------------------
     // Robustesse : aucune entrée ne doit provoquer d'exception
     // ------------------------------------------------------------------
 

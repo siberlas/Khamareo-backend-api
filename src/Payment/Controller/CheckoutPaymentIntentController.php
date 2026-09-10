@@ -249,9 +249,19 @@ class CheckoutPaymentIntentController extends AbstractController
         if ($estimation->success) {
             $shippingCost = $estimation->totalPrice;
         } else {
-            $this->shippingLogger->warning('Estimation checkout précise indisponible au paiement, repli sur le tarif de base', [
+            // Repli : colisage précis indisponible, mais on applique quand même
+            // les surcharges Colissimo sur le port net de la grille — cohérent
+            // avec l'estimation affichée au client (ShippingOptionsResolver).
+            $shippingCost = $this->checkoutEstimationService->surchargedPortNet(
+                $shippingCost,
+                $carrierMode,
+                $countryCode,
+                $deliveryAddress->getPostalCode()
+            );
+            $this->shippingLogger->warning('Estimation checkout précise indisponible au paiement, repli sur le port net + surcharges', [
                 'carrierModeId' => $carrierMode->getId(),
                 'reason' => $estimation->error,
+                'fallbackPrice' => $shippingCost,
             ]);
         }
 
