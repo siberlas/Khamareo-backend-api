@@ -57,9 +57,9 @@ class CheckoutEstimationService
             return CheckoutEstimationResult::failure('Panier vide.');
         }
 
-        $cartons = $this->cartonRepository->findAllOrdered();
+        $cartons = $this->cartonRepository->findActiveOrdered();
         if (empty($cartons)) {
-            return CheckoutEstimationResult::failure('Aucun format de carton configuré (page Emballage).');
+            return CheckoutEstimationResult::failure('Aucun format de carton actif configuré (page Emballage).');
         }
 
         // Un carton par format, du plus petit au plus grand volume — on
@@ -297,61 +297,8 @@ class CheckoutEstimationService
         $rate = $this->shippingRateRepository->findBestRate($carrierMode, $rateZone, $billableWeightGrams, $countryCode);
         $portNet = $rate ? $rate->getPrice() : (float) ($carrierMode->getBasePrice() ?? 0.0);
 
-        // CAE, SMIC, décarbonation, sûreté, suppléments pays et TVA répercutée
-        // sont des notions du contrat Colissimo : ne s'appliquent qu'aux offres
-        // Colissimo (Mondial Relay / Chronopost ont leur propre tarification et
-        // leur propre facturation). Un carrier_mode Colissimo est le seul à
-        // porter un colissimo_product_code_key.
-        $isColissimo = $carrierMode->getColissimoProductCodeKey() !== null;
-
-        $cae = 0.0;
-        $smicCompensation = 0.0;
-        $supplements = 0.0;
-        $vat = 0.0;
-
-        if ($settings !== null && $isColissimo) {
-            if (!in_array($carrierMode->getId(), $settings->getCaeExcludedCarrierModeIds(), true)) {
-                $caePercent = match ($carrierMode->getEnergyCoefficientType()) {
-                    'routier' => $settings->getCaePercentRoutier(),
-                    'aerien' => $settings->getCaePercentAerien(),
-                    default => null,
-                };
-                if ($caePercent !== null) {
-                    $cae = round($portNet * $caePercent / 100, 2);
-                }
-            }
-
-            if ($settings->getSmicCompensationPercent() !== null) {
-                // Sur le port net (HT après remise), comme le CAE, mais sans
-                // exclusion d'offre (s'applique aussi à Colissimo Eco Outre-mer).
-                $smicCompensation = round($portNet * $settings->getSmicCompensationPercent() / 100, 2);
-            }
-
-            // Sûreté internationale : UE / Europe hors UE / International —
-            // jamais France métro ni Outre-mer.
-            if (in_array($zone, [DestinationZone::UNION_EUROPEENNE, DestinationZone::EUROPE_HORS_UE, DestinationZone::INTERNATIONAL], true)) {
-                $supplements += $settings->getSupplementInternationalSecurity() ?? 0.0;
-            }
-            // Suppléments par pays (Colissimo Domicile avec signature) — hors option DDP.
-            $supplements += match (strtoupper($countryCode)) {
-                'US' => $settings->getSupplementUs() ?? 0.0,
-                'CN' => $settings->getSupplementChina() ?? 0.0,
-                'GB' => $settings->getSupplementUk() ?? 0.0,
-                default => 0.0,
-            };
-            // Décarbonation : systématique sur toutes les offres Colissimo.
-            $supplements += $settings->getSupplementDecarbonation() ?? 0.0;
-            $supplements = round($supplements, 2);
-
-            // TVA répercutée : La Poste facture 20 % sur France/UE (0 % export),
-            // non récupérable en franchise 293 B — assise sur port + CAE + SMIC +
-            // suppléments, comme sur la facture La Poste.
-            if ($settings->getShippingVatRatePercent() !== null
-                && $this->zoneMapper->isFrenchVatApplicable($countryCode)
-            ) {
-                $vat = round(($portNet + $cae + $smicCompensation + $supplements) * $settings->getShippingVatRatePercent() / 100, 2);
-            }
-        }
+        [$cae, $smicCompensation, $supplements, $vat] =
+            $this->computeSurcharges($portNet, $carrierMode, $countryCode, $zone, $settings);
 
         $price = round($portNet + $cae + $smicCompensation + $supplements + $vat, 2);
 
@@ -369,5 +316,100 @@ class CheckoutEstimationService
             vat: $vat,
             price: $price,
         );
+    }
+
+    /**
+     * Applique les surcharges Colissimo (CAE, SMIC, sûreté, suppléments pays,
+     * décarbonation, TVA répercutée) sur un port net déjà connu, et renvoie le
+     * total arrondi. Utilisé par les chemins de repli (estimation précise
+     * indisponible) pour que le prix affiché / facturé reste cohérent avec le
+     * calcul complet — sans quoi désactiver un carton ou omettre les dimensions
+     * d'un produit ferait chuter le tarif au port net nu.
+     *
+     * Ne s'applique qu'aux offres Colissimo ; renvoie le port net inchangé
+     * pour Mondial Relay / Chronopost.
+     */
+    public function surchargedPortNet(
+        float $portNet,
+        CarrierMode $carrierMode,
+        string $countryCode,
+        ?string $postalCode
+    ): float {
+        $zone = $this->destinationClassifier->classify($postalCode, $countryCode);
+        $settings = $this->em->getRepository(StoreSettings::class)->findOneBy([]);
+
+        [$cae, $smic, $supplements, $vat] =
+            $this->computeSurcharges($portNet, $carrierMode, $countryCode, $zone, $settings);
+
+        return round($portNet + $cae + $smic + $supplements + $vat, 2);
+    }
+
+    /**
+     * CAE, compensation SMIC, suppléments (sûreté + pays + décarbonation) et TVA
+     * répercutée — notions du contrat Colissimo, appliquées uniquement aux
+     * offres Colissimo (Mondial Relay / Chronopost ont leur propre facturation ;
+     * un carrier_mode Colissimo est le seul à porter un colissimo_product_code_key).
+     *
+     * @return array{0: float, 1: float, 2: float, 3: float} [cae, smicCompensation, supplements, vat]
+     */
+    private function computeSurcharges(
+        float $portNet,
+        CarrierMode $carrierMode,
+        string $countryCode,
+        DestinationZone $zone,
+        ?StoreSettings $settings
+    ): array {
+        $isColissimo = $carrierMode->getColissimoProductCodeKey() !== null;
+        if ($settings === null || !$isColissimo) {
+            return [0.0, 0.0, 0.0, 0.0];
+        }
+
+        $cae = 0.0;
+        if (!in_array($carrierMode->getId(), $settings->getCaeExcludedCarrierModeIds(), true)) {
+            $caePercent = match ($carrierMode->getEnergyCoefficientType()) {
+                'routier' => $settings->getCaePercentRoutier(),
+                'aerien' => $settings->getCaePercentAerien(),
+                default => null,
+            };
+            if ($caePercent !== null) {
+                $cae = round($portNet * $caePercent / 100, 2);
+            }
+        }
+
+        $smicCompensation = 0.0;
+        if ($settings->getSmicCompensationPercent() !== null) {
+            // Sur le port net (HT après remise), comme le CAE, mais sans
+            // exclusion d'offre (s'applique aussi à Colissimo Eco Outre-mer).
+            $smicCompensation = round($portNet * $settings->getSmicCompensationPercent() / 100, 2);
+        }
+
+        $supplements = 0.0;
+        // Sûreté internationale : UE / Europe hors UE / International —
+        // jamais France métro ni Outre-mer.
+        if (in_array($zone, [DestinationZone::UNION_EUROPEENNE, DestinationZone::EUROPE_HORS_UE, DestinationZone::INTERNATIONAL], true)) {
+            $supplements += $settings->getSupplementInternationalSecurity() ?? 0.0;
+        }
+        // Suppléments par pays (Colissimo Domicile avec signature) — hors option DDP.
+        $supplements += match (strtoupper($countryCode)) {
+            'US' => $settings->getSupplementUs() ?? 0.0,
+            'CN' => $settings->getSupplementChina() ?? 0.0,
+            'GB' => $settings->getSupplementUk() ?? 0.0,
+            default => 0.0,
+        };
+        // Décarbonation : systématique sur toutes les offres Colissimo.
+        $supplements += $settings->getSupplementDecarbonation() ?? 0.0;
+        $supplements = round($supplements, 2);
+
+        // TVA répercutée : La Poste facture 20 % sur France/UE (0 % export),
+        // non récupérable en franchise 293 B — assise sur port + CAE + SMIC +
+        // suppléments, comme sur la facture La Poste.
+        $vat = 0.0;
+        if ($settings->getShippingVatRatePercent() !== null
+            && $this->zoneMapper->isFrenchVatApplicable($countryCode)
+        ) {
+            $vat = round(($portNet + $cae + $smicCompensation + $supplements) * $settings->getShippingVatRatePercent() / 100, 2);
+        }
+
+        return [$cae, $smicCompensation, $supplements, $vat];
     }
 }

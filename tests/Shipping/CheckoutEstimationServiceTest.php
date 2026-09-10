@@ -85,7 +85,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testEmptyCartReturnsFailure(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
 
         $result = $this->service->estimate([], $this->makeCarrierMode(), 'FR', '75001');
 
@@ -95,7 +95,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testNoCartonConfiguredReturnsFailure(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([]);
 
         $result = $this->service->estimate(
             [['product' => $this->makeProduct(), 'quantity' => 1]],
@@ -110,7 +110,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testProductWithoutWeightReturnsFailure(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
 
         $product = $this->makeProduct(weightGrams: null);
 
@@ -127,7 +127,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testProductWithoutDimensionsReturnsFailure(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
 
         $product = $this->makeProduct(lengthCm: null);
 
@@ -144,7 +144,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testProductTooLargeForEveryCartonReturnsFailure(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
 
         // Carton par défaut : 30 × 20 × 15. Produit 200 × 200 × 200.
         $product = $this->makeProduct(lengthCm: 200, widthCm: 200, heightCm: 200);
@@ -162,7 +162,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testProductHeavierThanColissimoLimitReturnsFailure(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
 
         // Rentre dans le carton, mais 31 kg > plafond 30 kg par colis.
         $product = $this->makeProduct(weightGrams: 31_000);
@@ -185,7 +185,7 @@ class CheckoutEstimationServiceTest extends TestCase
     public function testSingleParcelDomesticWeightIncludesEmptyCartonPlusTape(): void
     {
         $carton = $this->makeCarton(emptyWeightGrams: 200);
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$carton]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$carton]);
 
         $result = $this->service->estimate(
             [['product' => $this->makeProduct(weightGrams: 500), 'quantity' => 2]],
@@ -206,7 +206,7 @@ class CheckoutEstimationServiceTest extends TestCase
     public function testNonFrenchDestinationAddsCn23Margin(): void
     {
         $carton = $this->makeCarton(emptyWeightGrams: 200);
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$carton]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$carton]);
 
         // Allemagne = Union européenne : marge CN23 (+30 g) mais pas de poids
         // volumétrique (réservé Outre-mer / International).
@@ -229,7 +229,7 @@ class CheckoutEstimationServiceTest extends TestCase
         // Carton 30 × 20 × 15 = 9 000 cm³. 10 unités de 1 000 cm³ → 10 000 cm³
         // de contenu : impossible en un seul colis.
         $carton = $this->makeCarton();
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$carton]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$carton]);
 
         $result = $this->service->estimate(
             [['product' => $this->makeProduct(weightGrams: 100, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 10]],
@@ -246,7 +246,7 @@ class CheckoutEstimationServiceTest extends TestCase
     {
         // Carton 40 × 30 × 20 = 24 000 cm³ → poids volumétrique 24000/5000 kg = 4 800 g.
         $carton = $this->makeCarton(lengthCm: 40, widthCm: 30, heightCm: 20, emptyWeightGrams: 200);
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$carton]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$carton]);
 
         $result = $this->service->estimate(
             [['product' => $this->makeProduct(weightGrams: 100, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 1]],
@@ -265,7 +265,7 @@ class CheckoutEstimationServiceTest extends TestCase
     public function testVolumetricWeightNeverAppliesOnEcoOutreMerOffer(): void
     {
         $carton = $this->makeCarton(lengthCm: 40, widthCm: 30, heightCm: 20, emptyWeightGrams: 200);
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$carton]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$carton]);
 
         $result = $this->service->estimate(
             [['product' => $this->makeProduct(weightGrams: 100, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 1]],
@@ -284,7 +284,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testNoSettingsMeansPriceEqualsPortNet(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
 
         $result = $this->service->estimate(
             [['product' => $this->makeProduct(), 'quantity' => 1]],
@@ -303,7 +303,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testShippingVatAppliedOnFranceAndEuOnly(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn(
+        $this->cartonRepository->method('findActiveOrdered')->willReturn(
             [$this->makeCarton(lengthCm: 40, widthCm: 30, heightCm: 20, emptyWeightGrams: 200)]
         );
         $settings = (new StoreSettings())->setShippingVatRatePercent(20.0);
@@ -339,7 +339,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testShippingVatAssietteIncludesCaeSmicAndSupplements(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $carrierMode = $this->makeCarrierMode('france_metro', 'routier');
         $settings = (new StoreSettings())
             ->setCaePercentRoutier(10.0)          // 10 % de 10,00 = 1,00
@@ -363,7 +363,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testChinaSupplementAppliedOnlyForCn(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn(
+        $this->cartonRepository->method('findActiveOrdered')->willReturn(
             [$this->makeCarton(lengthCm: 40, widthCm: 30, heightCm: 20)]
         );
         $settings = (new StoreSettings())->setSupplementChina(6.0);
@@ -390,7 +390,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testUkSupplementApplied(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $settings = (new StoreSettings())->setSupplementUk(4.4);
         $service = $this->serviceWithSettings($settings);
 
@@ -410,7 +410,7 @@ class CheckoutEstimationServiceTest extends TestCase
     {
         // Un carrier_mode sans colissimo_product_code_key = Mondial Relay / Chronopost :
         // pas de CAE, pas de SMIC, pas de décarbonation, pas de sûreté.
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $carrierMode = $this->makeCarrierMode(productCodeKey: null, energyType: 'routier');
         $settings = (new StoreSettings())
             ->setCaePercentRoutier(13.83)
@@ -438,7 +438,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testSmicCompensationAppliedOnPortNet(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $settings = (new StoreSettings())->setSmicCompensationPercent(1.0);
         $service = $this->serviceWithSettings($settings);
 
@@ -457,7 +457,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testSmicCompensationAppliesEvenWhenCarrierExcludedFromCae(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $carrierMode = $this->makeCarrierMode('outre_mer_eco');
         $settings = (new StoreSettings())
             ->setSmicCompensationPercent(1.0)
@@ -479,7 +479,7 @@ class CheckoutEstimationServiceTest extends TestCase
 
     public function testTotalPriceSumsAllParcels(): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $settings = (new StoreSettings())->setSupplementDecarbonation(0.05);
         $service = $this->serviceWithSettings($settings);
 
@@ -498,13 +498,56 @@ class CheckoutEstimationServiceTest extends TestCase
     }
 
     // ------------------------------------------------------------------
+    // Repli : surchargedPortNet() applique les mêmes surcharges Colissimo
+    // que l'estimation complète, pour que désactiver un carton / omettre
+    // les dimensions ne fasse pas chuter le tarif au port net nu.
+    // ------------------------------------------------------------------
+
+    public function testSurchargedPortNetAppliesColissimoSurchargesOnFallbackPrice(): void
+    {
+        $settings = (new StoreSettings())
+            ->setCaePercentRoutier(13.83)
+            ->setSmicCompensationPercent(1.0)
+            ->setShippingVatRatePercent(20.0)
+            ->setSupplementDecarbonation(0.05);
+        $service = $this->serviceWithSettings($settings);
+
+        // Port net 7,71 € (repli grille France) :
+        //   CAE  = 7,71 × 13,83 % = 1,07
+        //   SMIC = 7,71 × 1 %     = 0,08
+        //   décarbonation         = 0,05
+        //   TVA  = (7,71+1,07+0,08+0,05) × 20 % = 1,78
+        //   total = 10,69
+        $total = $service->surchargedPortNet(
+            7.71,
+            $this->makeCarrierMode('france_metro', 'routier'),
+            'FR',
+            '75001',
+        );
+
+        $this->assertSame(10.69, $total);
+    }
+
+    public function testSurchargedPortNetLeavesNonColissimoUntouched(): void
+    {
+        $settings = (new StoreSettings())
+            ->setCaePercentRoutier(13.83)
+            ->setShippingVatRatePercent(20.0);
+        $service = $this->serviceWithSettings($settings);
+
+        $total = $service->surchargedPortNet(7.49, $this->makeCarrierMode(null), 'FR', '75001');
+
+        $this->assertSame(7.49, $total);
+    }
+
+    // ------------------------------------------------------------------
     // Robustesse : aucune entrée ne doit provoquer d'exception
     // ------------------------------------------------------------------
 
     #[DataProvider('provideRoughInputs')]
     public function testEstimateNeverThrows(?string $country, ?string $postalCode, int $quantity): void
     {
-        $this->cartonRepository->method('findAllOrdered')->willReturn([$this->makeCarton()]);
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
 
         try {
             $result = $this->service->estimate(

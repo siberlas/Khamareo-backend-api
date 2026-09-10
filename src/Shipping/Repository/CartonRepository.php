@@ -23,4 +23,14 @@ class CartonRepository extends ServiceEntityRepository
             ->getQuery()
             ->getResult();
     }
+
+    /** Cartons actifs uniquement — pour le colisage automatique et la préparation. */
+    public function findActiveOrdered(): array
+    {
+        return $this->createQueryBuilder('c')
+            ->andWhere('c.isActive = true')
+            ->orderBy('c.createdAt', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
 }
