@@ -89,7 +89,8 @@ class ParcelItem
         }
 
         if ($product->getWeightGrams() !== null && $product->getWeightGrams() > 0) {
-            return $product->getWeightGrams();
+            // Poids du produit + poids à vide de son contenant (sachet, flacon…).
+            return $product->getShippingWeightGrams();
         }
 
         return 0;

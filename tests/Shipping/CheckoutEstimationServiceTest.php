@@ -306,7 +306,7 @@ class CheckoutEstimationServiceTest extends TestCase
         $this->cartonRepository->method('findActiveOrdered')->willReturn(
             [$this->makeCarton(lengthCm: 40, widthCm: 30, heightCm: 20, emptyWeightGrams: 200)]
         );
-        $settings = (new StoreSettings())->setShippingVatRatePercent(20.0);
+        $settings = (new StoreSettings())->setShippingVatRatePercent(20.0)->setApplySurchargesFrance(true);
         $service = $this->serviceWithSettings($settings);
 
         $product = fn () => ['product' => $this->makeProduct(weightGrams: 300, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 1];
@@ -344,6 +344,7 @@ class CheckoutEstimationServiceTest extends TestCase
         $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $carrierMode = $this->makeCarrierMode('france_metro', 'routier');
         $settings = (new StoreSettings())
+            ->setApplySurchargesFrance(true)
             ->setCaePercentRoutier(10.0)          // 10 % de 10,00 = 1,00
             ->setSmicCompensationPercent(1.0)     // 1 % de 10,00 = 0,10
             ->setSupplementDecarbonation(0.05)
@@ -444,7 +445,7 @@ class CheckoutEstimationServiceTest extends TestCase
     public function testSmicCompensationAppliedOnPortNet(): void
     {
         $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
-        $settings = (new StoreSettings())->setSmicCompensationPercent(1.0);
+        $settings = (new StoreSettings())->setSmicCompensationPercent(1.0)->setApplySurchargesFrance(true);
         $service = $this->serviceWithSettings($settings);
 
         $result = $service->estimate(
@@ -502,6 +503,62 @@ class CheckoutEstimationServiceTest extends TestCase
         $this->assertSame($expected, $result->totalPrice);
     }
 
+    public function testFranceGetsBasePriceOnlyByDefault(): void
+    {
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
+        // Toutes les surcharges configurées, mais applySurchargesFrance = false (défaut).
+        $settings = (new StoreSettings())
+            ->setCaePercentRoutier(13.83)
+            ->setSmicCompensationPercent(1.0)
+            ->setSupplementDecarbonation(0.05)
+            ->setShippingVatRatePercent(20.0);
+        $service = $this->serviceWithSettings($settings);
+
+        // France : port net seul.
+        $fr = $service->estimate(
+            [['product' => $this->makeProduct(), 'quantity' => 1]],
+            $this->makeCarrierMode('france_metro', 'routier'),
+            'FR',
+            '75001',
+        );
+        $this->assertSame(self::PORT_NET, $fr->parcels[0]->price);
+        $this->assertSame(0.0, $fr->parcels[0]->cae);
+        $this->assertSame(0.0, $fr->totalVat);
+        $this->assertSame(self::PORT_NET, $fr->totalPrice);
+
+        // Belgique (UE) : surcharges appliquées normalement.
+        $be = $service->estimate(
+            [['product' => $this->makeProduct(weightGrams: 300, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 1]],
+            $this->makeCarrierMode('union_europeenne', 'routier'),
+            'BE',
+            '1000',
+        );
+        $this->assertGreaterThan(self::PORT_NET, $be->totalPrice);
+        $this->assertGreaterThan(0.0, $be->totalVat);
+    }
+
+    public function testContainerEmptyWeightAddedToProductWeight(): void
+    {
+        $this->cartonRepository->method('findActiveOrdered')->willReturn(
+            [$this->makeCarton(emptyWeightGrams: 200)]
+        );
+
+        // Produit 500 g + contenant à vide 30 g.
+        $product = $this->makeProduct(weightGrams: 500);
+        $product->setContainerEmptyWeightGrams(30);
+
+        $result = $this->service->estimate(
+            [['product' => $product, 'quantity' => 1]],
+            $this->makeCarrierMode(),
+            'FR',
+            '75001',
+        );
+
+        $this->assertTrue($result->success);
+        // 500 (produit) + 30 (contenant) + 200 (carton) + 5 (scotch) = 735 g.
+        $this->assertSame(735, $result->parcels[0]->weightGrams);
+    }
+
     public function testVatAggregatedOnceOnOrderTotalNotPerParcel(): void
     {
         // Rate repo renvoyant 6,83 € de port net par colis (arrondi TVA piégeux).
@@ -509,7 +566,9 @@ class CheckoutEstimationServiceTest extends TestCase
         $rateRepo->method('findBestRate')->willReturn($this->makeRate(6.83));
 
         $settingsRepo = $this->createMock(EntityRepository::class);
-        $settingsRepo->method('findOneBy')->willReturn((new StoreSettings())->setShippingVatRatePercent(20.0));
+        $settingsRepo->method('findOneBy')->willReturn(
+            (new StoreSettings())->setShippingVatRatePercent(20.0)->setApplySurchargesFrance(true)
+        );
         $em = $this->createMock(EntityManagerInterface::class);
         $em->method('getRepository')->willReturn($settingsRepo);
 
@@ -555,6 +614,7 @@ class CheckoutEstimationServiceTest extends TestCase
     public function testSurchargedPortNetAppliesColissimoSurchargesOnFallbackPrice(): void
     {
         $settings = (new StoreSettings())
+            ->setApplySurchargesFrance(true)
             ->setCaePercentRoutier(13.83)
             ->setSmicCompensationPercent(1.0)
             ->setShippingVatRatePercent(20.0)

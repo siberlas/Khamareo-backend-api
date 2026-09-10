@@ -317,6 +317,7 @@ class ProductListController extends AbstractController
                     'digitalFileOriginalName' => $product->getDigitalFileOriginalName(),
                     'digitalFileSizeBytes' => $product->getDigitalFileSizeBytes(),
                     'weightGrams' => $product->getWeightGrams(),
+                    'containerEmptyWeightGrams' => $product->getContainerEmptyWeightGrams(),
                     'lengthCm' => $product->getLengthCm(),
                     'widthCm' => $product->getWidthCm(),
                     'heightCm' => $product->getHeightCm(),

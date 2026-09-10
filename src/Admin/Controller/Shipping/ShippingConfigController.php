@@ -59,6 +59,9 @@ class ShippingConfigController extends AbstractController
         if (array_key_exists('shippingVatRatePercent', $data)) {
             $settings->setShippingVatRatePercent($data['shippingVatRatePercent'] !== null && $data['shippingVatRatePercent'] !== '' ? (float) $data['shippingVatRatePercent'] : null);
         }
+        if (array_key_exists('applySurchargesFrance', $data)) {
+            $settings->setApplySurchargesFrance((bool) $data['applySurchargesFrance']);
+        }
 
         $settings->setUpdatedAt(new \DateTimeImmutable());
         $this->em->flush();
@@ -142,6 +145,7 @@ class ShippingConfigController extends AbstractController
             'supplementDecarbonation' => $s->getSupplementDecarbonation(),
             'smicCompensationPercent' => $s->getSmicCompensationPercent(),
             'shippingVatRatePercent' => $s->getShippingVatRatePercent(),
+            'applySurchargesFrance' => $s->isApplySurchargesFrance(),
         ];
     }
 }

@@ -585,7 +585,7 @@ class ParcelManager
     private function getProductWeightGrams($product): int
     {
         return ($product->getWeightGrams() !== null && $product->getWeightGrams() > 0)
-            ? $product->getWeightGrams()
+            ? $product->getShippingWeightGrams()
             : 0;
     }
 }

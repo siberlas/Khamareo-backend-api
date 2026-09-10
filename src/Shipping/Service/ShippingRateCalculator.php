@@ -97,7 +97,7 @@ class ShippingRateCalculator
             }
             $qty = (int) $item->getQuantity();
             if ($p->getWeightGrams() !== null) {
-                $total += $p->getWeightGrams() * $qty;
+                $total += $p->getShippingWeightGrams() * $qty;
             } elseif ($p->getWeight() !== null) {
                 $total += (int) round($p->getWeight() * 1000) * $qty;
             } else {

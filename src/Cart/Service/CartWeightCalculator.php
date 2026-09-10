@@ -25,8 +25,8 @@ class CartWeightCalculator
             if (!$product->requiresShipping()) {
                 continue;
             }
-            $weight = $product->getWeightGrams() !== null
-                ? $product->getWeightGrams() / 1000.0
+            $weight = $product->getShippingWeightGrams() !== null
+                ? $product->getShippingWeightGrams() / 1000.0
                 : ($product->getWeight() !== null ? (float) $product->getWeight() : self::DEFAULT_WEIGHT_KG);
             $qty = (int) $item->getQuantity();
             $total += $weight * $qty;

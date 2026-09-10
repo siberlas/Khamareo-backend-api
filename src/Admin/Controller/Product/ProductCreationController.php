@@ -145,6 +145,11 @@ class ProductCreationController extends AbstractController
             
             $product->setWeightGrams($weightGramsRaw !== null && (int) $weightGramsRaw > 0 ? (int) $weightGramsRaw : null);
 
+            if ($request->request->has('containerEmptyWeightGrams')) {
+                $c = $request->request->get('containerEmptyWeightGrams');
+                $product->setContainerEmptyWeightGrams($c !== null && $c !== '' && (int) $c > 0 ? (int) $c : null);
+            }
+
             // Dimensions et douane (optionnels à la création)
             if ($request->request->has('lengthCm')) {
                 $v = $request->request->get('lengthCm');
