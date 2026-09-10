@@ -306,35 +306,37 @@ class CheckoutEstimationServiceTest extends TestCase
         $this->cartonRepository->method('findActiveOrdered')->willReturn(
             [$this->makeCarton(lengthCm: 40, widthCm: 30, heightCm: 20, emptyWeightGrams: 200)]
         );
-        $settings = (new StoreSettings())->setShippingVatRatePercent(20.0);
+        $settings = (new StoreSettings())->setShippingVatRatePercent(20.0)->setApplySurchargesFrance(true);
         $service = $this->serviceWithSettings($settings);
 
         $product = fn () => ['product' => $this->makeProduct(weightGrams: 300, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 1];
 
-        // France : 20 % sur le port net (10,00 €) → 2,00 € de TVA.
+        // France : le colis reste HT (10,00 €), la TVA (20 %) est agrégée au
+        // niveau commande → totalVat 2,00 €, totalPrice 12,00 €.
         $fr = $service->estimate([$product()], $this->makeCarrierMode(), 'FR', '75001');
-        $this->assertSame(2.0, $fr->parcels[0]->vat);
-        $this->assertSame(12.0, $fr->parcels[0]->price);
+        $this->assertSame(10.0, $fr->parcels[0]->price);
+        $this->assertSame(2.0, $fr->totalVat);
+        $this->assertSame(12.0, $fr->totalPrice);
 
         // Allemagne (UE) : TVA aussi.
         $de = $service->estimate([$product()], $this->makeCarrierMode('union_europeenne'), 'DE', '10115');
-        $this->assertSame(2.0, $de->parcels[0]->vat);
+        $this->assertSame(2.0, $de->totalVat);
 
         // Royaume-Uni : zone tarifaire 'union_europeenne' mais export → 0 % TVA.
         $gb = $service->estimate([$product()], $this->makeCarrierMode('union_europeenne'), 'GB', 'EC1A 1BB');
-        $this->assertSame(0.0, $gb->parcels[0]->vat);
+        $this->assertSame(0.0, $gb->totalVat);
 
         // Suisse : hors UE → 0 %.
         $ch = $service->estimate([$product()], $this->makeCarrierMode('union_europeenne'), 'CH', '8001');
-        $this->assertSame(0.0, $ch->parcels[0]->vat);
+        $this->assertSame(0.0, $ch->totalVat);
 
         // États-Unis : export → 0 %.
         $us = $service->estimate([$product()], $this->makeCarrierMode('international'), 'US', null);
-        $this->assertSame(0.0, $us->parcels[0]->vat);
+        $this->assertSame(0.0, $us->totalVat);
 
         // Martinique (Outre-mer) : hors territoire TVA → 0 %.
         $mq = $service->estimate([$product()], $this->makeCarrierMode('outre_mer'), 'MQ', '97200');
-        $this->assertSame(0.0, $mq->parcels[0]->vat);
+        $this->assertSame(0.0, $mq->totalVat);
     }
 
     public function testShippingVatAssietteIncludesCaeSmicAndSupplements(): void
@@ -342,6 +344,7 @@ class CheckoutEstimationServiceTest extends TestCase
         $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
         $carrierMode = $this->makeCarrierMode('france_metro', 'routier');
         $settings = (new StoreSettings())
+            ->setApplySurchargesFrance(true)
             ->setCaePercentRoutier(10.0)          // 10 % de 10,00 = 1,00
             ->setSmicCompensationPercent(1.0)     // 1 % de 10,00 = 0,10
             ->setSupplementDecarbonation(0.05)
@@ -356,9 +359,12 @@ class CheckoutEstimationServiceTest extends TestCase
         );
 
         $this->assertTrue($result->success);
-        // Assiette = 10,00 + 1,00 + 0,10 + 0,05 = 11,15 ; TVA 20 % = 2,23.
-        $this->assertSame(2.23, $result->parcels[0]->vat);
-        $this->assertSame(13.38, $result->parcels[0]->price);
+        // Colis HT = 10,00 + 1,00 + 0,10 + 0,05 = 11,15.
+        $this->assertSame(11.15, $result->parcels[0]->price);
+        // Assiette TVA = total HT ; TVA 20 % = 2,23 ; TTC = 13,38.
+        $this->assertSame(11.15, $result->totalHt);
+        $this->assertSame(2.23, $result->totalVat);
+        $this->assertSame(13.38, $result->totalPrice);
     }
 
     public function testChinaSupplementAppliedOnlyForCn(): void
@@ -439,7 +445,7 @@ class CheckoutEstimationServiceTest extends TestCase
     public function testSmicCompensationAppliedOnPortNet(): void
     {
         $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
-        $settings = (new StoreSettings())->setSmicCompensationPercent(1.0);
+        $settings = (new StoreSettings())->setSmicCompensationPercent(1.0)->setApplySurchargesFrance(true);
         $service = $this->serviceWithSettings($settings);
 
         $result = $service->estimate(
@@ -497,6 +503,108 @@ class CheckoutEstimationServiceTest extends TestCase
         $this->assertSame($expected, $result->totalPrice);
     }
 
+    public function testFranceGetsBasePriceOnlyByDefault(): void
+    {
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
+        // Toutes les surcharges configurées, mais applySurchargesFrance = false (défaut).
+        $settings = (new StoreSettings())
+            ->setCaePercentRoutier(13.83)
+            ->setSmicCompensationPercent(1.0)
+            ->setSupplementDecarbonation(0.05)
+            ->setShippingVatRatePercent(20.0);
+        $service = $this->serviceWithSettings($settings);
+
+        // France : port net seul.
+        $fr = $service->estimate(
+            [['product' => $this->makeProduct(), 'quantity' => 1]],
+            $this->makeCarrierMode('france_metro', 'routier'),
+            'FR',
+            '75001',
+        );
+        $this->assertSame(self::PORT_NET, $fr->parcels[0]->price);
+        $this->assertSame(0.0, $fr->parcels[0]->cae);
+        $this->assertSame(0.0, $fr->totalVat);
+        $this->assertSame(self::PORT_NET, $fr->totalPrice);
+
+        // Belgique (UE) : surcharges appliquées normalement.
+        $be = $service->estimate(
+            [['product' => $this->makeProduct(weightGrams: 300, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 1]],
+            $this->makeCarrierMode('union_europeenne', 'routier'),
+            'BE',
+            '1000',
+        );
+        $this->assertGreaterThan(self::PORT_NET, $be->totalPrice);
+        $this->assertGreaterThan(0.0, $be->totalVat);
+    }
+
+    public function testContainerEmptyWeightAddedToProductWeight(): void
+    {
+        $this->cartonRepository->method('findActiveOrdered')->willReturn(
+            [$this->makeCarton(emptyWeightGrams: 200)]
+        );
+
+        // Produit 500 g + contenant à vide 30 g.
+        $product = $this->makeProduct(weightGrams: 500);
+        $product->setContainerEmptyWeightGrams(30);
+
+        $result = $this->service->estimate(
+            [['product' => $product, 'quantity' => 1]],
+            $this->makeCarrierMode(),
+            'FR',
+            '75001',
+        );
+
+        $this->assertTrue($result->success);
+        // 500 (produit) + 30 (contenant) + 200 (carton) + 5 (scotch) = 735 g.
+        $this->assertSame(735, $result->parcels[0]->weightGrams);
+    }
+
+    public function testVatAggregatedOnceOnOrderTotalNotPerParcel(): void
+    {
+        // Rate repo renvoyant 6,83 € de port net par colis (arrondi TVA piégeux).
+        $rateRepo = $this->createMock(ShippingRateRepository::class);
+        $rateRepo->method('findBestRate')->willReturn($this->makeRate(6.83));
+
+        $settingsRepo = $this->createMock(EntityRepository::class);
+        $settingsRepo->method('findOneBy')->willReturn(
+            (new StoreSettings())->setShippingVatRatePercent(20.0)->setApplySurchargesFrance(true)
+        );
+        $em = $this->createMock(EntityManagerInterface::class);
+        $em->method('getRepository')->willReturn($settingsRepo);
+
+        $service = new CheckoutEstimationService(
+            $this->cartonRepository,
+            $rateRepo,
+            new DestinationClassifier(new NullLogger()),
+            new ShippingZoneMapper(),
+            $em,
+        );
+
+        $this->cartonRepository->method('findActiveOrdered')->willReturn([$this->makeCarton()]);
+
+        // 10 unités de 1 000 cm³ dans un carton de 9 000 cm³ → 2 colis.
+        $result = $service->estimate(
+            [['product' => $this->makeProduct(weightGrams: 100, lengthCm: 10, widthCm: 10, heightCm: 10), 'quantity' => 10]],
+            $this->makeCarrierMode(),
+            'FR',
+            '75001',
+        );
+
+        $this->assertTrue($result->success);
+        $this->assertGreaterThanOrEqual(2, count($result->parcels));
+
+        // TVA calculée une fois sur le total HT.
+        $this->assertSame(round($result->totalHt * 0.20, 2), $result->totalVat);
+        $this->assertSame(round($result->totalHt + $result->totalVat, 2), $result->totalPrice);
+
+        // 2 colis à 6,83 € HT : par colis TVA 1,37 € → somme 2,74 € ;
+        // agrégé 13,66 € × 20 % = 2,73 €. La méthode agrégée (facture La Poste)
+        // l'emporte.
+        $perParcelVatSum = round(array_sum(array_map(fn ($p) => $p->vat, $result->parcels)), 2);
+        $this->assertSame(2.74, $perParcelVatSum);
+        $this->assertSame(2.73, $result->totalVat);
+    }
+
     // ------------------------------------------------------------------
     // Repli : surchargedPortNet() applique les mêmes surcharges Colissimo
     // que l'estimation complète, pour que désactiver un carton / omettre
@@ -506,6 +614,7 @@ class CheckoutEstimationServiceTest extends TestCase
     public function testSurchargedPortNetAppliesColissimoSurchargesOnFallbackPrice(): void
     {
         $settings = (new StoreSettings())
+            ->setApplySurchargesFrance(true)
             ->setCaePercentRoutier(13.83)
             ->setSmicCompensationPercent(1.0)
             ->setShippingVatRatePercent(20.0)

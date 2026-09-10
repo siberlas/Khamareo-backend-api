@@ -119,7 +119,22 @@ class CheckoutEstimationService
             );
         }
 
-        return CheckoutEstimationResult::success($estimates);
+        // TVA répercutée : appliquée UNE seule fois sur le total HT de la
+        // commande (port net + CAE + SMIC + suppléments de tous les colis),
+        // comme sur la facture La Poste — pas colis par colis.
+        $totalHt = round(array_sum(array_map(fn (ParcelEstimate $p) => $p->price, $estimates)), 2);
+        // France au tarif de base (surcharges désactivées) → pas de TVA répercutée non plus.
+        $franceBaseOnly = $zone === DestinationZone::FRANCE_METRO
+            && ($settings === null || !$settings->isApplySurchargesFrance());
+        $vatRate = ($settings !== null
+            && !$franceBaseOnly
+            && $settings->getShippingVatRatePercent() !== null
+            && $this->zoneMapper->isFrenchVatApplicable($countryCode))
+            ? (float) $settings->getShippingVatRatePercent()
+            : 0.0;
+        $totalVat = round($totalHt * $vatRate / 100, 2);
+
+        return CheckoutEstimationResult::success($estimates, $totalHt, $totalVat);
     }
 
     /**
@@ -190,7 +205,7 @@ class CheckoutEstimationService
     private function findSmallestFittingCarton(array $products, array $cartonsAscByVolume, bool $requiresCn23Margin): ?Carton
     {
         $totalVolume = array_sum(array_map(fn (Product $p) => $p->getVolumeCm3(), $products));
-        $sumProductWeightGrams = array_sum(array_map(fn (Product $p) => $p->getWeightGrams(), $products));
+        $sumProductWeightGrams = array_sum(array_map(fn (Product $p) => $p->getShippingWeightGrams() ?? 0, $products));
 
         foreach ($cartonsAscByVolume as $carton) {
             if ($carton->getVolumeCm3() < $totalVolume) {
@@ -237,7 +252,7 @@ class CheckoutEstimationService
                 "Le produit « %s » (%.2f kg) dépasse à lui seul la limite de 30 kg par colis Colissimo, "
                 . "même dans le plus petit carton adapté à sa taille.",
                 $unit->getName(),
-                $unit->getWeightGrams() / 1000
+                ($unit->getShippingWeightGrams() ?? 0) / 1000
             );
         }
 
@@ -273,7 +288,7 @@ class CheckoutEstimationService
         string $rateZone,
         ?StoreSettings $settings
     ): ParcelEstimate {
-        $sumProductWeightGrams = array_sum(array_map(fn (Product $p) => $p->getWeightGrams(), $products));
+        $sumProductWeightGrams = array_sum(array_map(fn (Product $p) => $p->getShippingWeightGrams() ?? 0, $products));
 
         // Même critère que ColissimoApiService::buildDomesticParcelPayload()
         // (countryCode !== 'FR', pas la zone) : l'Andorre reste en zone
@@ -300,7 +315,8 @@ class CheckoutEstimationService
         [$cae, $smicCompensation, $supplements, $vat] =
             $this->computeSurcharges($portNet, $carrierMode, $countryCode, $zone, $settings);
 
-        $price = round($portNet + $cae + $smicCompensation + $supplements + $vat, 2);
+        // Montant HT du colis (hors TVA — celle-ci est agrégée au niveau commande).
+        $price = round($portNet + $cae + $smicCompensation + $supplements, 2);
 
         return new ParcelEstimate(
             cartonId: $carton->getId()->toRfc4122(),
@@ -361,6 +377,13 @@ class CheckoutEstimationService
     ): array {
         $isColissimo = $carrierMode->getColissimoProductCodeKey() !== null;
         if ($settings === null || !$isColissimo) {
+            return [0.0, 0.0, 0.0, 0.0];
+        }
+
+        // France métropolitaine (+ Monaco, Andorre) : tarif de base seul, sauf
+        // si les surcharges France sont explicitement activées. Les autres
+        // destinations ne sont pas concernées.
+        if ($zone === DestinationZone::FRANCE_METRO && !$settings->isApplySurchargesFrance()) {
             return [0.0, 0.0, 0.0, 0.0];
         }
 

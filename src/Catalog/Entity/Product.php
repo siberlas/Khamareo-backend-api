@@ -165,6 +165,14 @@ class Product
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $weightGrams = null;
 
+    /**
+     * Poids à vide du contenant du produit (sachet, flacon, pot…) en grammes.
+     * Ajouté au poids du produit pour obtenir le poids réellement expédié.
+     */
+    #[Groups(['product:read', 'product:write'])]
+    #[ORM\Column(type: 'integer', nullable: true)]
+    private ?int $containerEmptyWeightGrams = null;
+
     #[Groups(['product:read', 'product:write'])]
     #[ORM\Column(type: 'integer', nullable: true)]
     private ?int $lengthCm = null;
@@ -361,6 +369,22 @@ class Product
 
     public function getWeightGrams(): ?int { return $this->weightGrams; }
     public function setWeightGrams(?int $weightGrams): static { $this->weightGrams = $weightGrams; return $this; }
+
+    public function getContainerEmptyWeightGrams(): ?int { return $this->containerEmptyWeightGrams; }
+    public function setContainerEmptyWeightGrams(?int $v): static { $this->containerEmptyWeightGrams = $v; return $this; }
+
+    /**
+     * Poids réellement expédié : poids du produit + poids à vide du contenant.
+     * null si le poids du produit n'est pas renseigné.
+     */
+    public function getShippingWeightGrams(): ?int
+    {
+        if ($this->weightGrams === null) {
+            return null;
+        }
+
+        return $this->weightGrams + ($this->containerEmptyWeightGrams ?? 0);
+    }
 
     public function getLengthCm(): ?int { return $this->lengthCm; }
     public function setLengthCm(?int $v): static { $this->lengthCm = $v; return $this; }

@@ -182,6 +182,11 @@ class ProductUpdateController extends AbstractController
                 $product->setWeightGrams($wg > 0 ? $wg : null);
             }
 
+            if (array_key_exists('containerEmptyWeightGrams', $data)) {
+                $c = $data['containerEmptyWeightGrams'];
+                $product->setContainerEmptyWeightGrams($c !== null && $c !== '' && (int) $c > 0 ? (int) $c : null);
+            }
+
             if (array_key_exists('lengthCm', $data)) {
                 $product->setLengthCm($data['lengthCm'] !== null && $data['lengthCm'] !== '' ? (int) $data['lengthCm'] : null);
             }
@@ -453,6 +458,11 @@ class ProductUpdateController extends AbstractController
                     ], 400);
                 }
                 $product->setWeightGrams($wg > 0 ? $wg : null);
+            }
+
+            if ($request->request->has('containerEmptyWeightGrams')) {
+                $c = $request->request->get('containerEmptyWeightGrams');
+                $product->setContainerEmptyWeightGrams($c !== null && $c !== '' && (int) $c > 0 ? (int) $c : null);
             }
 
             if ($request->request->has('lengthCm')) {
@@ -904,6 +914,7 @@ class ProductUpdateController extends AbstractController
             $newProduct->setOriginalPrice($originalProduct->getOriginalPrice());
             $newProduct->setStock(0); // Stock à 0 par défaut
             $newProduct->setWeightGrams($originalProduct->getWeightGrams());
+            $newProduct->setContainerEmptyWeightGrams($originalProduct->getContainerEmptyWeightGrams());
             $newProduct->setBadge($originalProduct->getBadge());
             $newProduct->setBenefits($originalProduct->getBenefits());
             $newProduct->setIngredients($originalProduct->getIngredients());

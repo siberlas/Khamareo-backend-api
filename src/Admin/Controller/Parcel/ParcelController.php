@@ -46,6 +46,7 @@ class ParcelController extends AbstractController
         private DestinationClassifier $destinationClassifier,
         private \App\Shipping\Repository\ShippingRateRepository $shippingRateRepository,
         private \App\Shipping\Service\ShippingZoneMapper $zoneMapper,
+        private \App\Shipping\Service\CheckoutEstimationService $checkoutEstimationService,
     ) {}
 
     #[Route('/parcels/{parcelId}/delivery-note', name: 'generate_parcel_delivery_note', methods: ['POST'])]
@@ -591,7 +592,7 @@ class ParcelController extends AbstractController
             if (!$product) {
                 continue;
             }
-            $unitWeightGrams = $product->getWeightGrams();
+            $unitWeightGrams = $product->getShippingWeightGrams();
             if ($unitWeightGrams === null || $unitWeightGrams <= 0) {
                 $unitWeightGrams = 500;
             }
@@ -644,55 +645,15 @@ class ParcelController extends AbstractController
         $rate = $this->shippingRateRepository->findBestRate($carrierMode, $rateZone, $billableWeightGrams, $countryCode);
         $portNet = $rate ? (float) $rate->getPrice() : (float) ($carrierMode->getBasePrice() ?? 0.0);
 
-        $settings = $this->em->getRepository(\App\Shared\Entity\StoreSettings::class)->findOneBy([]);
-        if ($settings === null) {
-            return round($portNet, 2);
-        }
-
-        // CAE / SMIC / décarbonation / sûreté / suppléments pays / TVA : offres Colissimo uniquement.
-        $isColissimo = $carrierMode->getColissimoProductCodeKey() !== null;
-
-        $cae = 0.0;
-        $smicCompensation = 0.0;
-        $supplements = 0.0;
-        $vat = 0.0;
-        $zone = $this->destinationClassifier->classify($address->getPostalCode(), $countryCode);
-
-        if ($isColissimo) {
-            if (!in_array($carrierMode->getId(), $settings->getCaeExcludedCarrierModeIds(), true)) {
-                $caePercent = match ($carrierMode->getEnergyCoefficientType()) {
-                    'routier' => $settings->getCaePercentRoutier(),
-                    'aerien' => $settings->getCaePercentAerien(),
-                    default => null,
-                };
-                if ($caePercent !== null) {
-                    $cae = round($portNet * $caePercent / 100, 2);
-                }
-            }
-
-            if ($settings->getSmicCompensationPercent() !== null) {
-                $smicCompensation = round($portNet * $settings->getSmicCompensationPercent() / 100, 2);
-            }
-
-            if (in_array($zone, [DestinationZone::UNION_EUROPEENNE, DestinationZone::EUROPE_HORS_UE, DestinationZone::INTERNATIONAL], true)) {
-                $supplements += $settings->getSupplementInternationalSecurity() ?? 0.0;
-            }
-            $supplements += match (strtoupper($countryCode)) {
-                'US' => $settings->getSupplementUs() ?? 0.0,
-                'CN' => $settings->getSupplementChina() ?? 0.0,
-                'GB' => $settings->getSupplementUk() ?? 0.0,
-                default => 0.0,
-            };
-            $supplements += $settings->getSupplementDecarbonation() ?? 0.0;
-
-            if ($settings->getShippingVatRatePercent() !== null
-                && $this->zoneMapper->isFrenchVatApplicable($countryCode)
-            ) {
-                $vat = round(($portNet + $cae + $smicCompensation + $supplements) * $settings->getShippingVatRatePercent() / 100, 2);
-            }
-        }
-
-        return round($portNet + $cae + $smicCompensation + $supplements + $vat, 2);
+        // Surcharges Colissimo (CAE, SMIC, sûreté, suppléments pays, décarbonation,
+        // TVA) — mêmes règles que l'estimation checkout, y compris le tarif de
+        // base pour la France quand les surcharges France sont désactivées.
+        return $this->checkoutEstimationService->surchargedPortNet(
+            $portNet,
+            $carrierMode,
+            $countryCode,
+            $address->getPostalCode(),
+        );
     }
 
     /**
@@ -758,7 +719,7 @@ class ParcelController extends AbstractController
                 'orderItemId' => $oid,
                 'productId' => $product?->getId()?->toRfc4122(),
                 'productName' => $product?->getName() ??  'Produit',
-                'unitWeightGrams' => (int) ($product?->getWeightGrams() ?? 0),
+                'unitWeightGrams' => (int) ($product?->getShippingWeightGrams() ?? 0),
                 'totalQuantity' => $totalQty,
                 'allocatedQuantity' => $allocatedQty,
                 'remainingQuantity' => $remainingQty,

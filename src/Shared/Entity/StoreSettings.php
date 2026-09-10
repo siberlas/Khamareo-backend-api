@@ -134,6 +134,15 @@ class StoreSettings
     #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
     private ?string $shippingVatRatePercent = null;
 
+    /**
+     * Quand faux (défaut) : la France métropolitaine (+ Monaco, Andorre) est
+     * facturée au tarif de base — port net seul, sans CAE / SMIC /
+     * décarbonation / TVA répercutés. Les autres destinations ne sont pas
+     * concernées. Mettre à vrai pour répercuter aussi ces frais sur la France.
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => false])]
+    private bool $applySurchargesFrance = false;
+
     // ── Livres numériques ─────────────────────────────────────────────────
 
     /**
@@ -259,6 +268,9 @@ class StoreSettings
 
     public function getSmicCompensationPercent(): ?float { return $this->smicCompensationPercent !== null ? (float) $this->smicCompensationPercent : null; }
     public function setSmicCompensationPercent(?float $v): self { $this->smicCompensationPercent = $v !== null ? (string) $v : null; return $this; }
+
+    public function isApplySurchargesFrance(): bool { return $this->applySurchargesFrance; }
+    public function setApplySurchargesFrance(bool $v): self { $this->applySurchargesFrance = $v; return $this; }
 
     public function getShippingVatRatePercent(): ?float { return $this->shippingVatRatePercent !== null ? (float) $this->shippingVatRatePercent : null; }
     public function setShippingVatRatePercent(?float $v): self { $this->shippingVatRatePercent = $v !== null ? (string) $v : null; return $this; }

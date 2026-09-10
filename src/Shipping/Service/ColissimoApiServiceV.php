@@ -413,7 +413,8 @@ class ColissimoApiServiceV
      */
     private function safeProductWeightGrams($product): int
     {
-        $grams = $product->getWeightGrams();
+        // Poids du produit + poids à vide de son contenant (sachet, flacon…).
+        $grams = $product->getShippingWeightGrams();
 
         if ($grams === null || $grams <= 0) {
             return 500; // Default 500g
