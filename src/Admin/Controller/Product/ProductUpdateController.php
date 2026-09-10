@@ -34,7 +34,8 @@ class ProductUpdateController extends AbstractController
         private BadgeRepository $badgeRepository,
         private CloudinaryService $cloudinaryService,
         private SluggerInterface $slugger,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private \App\Catalog\Service\DigitalFileUploader $digitalFileUploader,
     ) {}
 
     /**
@@ -160,15 +161,25 @@ class ProductUpdateController extends AbstractController
                 $product->setStock((int) $data['stock']);
             }
 
+            if (array_key_exists('productType', $data)) {
+                $pt = \App\Catalog\Enum\ProductType::tryFrom((string) $data['productType']);
+                if ($pt === null) {
+                    return $this->json(['success' => false, 'error' => 'productType invalide (physical|digital)'], 400);
+                }
+                $product->setProductType($pt);
+            }
+
+            $isDigital = $product->getProductType() === \App\Catalog\Enum\ProductType::DIGITAL;
+
             if (array_key_exists('weightGrams', $data)) {
                 $wg = $data['weightGrams'] ? (int) $data['weightGrams'] : 0;
-                if ($wg <= 0) {
+                if ($wg <= 0 && !$isDigital) {
                     return $this->json([
                         'success' => false,
                         'error' => 'Le poids (en grammes) est obligatoire et doit être supérieur à 0'
                     ], 400);
                 }
-                $product->setWeightGrams($wg);
+                $product->setWeightGrams($wg > 0 ? $wg : null);
             }
 
             if (array_key_exists('lengthCm', $data)) {
@@ -228,7 +239,14 @@ class ProductUpdateController extends AbstractController
             }
 
             if (isset($data['isEnabled'])) {
-                $product->setIsEnabled((bool) $data['isEnabled']);
+                $wantEnabled = (bool) $data['isEnabled'];
+                if ($wantEnabled && $isDigital && !$product->hasDigitalFile()) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'Impossible d\'activer un livre numérique sans fichier PDF. Uploadez le fichier d\'abord.'
+                    ], 400);
+                }
+                $product->setIsEnabled($wantEnabled);
             }
 
             if (isset($data['isFeatured'])) {
@@ -291,6 +309,11 @@ class ProductUpdateController extends AbstractController
                     'stock' => $product->getStock(),
                     'isEnabled' => $product->getIsEnabled(),
                     'isFeatured' => $product->getIsFeatured(),
+                    'productType' => $product->getProductType()->value,
+                    'isDigital' => $product->isDigital(),
+                    'hasDigitalFile' => $product->hasDigitalFile(),
+                    'digitalFileOriginalName' => $product->getDigitalFileOriginalName(),
+                    'digitalFileSizeBytes' => $product->getDigitalFileSizeBytes(),
                 ],
                 'message' => 'Produit mis à jour avec succès'
             ]);
@@ -401,16 +424,35 @@ class ProductUpdateController extends AbstractController
             if ($request->request->has('stock')) {
                 $product->setStock((int) $request->request->get('stock'));
             }
+            if ($request->request->has('productType')) {
+                $pt = \App\Catalog\Enum\ProductType::tryFrom((string) $request->request->get('productType'));
+                if ($pt === null) {
+                    return $this->json(['success' => false, 'error' => 'productType invalide (physical|digital)'], 400);
+                }
+                $product->setProductType($pt);
+            }
+            $isDigital = $product->getProductType() === \App\Catalog\Enum\ProductType::DIGITAL;
+
+            // Fichier PDF du livre numérique — traité AVANT le contrôle isEnabled
+            if ($isDigital) {
+                $digitalFile = $request->files->get('digitalFile');
+                if ($digitalFile instanceof \Symfony\Component\HttpFoundation\File\UploadedFile) {
+                    if ($error = $this->digitalFileUploader->attach($product, $digitalFile)) {
+                        return $this->json(['success' => false, 'error' => $error], 400);
+                    }
+                }
+            }
+
             if ($request->request->has('weightGrams')) {
                 $weightGrams = $request->request->get('weightGrams');
                 $wg = ($weightGrams !== null && $weightGrams !== '') ? (int) $weightGrams : 0;
-                if ($wg <= 0) {
+                if ($wg <= 0 && !$isDigital) {
                     return $this->json([
                         'success' => false,
                         'error' => 'Le poids (en grammes) est obligatoire et doit être supérieur à 0'
                     ], 400);
                 }
-                $product->setWeightGrams($wg);
+                $product->setWeightGrams($wg > 0 ? $wg : null);
             }
 
             if ($request->request->has('lengthCm')) {
@@ -456,7 +498,14 @@ class ProductUpdateController extends AbstractController
                 }
             }
             if ($request->request->has('isEnabled')) {
-                $product->setIsEnabled(filter_var($request->request->get('isEnabled'), FILTER_VALIDATE_BOOLEAN));
+                $wantEnabled = filter_var($request->request->get('isEnabled'), FILTER_VALIDATE_BOOLEAN);
+                if ($wantEnabled && $isDigital && !$product->hasDigitalFile()) {
+                    return $this->json([
+                        'success' => false,
+                        'error' => 'Impossible d\'activer un livre numérique sans fichier PDF. Uploadez le fichier d\'abord.'
+                    ], 400);
+                }
+                $product->setIsEnabled($wantEnabled);
             }
 
             if ($request->request->has('isFeatured')) {

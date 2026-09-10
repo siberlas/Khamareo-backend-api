@@ -17,7 +17,9 @@ readonly class ParcelEstimate
         public int $billableWeightGrams,
         public float $portNet,
         public float $cae,
+        public float $smicCompensation,
         public float $supplements,
+        public float $vat,
         public float $price,
     ) {}
 }

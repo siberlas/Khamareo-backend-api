@@ -475,8 +475,87 @@ class CloudinaryService
     }
 
     /**
+     * Upload un fichier binaire privé (ebook PDF) en ressource `raw`,
+     * `type: authenticated` — jamais accessible via une URL publique. La
+     * livraison se fait ensuite via signedRawUrl() avec une expiration courte.
+     *
+     * @return array{success: bool, publicId?: string, bytes?: int, error?: string}
+     */
+    public function uploadRawAuthenticated(string $filePath, string $folder = 'khamareo/ebooks', array $options = []): array
+    {
+        try {
+            $result = $this->cloudinary->uploadApi()->upload($filePath, array_merge([
+                'resource_type' => 'raw',
+                'type'          => 'authenticated',
+                'asset_folder'  => $folder,
+                'overwrite'     => true,
+            ], $options));
+
+            return [
+                'success'  => true,
+                'publicId' => $result['public_id'],
+                'bytes'    => $result['bytes'] ?? null,
+            ];
+        } catch (\Exception $e) {
+            $this->logger->error('Cloudinary raw upload failed', ['error' => $e->getMessage()]);
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * URL signée temporaire vers une ressource `raw` `authenticated`, valable
+     * $ttlSeconds secondes. Le navigateur est redirigé (302) dessus par le
+     * contrôleur de téléchargement — l'URL n'est jamais stockée ni envoyée par email.
+     */
+    public function signedRawUrl(string $publicId, int $ttlSeconds = 600, bool $asAttachment = true): string
+    {
+        return $this->cloudinary->uploadApi()->privateDownloadUrl($publicId, '', [
+            'resource_type' => 'raw',
+            'type'          => 'authenticated',
+            'attachment'    => $asAttachment,
+            'expires_at'    => time() + $ttlSeconds,
+        ]);
+    }
+
+    /**
+     * Récupère le contenu binaire d'une ressource `raw` `authenticated` par son
+     * public_id (pour appliquer le watermark côté serveur).
+     */
+    public function downloadRawByPublicId(string $publicId, string $type = 'authenticated'): string|false
+    {
+        try {
+            $signedUrl = $this->cloudinary->uploadApi()->privateDownloadUrl($publicId, '', [
+                'resource_type' => 'raw',
+                'type'          => $type,
+                'expires_at'    => time() + 300,
+            ]);
+            return file_get_contents($signedUrl);
+        } catch (\Exception $e) {
+            $this->logger->error('Cloudinary downloadRawByPublicId failed', [
+                'public_id' => $publicId,
+                'error'     => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
+
+    /** Supprime une ressource `raw` (fichier ebook remplacé ou produit supprimé). */
+    public function deleteRaw(string $publicId, string $type = 'authenticated'): void
+    {
+        try {
+            $this->cloudinary->uploadApi()->destroy($publicId, [
+                'resource_type' => 'raw',
+                'type'          => $type,
+                'invalidate'    => true,
+            ]);
+        } catch (\Exception $e) {
+            $this->logger->warning('Cloudinary deleteRaw failed', ['public_id' => $publicId, 'error' => $e->getMessage()]);
+        }
+    }
+
+    /**
      * Recherche avancée avec expression personnalisée
-     * 
+     *
      * @param string $expression Expression de recherche Cloudinary
      * @param int $maxResults Nombre maximum de résultats
      * @return array Résultats

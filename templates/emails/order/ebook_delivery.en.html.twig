@@ -1,0 +1,35 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Your ebook is ready{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Thank you for your order <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong>.
+    Your ebook is ready to download:</p>
+
+    <div class="card">
+        <h3 style="margin-top: 0; color: #4A2E20;">{{ productName }}</h3>
+        <p style="text-align: center; margin: 20px 0;">
+            <a href="{{ downloadUrl }}"
+               style="display: inline-block; background: #4A2E20; color: #fff; text-decoration: none;
+                      padding: 12px 28px; border-radius: 6px; font-weight: bold;">
+                Download my book (PDF)
+            </a>
+        </p>
+        <p style="font-size: 13px; opacity: 0.8; margin: 0;">
+            This link is valid for <strong>a single download</strong>{% if expiresAt %}
+            and expires on <strong>{{ expiresAt|date('m/d/Y') }}</strong>{% endif %}.
+            Save the file to your device the first time you open it.
+        </p>
+    </div>
+
+    <p style="font-size: 13px; opacity: 0.85;">
+        Each copy is personalised with your name and is for strictly personal use.
+        Please do not share or resell it.
+    </p>
+
+    <p style="font-size: 13px;">
+        Trouble downloading? Reply to this email and we will send you a new link.
+    </p>
+{% endblock %}

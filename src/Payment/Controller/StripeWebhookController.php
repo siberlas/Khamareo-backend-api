@@ -38,6 +38,7 @@ class StripeWebhookController extends AbstractController
         private readonly PromoCodeRepository $promoCodeRepository,
         private readonly PromoCodeApplicationService $promoCodeApplicationService,
         private readonly ClientContextResolver $clientContext,
+        private readonly \App\Order\Service\Digital\DigitalDeliveryService $digitalDelivery,
         private readonly string $webhookSecret,
     ) {
         $this->logger->debug('🔧 StripeWebhookController initialisé');
@@ -244,10 +245,10 @@ class StripeWebhookController extends AbstractController
                 'is_locked' => true
             ]);
 
-            // 5️⃣ Décrémenter le stock des produits commandés
+            // 5️⃣ Décrémenter le stock des produits commandés (jamais les livres numériques)
             foreach ($order->getItems() as $item) {
                 $product = $item->getProduct();
-                if ($product === null) {
+                if ($product === null || !$product->requiresShipping()) {
                     continue;
                 }
                 $newStock = max(0, ($product->getStock() ?? 0) - $item->getQuantity());
@@ -286,6 +287,16 @@ class StripeWebhookController extends AbstractController
 
             // 8️⃣ Envoyer l'email de confirmation
             $this->sendOrderConfirmationEmail($order);
+
+            // 8bis️⃣ Livraison des livres numériques (idempotent)
+            try {
+                $this->digitalDelivery->fulfill($order);
+            } catch (\Throwable $e) {
+                $this->logger->error('Échec livraison des livres numériques', [
+                    'order_number' => $order->getOrderNumber(),
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             $this->logger->info('🎉 Paiement traité avec succès', [
                 'payment_id' => $payment->getId(),
@@ -650,14 +661,19 @@ class StripeWebhookController extends AbstractController
             return null;
         }
 
-        $billingSource  = isset($metadata['billing_address_id'])
+        // Panier 100 % numérique : ni adresse de livraison ni transporteur.
+        $digitalOnly = ($metadata['digital_only'] ?? '0') === '1';
+
+        $billingSource  = !empty($metadata['billing_address_id'])
             ? $this->em->getRepository(Address::class)->find((int) $metadata['billing_address_id'])
             : null;
-        $deliverySource = isset($metadata['delivery_address_id'])
+        $deliverySource = !empty($metadata['delivery_address_id'])
             ? $this->em->getRepository(Address::class)->find((int) $metadata['delivery_address_id'])
             : null;
 
-        if (!$billingSource || !$deliverySource) {
+        // Une commande 100 % numérique n'exige aucune adresse : seul l'email
+        // du client (porté par le owner invité du panier) suffit.
+        if (!$digitalOnly && (!$billingSource || !$deliverySource)) {
             $this->logger->error('❌ Adresse(s) introuvable(s), reconstruction impossible', [
                 'payment_intent_id' => $pi->id,
                 'billing_address_id' => $metadata['billing_address_id'] ?? null,
@@ -666,11 +682,11 @@ class StripeWebhookController extends AbstractController
             return null;
         }
 
-        $carrierMode = isset($metadata['carrier_mode_id'])
+        $carrierMode = !empty($metadata['carrier_mode_id'])
             ? $this->carrierModeRepository->find((int) $metadata['carrier_mode_id'])
             : null;
 
-        if (!$carrierMode) {
+        if (!$carrierMode && !$digitalOnly) {
             $this->logger->error('❌ CarrierMode introuvable, reconstruction impossible', [
                 'payment_intent_id' => $pi->id,
                 'carrier_mode_id' => $metadata['carrier_mode_id'] ?? null,
@@ -717,53 +733,59 @@ class StripeWebhookController extends AbstractController
         ]);
 
         // --- Snapshots d'adresse (mêmes champs que CheckoutController) ---
-        $billingSnapshot = (new Address())
-            ->setAddressKind($billingSource->getAddressKind())
-            ->setStreetAddress($billingSource->getStreetAddress())
-            ->setAddressComplement($billingSource->getAddressComplement())
-            ->setCity($billingSource->getCity())
-            ->setPostalCode($billingSource->getPostalCode())
-            ->setCountry($billingSource->getCountry())
-            ->setState($billingSource->getState())
-            ->setLabel('Billing snapshot (webhook)')
-            ->setIsDefault(false)->setOwner(null)
-            ->setLatitude($billingSource->getLatitude())
-            ->setLongitude($billingSource->getLongitude())
-            ->setCivility($billingSource->getCivility())
-            ->setFirstName($billingSource->getFirstName())
-            ->setLastName($billingSource->getLastName())
-            ->setPhone($billingSource->getPhone())
-            ->setIsBusiness($billingSource->isBusiness())
-            ->setCompanyName($billingSource->getCompanyName());
-        $this->em->persist($billingSnapshot);
-
-        $shippingSnapshot = (new Address())
-            ->setAddressKind($deliverySource->getAddressKind())
-            ->setStreetAddress($deliverySource->getStreetAddress())
-            ->setAddressComplement($deliverySource->getAddressComplement())
-            ->setCity($deliverySource->getCity())
-            ->setPostalCode($deliverySource->getPostalCode())
-            ->setCountry($deliverySource->getCountry())
-            ->setState($deliverySource->getState())
-            ->setLabel('Shipping snapshot (webhook)')
-            ->setIsDefault(false)->setOwner(null)
-            ->setLatitude($deliverySource->getLatitude())
-            ->setLongitude($deliverySource->getLongitude())
-            ->setCivility($deliverySource->getCivility())
-            ->setFirstName($deliverySource->getFirstName())
-            ->setLastName($deliverySource->getLastName())
-            ->setPhone($deliverySource->getPhone())
-            ->setIsBusiness($deliverySource->isBusiness())
-            ->setCompanyName($deliverySource->getCompanyName());
-
-        if ($deliverySource->isRelayPoint()) {
-            $shippingSnapshot
-                ->setAddressKind('relay')
-                ->setIsRelayPoint(true)
-                ->setRelayPointId($deliverySource->getRelayPointId())
-                ->setRelayCarrier($deliverySource->getRelayCarrier());
+        $billingSnapshot = null;
+        if ($billingSource !== null) {
+            $billingSnapshot = (new Address())
+                ->setAddressKind($billingSource->getAddressKind())
+                ->setStreetAddress($billingSource->getStreetAddress())
+                ->setAddressComplement($billingSource->getAddressComplement())
+                ->setCity($billingSource->getCity())
+                ->setPostalCode($billingSource->getPostalCode())
+                ->setCountry($billingSource->getCountry())
+                ->setState($billingSource->getState())
+                ->setLabel('Billing snapshot (webhook)')
+                ->setIsDefault(false)->setOwner(null)
+                ->setLatitude($billingSource->getLatitude())
+                ->setLongitude($billingSource->getLongitude())
+                ->setCivility($billingSource->getCivility())
+                ->setFirstName($billingSource->getFirstName())
+                ->setLastName($billingSource->getLastName())
+                ->setPhone($billingSource->getPhone())
+                ->setIsBusiness($billingSource->isBusiness())
+                ->setCompanyName($billingSource->getCompanyName());
+            $this->em->persist($billingSnapshot);
         }
-        $this->em->persist($shippingSnapshot);
+
+        $shippingSnapshot = null;
+        if ($deliverySource !== null) {
+            $shippingSnapshot = (new Address())
+                ->setAddressKind($deliverySource->getAddressKind())
+                ->setStreetAddress($deliverySource->getStreetAddress())
+                ->setAddressComplement($deliverySource->getAddressComplement())
+                ->setCity($deliverySource->getCity())
+                ->setPostalCode($deliverySource->getPostalCode())
+                ->setCountry($deliverySource->getCountry())
+                ->setState($deliverySource->getState())
+                ->setLabel('Shipping snapshot (webhook)')
+                ->setIsDefault(false)->setOwner(null)
+                ->setLatitude($deliverySource->getLatitude())
+                ->setLongitude($deliverySource->getLongitude())
+                ->setCivility($deliverySource->getCivility())
+                ->setFirstName($deliverySource->getFirstName())
+                ->setLastName($deliverySource->getLastName())
+                ->setPhone($deliverySource->getPhone())
+                ->setIsBusiness($deliverySource->isBusiness())
+                ->setCompanyName($deliverySource->getCompanyName());
+
+            if ($deliverySource->isRelayPoint()) {
+                $shippingSnapshot
+                    ->setAddressKind('relay')
+                    ->setIsRelayPoint(true)
+                    ->setRelayPointId($deliverySource->getRelayPointId())
+                    ->setRelayCarrier($deliverySource->getRelayCarrier());
+            }
+            $this->em->persist($shippingSnapshot);
+        }
 
         // --- Order ---
         $piAmount     = ($pi->amount_received ?: $pi->amount) / 100;
@@ -772,9 +794,6 @@ class StripeWebhookController extends AbstractController
         $order = new Order();
         $order
             ->setStatus(OrderStatus::PENDING)
-            ->setCarrier($carrierMode->getCarrier())
-            ->setShippingMode($carrierMode->getShippingMode())
-            ->setCarrierMode($carrierMode)
             ->setBillingAddress($billingSnapshot)
             ->setShippingAddress($shippingSnapshot)
             ->setShippingCost($shippingCost)
@@ -782,6 +801,13 @@ class StripeWebhookController extends AbstractController
             ->setTotalAmount($piAmount)
             ->setCurrency('EUR')
             ->setLocale('fr');
+
+        if ($carrierMode !== null) {
+            $order
+                ->setCarrier($carrierMode->getCarrier())
+                ->setShippingMode($carrierMode->getShippingMode())
+                ->setCarrierMode($carrierMode);
+        }
 
         // Provenance visiteur : copiée depuis le Cart (capturée à l'ouverture du panier)
         $order
@@ -818,12 +844,12 @@ class StripeWebhookController extends AbstractController
         } else {
             $order
                 ->setGuestEmail($guestEmail)
-                ->setGuestFirstName($billingSource->getFirstName())
-                ->setGuestLastName($billingSource->getLastName())
-                ->setGuestPhone($billingSource->getPhone());
+                ->setGuestFirstName($billingSource?->getFirstName() ?? $guestUser?->getFirstName())
+                ->setGuestLastName($billingSource?->getLastName() ?? $guestUser?->getLastName())
+                ->setGuestPhone($billingSource?->getPhone() ?? $guestUser?->getPhone());
         }
 
-        if ($deliverySource->isRelayPoint()) {
+        if ($deliverySource !== null && $deliverySource->isRelayPoint()) {
             $order
                 ->setIsRelayPoint(true)
                 ->setRelayPointId($deliverySource->getRelayPointId())
@@ -833,6 +859,7 @@ class StripeWebhookController extends AbstractController
         foreach ($cart->getItems() as $cartItem) {
             $item = (new OrderItem())
                 ->setProduct($cartItem->getProduct())
+                ->setProductType($cartItem->getProduct()?->getProductType())
                 ->setQuantity($cartItem->getQuantity())
                 ->setUnitPrice($cartItem->getUnitPrice());
             // addItem() (et non setCustomerOrder() seul) : alimente aussi la collection

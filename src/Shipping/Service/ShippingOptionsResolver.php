@@ -14,8 +14,6 @@ use Psr\Log\LoggerInterface;
  */
 class ShippingOptionsResolver
 {
-    private const TARIFF_NOTE = 'classification tarifaire Colissimo – indicative';
-
     public function __construct(
         private CarrierModeRepository $carrierModeRepository,
         private ShippingRateRepository $shippingRateRepository,
@@ -109,7 +107,14 @@ class ShippingOptionsResolver
                         'cartonName' => $p->cartonName,
                         'productNames' => $p->productNames,
                         'weightGrams' => $p->weightGrams,
+                        'volumetricWeightGrams' => $p->volumetricWeightGrams,
                         'billableWeightGrams' => $p->billableWeightGrams,
+                        // Détail du prix (utilisé pour l'affichage debug côté admin/dev)
+                        'portNet' => $p->portNet,
+                        'cae' => $p->cae,
+                        'smicCompensation' => $p->smicCompensation,
+                        'supplements' => $p->supplements,
+                        'vat' => $p->vat,
                         'price' => $p->price,
                     ], $estimation->parcels);
                 } else {
@@ -145,7 +150,6 @@ class ShippingOptionsResolver
                 'requiresPickupPoint' => $carrierMode->getShippingMode()->requiresPickupPoint(),
                 'icon' => $carrierMode->getShippingMode()->getIcon(),
                 'zone' => $zone,
-                'tariffClassificationNote' => self::TARIFF_NOTE,
             ];
         }
 

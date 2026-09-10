@@ -30,7 +30,8 @@ class ProductCreationController extends AbstractController
         private CloudinaryService $cloudinaryService,
         private CategoryRepository $categoryRepository,
         private SluggerInterface $slugger,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private \App\Catalog\Service\DigitalFileUploader $digitalFileUploader,
     ) {}
 
     /**
@@ -69,6 +70,10 @@ class ProductCreationController extends AbstractController
             $isFeatured = $request->request->get('isFeatured');
 
             $weightGramsRaw = $request->request->get('weightGrams');
+            $productType = \App\Catalog\Enum\ProductType::tryFrom((string) $request->request->get('productType', 'physical'))
+                ?? \App\Catalog\Enum\ProductType::PHYSICAL;
+            $isDigital = $productType === \App\Catalog\Enum\ProductType::DIGITAL;
+
             if (!$name || !$categoryId || !$price || $stock === null) {
                 return $this->json([
                     'success' => false,
@@ -76,7 +81,7 @@ class ProductCreationController extends AbstractController
                 ], 400);
             }
 
-            if (!$weightGramsRaw || (int) $weightGramsRaw <= 0) {
+            if (!$isDigital && (!$weightGramsRaw || (int) $weightGramsRaw <= 0)) {
                 return $this->json([
                     'success' => false,
                     'error' => 'Le poids (en grammes) est obligatoire et doit être supérieur à 0'
@@ -123,6 +128,7 @@ class ProductCreationController extends AbstractController
             $product->setDescription($request->request->get('description'));
             $product->setPrice((float) $price);
             $product->setStock((int) $stock);
+            $product->setProductType($productType);
 
             if ($badgeId) {
                 $badge = $this->em->getRepository(Badge::class)->find($badgeId);
@@ -137,7 +143,7 @@ class ProductCreationController extends AbstractController
                 $product->setBadge(null);
             }
             
-            $product->setWeightGrams((int) $weightGramsRaw);
+            $product->setWeightGrams($weightGramsRaw !== null && (int) $weightGramsRaw > 0 ? (int) $weightGramsRaw : null);
 
             // Dimensions et douane (optionnels à la création)
             if ($request->request->has('lengthCm')) {
@@ -275,6 +281,21 @@ class ProductCreationController extends AbstractController
                         
                         $displayOrder++;
                     }
+                }
+            }
+
+            // 5b. FICHIER PDF DU LIVRE NUMÉRIQUE
+            if ($isDigital) {
+                /** @var UploadedFile|null $digitalFile */
+                $digitalFile = $request->files->get('digitalFile');
+                if ($digitalFile instanceof UploadedFile) {
+                    if ($error = $this->digitalFileUploader->attach($product, $digitalFile)) {
+                        return $this->json(['success' => false, 'error' => $error], 400);
+                    }
+                }
+                // Un livre numérique sans PDF ne peut pas être en vente.
+                if (!$product->hasDigitalFile()) {
+                    $product->setIsEnabled(false);
                 }
             }
 

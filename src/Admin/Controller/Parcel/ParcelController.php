@@ -649,29 +649,50 @@ class ParcelController extends AbstractController
             return round($portNet, 2);
         }
 
+        // CAE / SMIC / décarbonation / sûreté / suppléments pays / TVA : offres Colissimo uniquement.
+        $isColissimo = $carrierMode->getColissimoProductCodeKey() !== null;
+
         $cae = 0.0;
-        if (!in_array($carrierMode->getId(), $settings->getCaeExcludedCarrierModeIds(), true)) {
-            $caePercent = match ($carrierMode->getEnergyCoefficientType()) {
-                'routier' => $settings->getCaePercentRoutier(),
-                'aerien' => $settings->getCaePercentAerien(),
-                default => null,
+        $smicCompensation = 0.0;
+        $supplements = 0.0;
+        $vat = 0.0;
+        $zone = $this->destinationClassifier->classify($address->getPostalCode(), $countryCode);
+
+        if ($isColissimo) {
+            if (!in_array($carrierMode->getId(), $settings->getCaeExcludedCarrierModeIds(), true)) {
+                $caePercent = match ($carrierMode->getEnergyCoefficientType()) {
+                    'routier' => $settings->getCaePercentRoutier(),
+                    'aerien' => $settings->getCaePercentAerien(),
+                    default => null,
+                };
+                if ($caePercent !== null) {
+                    $cae = round($portNet * $caePercent / 100, 2);
+                }
+            }
+
+            if ($settings->getSmicCompensationPercent() !== null) {
+                $smicCompensation = round($portNet * $settings->getSmicCompensationPercent() / 100, 2);
+            }
+
+            if (in_array($zone, [DestinationZone::UNION_EUROPEENNE, DestinationZone::EUROPE_HORS_UE, DestinationZone::INTERNATIONAL], true)) {
+                $supplements += $settings->getSupplementInternationalSecurity() ?? 0.0;
+            }
+            $supplements += match (strtoupper($countryCode)) {
+                'US' => $settings->getSupplementUs() ?? 0.0,
+                'CN' => $settings->getSupplementChina() ?? 0.0,
+                'GB' => $settings->getSupplementUk() ?? 0.0,
+                default => 0.0,
             };
-            if ($caePercent !== null) {
-                $cae = round($portNet * $caePercent / 100, 2);
+            $supplements += $settings->getSupplementDecarbonation() ?? 0.0;
+
+            if ($settings->getShippingVatRatePercent() !== null
+                && $this->zoneMapper->isFrenchVatApplicable($countryCode)
+            ) {
+                $vat = round(($portNet + $cae + $smicCompensation + $supplements) * $settings->getShippingVatRatePercent() / 100, 2);
             }
         }
 
-        $zone = $this->destinationClassifier->classify($address->getPostalCode(), $countryCode);
-        $supplements = 0.0;
-        if (in_array($zone, [DestinationZone::UNION_EUROPEENNE, DestinationZone::EUROPE_HORS_UE, DestinationZone::INTERNATIONAL], true)) {
-            $supplements += $settings->getSupplementInternationalSecurity() ?? 0.0;
-        }
-        if (strtoupper($countryCode) === 'US') {
-            $supplements += $settings->getSupplementUs() ?? 0.0;
-        }
-        $supplements += $settings->getSupplementDecarbonation() ?? 0.0;
-
-        return round($portNet + $cae + $supplements, 2);
+        return round($portNet + $cae + $smicCompensation + $supplements + $vat, 2);
     }
 
     /**
@@ -720,6 +741,11 @@ class ParcelController extends AbstractController
         $result = [];
 
         foreach ($order->getItems() as $orderItem) {
+            // Les livres numériques ne sont pas expédiés : hors colisage.
+            if (!$orderItem->requiresShipping()) {
+                continue;
+            }
+
             $oid = $orderItem->getId()->toRfc4122();
 
             $totalQty = (int) $orderItem->getQuantity();
@@ -1298,6 +1324,9 @@ class ParcelController extends AbstractController
                     }
                 }
                 foreach ($order->getItems() as $orderItem) {
+                    if (!$orderItem->requiresShipping()) {
+                        continue; // livres numériques : jamais colisés
+                    }
                     $oid = $orderItem->getId()->toRfc4122();
                     $allocated = (int) ($allocatedByOrderItemId[$oid] ?? 0);
                     if ($allocated < (int) $orderItem->getQuantity()) {

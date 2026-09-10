@@ -21,6 +21,10 @@ class CartWeightCalculator
             if (!$product instanceof Product) {
                 continue;
             }
+            // Les livres numériques n'ont pas de poids et ne sont pas expédiés.
+            if (!$product->requiresShipping()) {
+                continue;
+            }
             $weight = $product->getWeightGrams() !== null
                 ? $product->getWeightGrams() / 1000.0
                 : ($product->getWeight() !== null ? (float) $product->getWeight() : self::DEFAULT_WEIGHT_KG);

@@ -100,8 +100,49 @@ class StoreSettings
     #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
     private ?string $supplementUs = null;
 
+    /** Supplément Colissimo Domicile avec signature vers la Chine (CN). */
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementChina = null;
+
+    /**
+     * Supplément Colissimo Domicile avec signature vers le Royaume-Uni (GB) —
+     * Grande-Bretagne + Irlande du Nord.
+     */
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementUk = null;
+
     #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
     private ?string $supplementDecarbonation = null;
+
+    /**
+     * Compensation évolution du SMIC La Poste, en pourcentage — appliquée sur
+     * le port net (HT après remise, hors options/suppléments/taxes), comme le
+     * CAE. Pourcentage variable chaque mois, sans exclusion d'offre (contrairement
+     * au CAE qui exclut Colissimo Eco Outre-mer).
+     */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $smicCompensationPercent = null;
+
+    /**
+     * Taux de TVA (%) répercuté sur les frais de port estimés au checkout.
+     * La Poste facture la TVA (20 % France + UE, 0 % export/Outre-mer) et,
+     * en franchise 293 B, la boutique ne la récupère pas : ce taux permet
+     * de la refacturer au client. Appliqué sur port + CAE + SMIC + suppléments,
+     * uniquement quand ShippingZoneMapper::isFrenchVatApplicable() est vrai.
+     * null = pas de TVA sur le port (comportement historique).
+     */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $shippingVatRatePercent = null;
+
+    // ── Livres numériques ─────────────────────────────────────────────────
+
+    /**
+     * Durée de validité (jours) d'un lien de téléchargement d'ebook — filet de
+     * sécurité en plus de la limite « 1 téléchargement ». null = pas d'expiration
+     * dans le temps.
+     */
+    #[ORM\Column(type: 'integer', nullable: true, options: ['default' => 90])]
+    private ?int $ebookDownloadValidityDays = 90;
 
     // ── Timestamp ─────────────────────────────────────────────────────────────
 
@@ -207,8 +248,23 @@ class StoreSettings
     public function getSupplementUs(): ?float { return $this->supplementUs !== null ? (float) $this->supplementUs : null; }
     public function setSupplementUs(?float $v): self { $this->supplementUs = $v !== null ? (string) $v : null; return $this; }
 
+    public function getSupplementChina(): ?float { return $this->supplementChina !== null ? (float) $this->supplementChina : null; }
+    public function setSupplementChina(?float $v): self { $this->supplementChina = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSupplementUk(): ?float { return $this->supplementUk !== null ? (float) $this->supplementUk : null; }
+    public function setSupplementUk(?float $v): self { $this->supplementUk = $v !== null ? (string) $v : null; return $this; }
+
     public function getSupplementDecarbonation(): ?float { return $this->supplementDecarbonation !== null ? (float) $this->supplementDecarbonation : null; }
     public function setSupplementDecarbonation(?float $v): self { $this->supplementDecarbonation = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSmicCompensationPercent(): ?float { return $this->smicCompensationPercent !== null ? (float) $this->smicCompensationPercent : null; }
+    public function setSmicCompensationPercent(?float $v): self { $this->smicCompensationPercent = $v !== null ? (string) $v : null; return $this; }
+
+    public function getShippingVatRatePercent(): ?float { return $this->shippingVatRatePercent !== null ? (float) $this->shippingVatRatePercent : null; }
+    public function setShippingVatRatePercent(?float $v): self { $this->shippingVatRatePercent = $v !== null ? (string) $v : null; return $this; }
+
+    public function getEbookDownloadValidityDays(): ?int { return $this->ebookDownloadValidityDays; }
+    public function setEbookDownloadValidityDays(?int $v): self { $this->ebookDownloadValidityDays = $v; return $this; }
 
     // ── Timestamp ─────────────────────────────────────────────────────────
 

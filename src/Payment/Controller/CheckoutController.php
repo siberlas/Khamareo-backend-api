@@ -121,12 +121,20 @@ class CheckoutController extends AbstractController
         // ============================================================
         // 2) Vérification des adresses
         // ============================================================
-        if (!$billingAddressIri || !$deliveryAddressIri) {
-            throw new BadRequestException("Adresses requises.");
+        // Panier 100 % numérique : pas d'adresse de livraison ni de transporteur.
+        $digitalOnly = $cart->hasOnlyDigitalItems();
+
+        if (!$billingAddressIri) {
+            throw new BadRequestException("Adresse de facturation requise.");
+        }
+        if (!$digitalOnly && !$deliveryAddressIri) {
+            throw new BadRequestException("Adresse de livraison requise.");
         }
 
         $billingSource  = $this->resolveAddressInput($billingAddressIri);
-        $deliverySource = $this->resolveAddressInput($deliveryAddressIri);
+        $deliverySource = ($deliveryAddressIri && !$digitalOnly)
+            ? $this->resolveAddressInput($deliveryAddressIri)
+            : null;
 
         $this->logger->info('🔎 [CHECKOUT] Adresse source résolue', [
             'delivery_address_iri' => $deliveryAddressIri,
@@ -138,7 +146,7 @@ class CheckoutController extends AbstractController
             'billing_source_state' => $billingSource?->getState(),
         ]);
 
-        if (!$billingSource || !$deliverySource) {
+        if (!$billingSource || (!$digitalOnly && !$deliverySource)) {
             throw new BadRequestException("Adresse de livraison ou facturation invalide.");
         }
 
@@ -179,56 +187,52 @@ class CheckoutController extends AbstractController
 
         $this->em->persist($billingSnapshot);
 
-        // --- SNAPSHOT SHIPPING ---
-        $shippingSnapshot = (new Address())
-            ->setAddressKind($deliverySource->getAddressKind())
-            ->setStreetAddress($deliverySource->getStreetAddress())
-            ->setAddressComplement($deliverySource->getAddressComplement())
-            ->setCity($deliverySource->getCity())
-            ->setPostalCode($deliverySource->getPostalCode())
-            ->setCountry($deliverySource->getCountry())
-            ->setState($deliverySource->getState())
-            ->setLabel('Shipping snapshot')
-            ->setIsDefault(false)
-            ->setOwner(null)
-            // Copier lat/lon pour que le listener utilise le reverse geocode (fiable)
-            // plutôt que de re-géocoder le texte depuis zéro (score variable)
-            ->setLatitude($deliverySource->getLatitude())
-            ->setLongitude($deliverySource->getLongitude());
+        // --- SNAPSHOT SHIPPING (uniquement si livraison physique) ---
+        $shippingSnapshot = null;
+        if ($deliverySource !== null) {
+            $shippingSnapshot = (new Address())
+                ->setAddressKind($deliverySource->getAddressKind())
+                ->setStreetAddress($deliverySource->getStreetAddress())
+                ->setAddressComplement($deliverySource->getAddressComplement())
+                ->setCity($deliverySource->getCity())
+                ->setPostalCode($deliverySource->getPostalCode())
+                ->setCountry($deliverySource->getCountry())
+                ->setState($deliverySource->getState())
+                ->setLabel('Shipping snapshot')
+                ->setIsDefault(false)
+                ->setOwner(null)
+                ->setLatitude($deliverySource->getLatitude())
+                ->setLongitude($deliverySource->getLongitude())
+                ->setCivility($deliverySource->getCivility())
+                ->setFirstName($deliverySource->getFirstName())
+                ->setLastName($deliverySource->getLastName())
+                ->setPhone($deliverySource->getPhone())
+                ->setIsBusiness($deliverySource->isBusiness())
+                ->setCompanyName($deliverySource->getCompanyName());
 
-        // Champs persos
-        $shippingSnapshot
-            ->setCivility($deliverySource->getCivility())
-            ->setFirstName($deliverySource->getFirstName())
-            ->setLastName($deliverySource->getLastName())
-            ->setPhone($deliverySource->getPhone());
+            if ($deliverySource->isRelayPoint()) {
+                $shippingSnapshot
+                    ->setAddressKind('relay')
+                    ->setIsRelayPoint(true)
+                    ->setRelayPointId($deliverySource->getRelayPointId())
+                    ->setRelayCarrier($deliverySource->getRelayCarrier());
+            }
 
-        // Champs business
-        $shippingSnapshot
-            ->setIsBusiness($deliverySource->isBusiness())
-            ->setCompanyName($deliverySource->getCompanyName());
-
-        // Champs relay
-        if ($deliverySource->isRelayPoint()) {
-            $shippingSnapshot
-                ->setAddressKind('relay')
-                ->setIsRelayPoint(true)
-                ->setRelayPointId($deliverySource->getRelayPointId())
-                ->setRelayCarrier($deliverySource->getRelayCarrier());
+            $this->em->persist($shippingSnapshot);
         }
 
-        $this->em->persist($shippingSnapshot);
-
         // ============================================================
-        // 3) Mode de livraison (CarrierMode)
+        // 3) Mode de livraison (CarrierMode) — absent si panier numérique
         // ============================================================
-        if (!$carrierModeId) {
-            throw new BadRequestException("carrierModeId requis.");
-        }
-
-        $carrierMode = $this->carrierModeRepository->find((int) $carrierModeId);
-        if (!$carrierMode) {
-            throw new BadRequestException("Mode de livraison invalide.");
+        $carrierMode = null;
+        if (!$digitalOnly) {
+            if (!$carrierModeId) {
+                throw new BadRequestException("carrierModeId requis.");
+            }
+            $carrierMode = $this->carrierModeRepository->find((int) $carrierModeId);
+            if (!$carrierMode) {
+                throw new BadRequestException("Mode de livraison invalide.");
+            }
         }
 
         // ============================================================
@@ -323,9 +327,6 @@ class CheckoutController extends AbstractController
         $order = new Order();
         $order
             ->setStatus(OrderStatus::PENDING)
-            ->setCarrier($carrierMode->getCarrier())
-            ->setShippingMode($carrierMode->getShippingMode())
-            ->setCarrierMode($carrierMode)
             ->setBillingAddress($billingSnapshot)
             ->setShippingAddress($shippingSnapshot)
             ->setShippingCost($shippingCost)
@@ -333,6 +334,13 @@ class CheckoutController extends AbstractController
             ->setTotalAmount($piAmount)
             ->setCurrency('EUR')
             ->setLocale($locale);
+
+        if ($carrierMode !== null) {
+            $order
+                ->setCarrier($carrierMode->getCarrier())
+                ->setShippingMode($carrierMode->getShippingMode())
+                ->setCarrierMode($carrierMode);
+        }
 
         // Provenance visiteur : copiée depuis le Cart (capturée à l'ouverture du panier)
         $order
@@ -382,7 +390,7 @@ class CheckoutController extends AbstractController
         }
 
         // Point relais
-        if ($deliverySource->isRelayPoint()) {
+        if ($deliverySource !== null && $deliverySource->isRelayPoint()) {
             $order
                 ->setIsRelayPoint(true)
                 ->setRelayPointId($deliverySource->getRelayPointId())
@@ -396,6 +404,7 @@ class CheckoutController extends AbstractController
             $item = (new OrderItem())
                 ->setCustomerOrder($order)
                 ->setProduct($cartItem->getProduct())
+                ->setProductType($cartItem->getProduct()?->getProductType())
                 ->setQuantity($cartItem->getQuantity())
                 ->setUnitPrice($cartItem->getUnitPrice());
 

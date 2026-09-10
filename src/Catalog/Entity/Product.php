@@ -27,6 +27,7 @@ use Gedmo\Translatable\Translatable;
 use App\Media\Entity\ProductMedia;
 use App\Shared\Entity\Currency;
 use App\Media\Entity\Media;
+use App\Catalog\Enum\ProductType;
 
 #[ORM\HasLifecycleCallbacks]
 #[ORM\Entity(repositoryClass: ProductRepository::class)]
@@ -185,6 +186,23 @@ class Product
     #[Groups(['product:read', 'product:write'])]
     #[ORM\Column(type: 'string', length: 2, nullable: true)]
     private ?string $paysOrigine = null;
+
+    /** Nature du produit : physique (expédié) ou numérique (ebook PDF par email). */
+    #[Groups(['product:read', 'product:write', 'cart:read', 'order:read', 'orderitem:read'])]
+    #[ORM\Column(type: 'string', length: 20, enumType: ProductType::class, options: ['default' => 'physical'])]
+    private ProductType $productType = ProductType::PHYSICAL;
+
+    /** public_id Cloudinary du PDF source (ressource `raw`, `type: authenticated`). */
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $digitalFilePublicId = null;
+
+    #[Groups(['product:read'])]
+    #[ORM\Column(type: 'string', length: 255, nullable: true)]
+    private ?string $digitalFileOriginalName = null;
+
+    #[Groups(['product:read'])]
+    #[ORM\Column(type: 'bigint', nullable: true)]
+    private ?int $digitalFileSizeBytes = null;
 
     #[Groups(['product:read'])]
     private ?Currency $currency = null;
@@ -358,6 +376,27 @@ class Product
 
     public function getPaysOrigine(): ?string { return $this->paysOrigine; }
     public function setPaysOrigine(?string $v): static { $this->paysOrigine = $v; return $this; }
+
+    public function getProductType(): ProductType { return $this->productType; }
+    public function setProductType(ProductType $v): static { $this->productType = $v; return $this; }
+
+    #[Groups(['product:read', 'cart:read', 'order:read', 'orderitem:read'])]
+    public function isDigital(): bool { return $this->productType === ProductType::DIGITAL; }
+
+    /** Le produit doit-il être expédié (adresse de livraison + transporteur + frais de port) ? */
+    public function requiresShipping(): bool { return $this->productType->requiresShipping(); }
+
+    public function getDigitalFilePublicId(): ?string { return $this->digitalFilePublicId; }
+    public function setDigitalFilePublicId(?string $v): static { $this->digitalFilePublicId = $v; return $this; }
+
+    public function getDigitalFileOriginalName(): ?string { return $this->digitalFileOriginalName; }
+    public function setDigitalFileOriginalName(?string $v): static { $this->digitalFileOriginalName = $v; return $this; }
+
+    public function getDigitalFileSizeBytes(): ?int { return $this->digitalFileSizeBytes !== null ? (int) $this->digitalFileSizeBytes : null; }
+    public function setDigitalFileSizeBytes(?int $v): static { $this->digitalFileSizeBytes = $v; return $this; }
+
+    #[Groups(['product:read'])]
+    public function hasDigitalFile(): bool { return $this->digitalFilePublicId !== null && $this->digitalFilePublicId !== ''; }
 
     /** Volume dérivé des dimensions (cm³) — null tant que L/l/h ne sont pas toutes renseignées. */
     #[Groups(['product:read'])]

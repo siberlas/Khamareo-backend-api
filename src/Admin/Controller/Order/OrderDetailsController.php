@@ -18,7 +18,8 @@ class OrderDetailsController extends AbstractController
     public function __construct(
         private EntityManagerInterface $em,
         private OrderRepository $orderRepository,
-        private LoggerInterface $logger
+        private LoggerInterface $logger,
+        private \App\Order\Repository\DigitalDownloadRepository $digitalDownloadRepository,
     ) {}
 
     /**
@@ -119,6 +120,8 @@ class OrderDetailsController extends AbstractController
                     'quantity' => $item->getQuantity(),
                     'price' => $item->getUnitPrice(),
                     'total' => $item->getUnitPrice() * $item->getQuantity(),
+                    'isDigital' => $item->isDigital(),
+                    'productType' => $item->getProductType()?->value,
                     'product' => $product ? [
                         'id' => $product->getId(),
                         'name' => $product->getName(),
@@ -130,6 +133,20 @@ class OrderDetailsController extends AbstractController
                     ],
                 ];
             }
+
+            // Livres numériques : statut de livraison par email
+            $digitalDownloadsData = array_map(fn ($d) => [
+                'id' => (string) $d->getId(),
+                'productName' => $d->getProduct()?->getName(),
+                'email' => $d->getEmail(),
+                'emailSentAt' => $d->getEmailSentAt()?->format(\DateTimeInterface::ATOM),
+                'downloadCount' => $d->getDownloadCount(),
+                'maxDownloads' => $d->getMaxDownloads(),
+                'firstDownloadedAt' => $d->getFirstDownloadedAt()?->format(\DateTimeInterface::ATOM),
+                'expiresAt' => $d->getExpiresAt()?->format(\DateTimeInterface::ATOM),
+                'revokedAt' => $d->getRevokedAt()?->format(\DateTimeInterface::ATOM),
+                'downloadable' => $d->isDownloadable(),
+            ], $this->digitalDownloadRepository->findByOrder($order));
 
             // Construire l'adresse de livraison
             $shippingAddressData = null;
@@ -316,6 +333,9 @@ class OrderDetailsController extends AbstractController
                     'customer' => $customerData,
                     'items' => $itemsData,
                     'itemsCount' => count($itemsData),
+                    'isDigitalOnly' => $order->isDigitalOnly(),
+                    'hasPhysicalItems' => $order->hasPhysicalItems(),
+                    'digitalDownloads' => $digitalDownloadsData,
                     'shippingAddress' => $shippingAddressData,
                     'billingAddress' => $billingAddressData,
                     // Provenance visiteur (différent de shippingAddress.country = pays de LIVRAISON)

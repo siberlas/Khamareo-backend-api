@@ -53,10 +53,6 @@ class CheckoutPaymentIntentController extends AbstractController
         $shippingRateId = $data['shippingRateId']  ?? null;
         $deliveryPhoneOverride = trim((string) ($data['deliveryPhone'] ?? ''));
 
-        if (!$carrierModeId || !$billingInput || !$deliveryInput) {
-            throw new BadRequestException("carrierModeId, billingAddress et deliveryAddress sont requis.");
-        }
-
         // Valider la devise
         $currency = $this->currencyRepository->findOneBy(['code' => $currencyCode]);
         if (!$currency) {
@@ -82,7 +78,8 @@ class CheckoutPaymentIntentController extends AbstractController
         // contrôle de stock n'existe ailleurs dans le tunnel de paiement).
         $removedOutOfStock = [];
         foreach ($cart->getItems()->toArray() as $item) {
-            if ($item->getProduct()->getStock() <= 0) {
+            // Les livres numériques ont un stock illimité : jamais retirés.
+            if ($item->getProduct()->requiresShipping() && $item->getProduct()->getStock() <= 0) {
                 $removedOutOfStock[] = $item->getProduct()->getName();
                 $cart->removeItem($item);
                 $this->em->remove($item);
@@ -105,28 +102,114 @@ class CheckoutPaymentIntentController extends AbstractController
             }
         }
 
-        // 2) Résolution des adresses
-        $billingAddress  = $this->resolveAddressInput($billingInput);
-        $deliveryAddress = $this->resolveAddressInput($deliveryInput);
+        // Panier 100 % numérique : aucune livraison, aucun transporteur, aucune
+        // adresse — seul l'email du client (porté par le owner du panier) suffit.
+        $digitalOnly = $cart->hasOnlyDigitalItems();
 
-        // Mondial Relay Domicile exige un mobile dédié (SMS de suivi + code de livraison),
-        // distinct du téléphone de l'adresse résolue. On ne mute jamais l'adresse résolue
-        // en place (elle peut être l'adresse par défaut sauvegardée du client) : on clone
-        // dans une nouvelle Address avec le mobile fourni, utilisée pour cette commande only.
-        if ($deliveryPhoneOverride !== '' && $deliveryPhoneOverride !== $deliveryAddress->getPhone()) {
-            $deliveryAddress = $this->cloneAddressWithPhone($deliveryAddress, $deliveryPhoneOverride);
-            // Flush immédiat : il faut l'ID généré du clone pour le mettre dans les
-            // métadonnées Stripe juste après (delivery_address_id).
-            $this->em->flush();
+        if ($digitalOnly) {
+            if (!$cart->getOwner()?->getEmail()) {
+                throw new BadRequestException("Email client requis pour finaliser la commande numérique.");
+            }
+            $billingAddress       = null;
+            $carrierMode          = null;
+            $deliveryAddress      = null;
+            $zone                 = null;
+            $weightGrams          = 0;
+            $shippingCost         = 0.0;
+            $carrierShippingCost  = 0.0;
+            $zoneThreshold        = null;
+            $carrierName          = '';
+        } else {
+            if (!$billingInput) {
+                throw new BadRequestException("billingAddress est requise.");
+            }
+            $billingAddress = $this->resolveAddressInput($billingInput);
+
+            if (!$carrierModeId || !$deliveryInput) {
+                throw new BadRequestException("carrierModeId et deliveryAddress sont requis pour une commande avec livraison.");
+            }
+
+            $deliveryAddress = $this->resolveAddressInput($deliveryInput);
+
+            // Mondial Relay Domicile exige un mobile dédié (SMS de suivi + code de livraison),
+            // distinct du téléphone de l'adresse résolue. On ne mute jamais l'adresse résolue
+            // en place (elle peut être l'adresse par défaut sauvegardée du client) : on clone
+            // dans une nouvelle Address avec le mobile fourni, utilisée pour cette commande only.
+            if ($deliveryPhoneOverride !== '' && $deliveryPhoneOverride !== $deliveryAddress->getPhone()) {
+                $deliveryAddress = $this->cloneAddressWithPhone($deliveryAddress, $deliveryPhoneOverride);
+                $this->em->flush();
+            }
+
+            // 3) Récupération du CarrierMode
+            $carrierMode = $this->carrierModeRepository->find((int) $carrierModeId);
+            if (!$carrierMode) {
+                throw new BadRequestException("Mode de livraison invalide.");
+            }
+
+            [$shippingCost, $carrierShippingCost, $zone, $zoneThreshold, $carrierName] =
+                $this->computeShipping($cart, $carrierMode, $deliveryAddress, $shippingRateId);
         }
 
-        // 3) Récupération du CarrierMode
-        $carrierMode = $this->carrierModeRepository->find((int) $carrierModeId);
-        if (!$carrierMode) {
-            throw new BadRequestException("Mode de livraison invalide.");
-        }
+        $itemsSubtotal         = $cart->getSubtotal();
+        $discountAmount        = $cart->getDiscountAmount() ? (float) $cart->getDiscountAmount() : 0;
+        $subtotalAfterDiscount = $itemsSubtotal - $discountAmount;
+        $total                 = $subtotalAfterDiscount + $shippingCost;
+        $stripeCurrency        = 'eur';
 
-        // 4) Calcul du coût de livraison
+        $resp = $this->stripeProvider->createOrUpdateCartPaymentIntent(
+            $cart,
+            (int) round($total * 100),
+            $stripeCurrency,
+            $shippingCost,
+            $carrierName,
+            [
+                'billing_address_id'  => $billingAddress ? (string) $billingAddress->getId() : '',
+                'delivery_address_id' => $deliveryAddress ? (string) $deliveryAddress->getId() : '',
+                'is_relay_point'      => $deliveryAddress && $deliveryAddress->isRelayPoint() ? '1' : '0',
+                'relay_point_id'      => $deliveryAddress?->getRelayPointId() ?? '',
+                'relay_carrier'       => $deliveryAddress?->getRelayCarrier() ?? '',
+                'carrier_mode_id'     => $carrierMode ? (string) $carrierMode->getId() : '',
+                'shipping_cost'       => (string) $shippingCost,
+                'digital_only'        => $digitalOnly ? '1' : '0',
+                'promo_code'          => $cart->getPromoCode() ?? '',
+                'promo_codes'         => $cart->getPromoCodesData() ? json_encode($cart->getPromoCodesData()) : '',
+                'discount_amount'     => (string) ($cart->getDiscountAmount() ?? '0'),
+                'currency'            => $currencyCode,
+            ]
+        );
+
+        $cart->setPaymentIntentId($resp->paymentId);
+        $cart->setPaymentClientSecret($resp->clientSecret);
+        $cart->setShippingCost($shippingCost);
+        $cart->setCarrierShippingCost($carrierShippingCost);
+        $cart->setDeliveryAddress($deliveryAddress);
+        $cart->setBillingAddress($billingAddress);
+        $this->em->flush();
+
+        return $this->json([
+            'paymentIntentId'  => $resp->paymentId,
+            'clientSecret'     => $resp->clientSecret,
+            'total'            => $total,
+            'subtotal'         => $itemsSubtotal,
+            'shippingCost'     => $shippingCost,
+            'currency'         => $currencyCode,
+            'currencySymbol'   => $currency->getSymbol(),
+            'itemsSubtotal'    => $itemsSubtotal,
+            'discountAmount'   => $discountAmount,
+            'promoCode'        => $cart->getPromoCode(),
+            'requiresShipping' => !$digitalOnly,
+            'freeShipping'          => $shippingCost === 0.0,
+            'freeShippingThreshold' => $zoneThreshold,
+            'shippingZone'          => $zone,
+            'removedOutOfStock'     => $removedOutOfStock,
+        ]);
+    }
+
+    /**
+     * @return array{0: float, 1: float, 2: string, 3: float|null, 4: string} shippingCost, carrierShippingCost, zone, zoneThreshold, carrierName
+     */
+    private function computeShipping(Cart $cart, \App\Shipping\Entity\CarrierMode $carrierMode, Address $deliveryAddress, ?string $shippingRateId): array
+    {
         $weightKg    = $this->weightCalculator->getTotalWeightFromCart($cart);
         $weightGrams = (int) round($weightKg * 1000);
         $zone        = $this->zoneMapper->mapCountryToZone($deliveryAddress->getCountry());
@@ -154,13 +237,13 @@ class CheckoutPaymentIntentController extends AbstractController
 
         // Recalcul précis (colisage + poids volumétrique + CAE + suppléments —
         // mêmes règles que la génération réelle de l'étiquette), avec repli
-        // silencieux sur le calcul ci-dessus si l'estimation échoue (ex :
-        // produit sans dimensions renseignées) — pour ne jamais bloquer un
-        // paiement à cause d'une fiche produit incomplète.
+        // silencieux sur le calcul ci-dessus si l'estimation échoue. Seuls les
+        // articles physiques entrent dans le colisage (les livres numériques
+        // n'ont ni poids ni dimensions).
         $cartItems = array_map(fn ($item) => [
             'product' => $item->getProduct(),
             'quantity' => $item->getQuantity(),
-        ], $cart->getItems()->toArray());
+        ], $cart->getShippableItems());
 
         $estimation = $this->checkoutEstimationService->estimate($cartItems, $carrierMode, $countryCode, $deliveryAddress->getPostalCode());
         if ($estimation->success) {
@@ -177,77 +260,19 @@ class CheckoutPaymentIntentController extends AbstractController
 
         // 4b) Livraison offerte si le seuil de la zone est atteint
         $storeSettings = $this->em->getRepository(StoreSettings::class)->findOneBy([]);
-        $itemsSubtotalForShipping = $cart->getSubtotal();
         $zoneThreshold = null;
-
         if ($storeSettings && $storeSettings->isFreeShippingEnabled()) {
             $zoneThreshold = $storeSettings->getThresholdForZone($zone);
-            if ($zoneThreshold !== null && $zoneThreshold > 0 && $itemsSubtotalForShipping >= $zoneThreshold) {
+            if ($zoneThreshold !== null && $zoneThreshold > 0 && $cart->getSubtotal() >= $zoneThreshold) {
                 $shippingCost = 0;
             }
         }
-
-        // 5) Total en EUR (devise de stockage — Stripe est toujours débité en EUR)
-        $itemsSubtotal         = $cart->getSubtotal();
-        $discountAmount        = $cart->getDiscountAmount() ? (float) $cart->getDiscountAmount() : 0;
-        $subtotalAfterDiscount = $itemsSubtotal - $discountAmount;
-        $total                 = $subtotalAfterDiscount + $shippingCost;
-
-        $stripeCurrency = 'eur';
 
         $carrierName = ($carrierMode->getCarrier()?->getName() ?? '')
             . ' - '
             . ($carrierMode->getShippingMode()?->getName() ?? '');
 
-        // 6) Créer / mettre à jour PaymentIntent Stripe en EUR
-        $resp = $this->stripeProvider->createOrUpdateCartPaymentIntent(
-            $cart,
-            (int) round($total * 100),
-            $stripeCurrency,
-            $shippingCost,
-            $carrierName,
-            [
-                'billing_address_id'  => (string) $billingAddress->getId(),
-                'delivery_address_id' => (string) $deliveryAddress->getId(),
-                'is_relay_point'      => $deliveryAddress->isRelayPoint() ? '1' : '0',
-                'relay_point_id'      => $deliveryAddress->getRelayPointId() ?? '',
-                'relay_carrier'       => $deliveryAddress->getRelayCarrier() ?? '',
-                'carrier_mode_id'     => (string) $carrierMode->getId(),
-                'shipping_cost'       => (string) $shippingCost,
-                'promo_code'          => $cart->getPromoCode() ?? '',
-                'promo_codes'         => $cart->getPromoCodesData() ? json_encode($cart->getPromoCodesData()) : '',
-                'discount_amount'     => (string) ($cart->getDiscountAmount() ?? '0'),
-                'currency'            => $currencyCode,
-            ]
-        );
-
-        // 7) Mettre à jour le panier
-        $cart->setPaymentIntentId($resp->paymentId);
-        $cart->setPaymentClientSecret($resp->clientSecret);
-        $cart->setShippingCost($shippingCost);
-        $cart->setCarrierShippingCost($carrierShippingCost);
-        $cart->setDeliveryAddress($deliveryAddress);
-        $cart->setBillingAddress($billingAddress);
-
-        $this->em->flush();
-
-        // 9) Réponse en EUR (l'affichage dans la devise du client est géré côté frontend)
-        return $this->json([
-            'paymentIntentId'  => $resp->paymentId,
-            'clientSecret'     => $resp->clientSecret,
-            'total'            => $total,
-            'subtotal'         => $itemsSubtotal,
-            'shippingCost'     => $shippingCost,
-            'currency'         => $currencyCode,
-            'currencySymbol'   => $currency->getSymbol(),
-            'itemsSubtotal'    => $itemsSubtotal,
-            'discountAmount'   => $discountAmount,
-            'promoCode'        => $cart->getPromoCode(),
-            'freeShipping'          => $shippingCost === 0.0,
-            'freeShippingThreshold' => $zoneThreshold,
-            'shippingZone'          => $zone,
-            'removedOutOfStock'     => $removedOutOfStock,
-        ]);
+        return [$shippingCost, $carrierShippingCost, $zone, $zoneThreshold, $carrierName];
     }
 
     // =========================================================================

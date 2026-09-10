@@ -44,8 +44,20 @@ class ShippingConfigController extends AbstractController
         if (array_key_exists('supplementUs', $data)) {
             $settings->setSupplementUs($data['supplementUs'] !== null && $data['supplementUs'] !== '' ? (float) $data['supplementUs'] : null);
         }
+        if (array_key_exists('supplementChina', $data)) {
+            $settings->setSupplementChina($data['supplementChina'] !== null && $data['supplementChina'] !== '' ? (float) $data['supplementChina'] : null);
+        }
+        if (array_key_exists('supplementUk', $data)) {
+            $settings->setSupplementUk($data['supplementUk'] !== null && $data['supplementUk'] !== '' ? (float) $data['supplementUk'] : null);
+        }
         if (array_key_exists('supplementDecarbonation', $data)) {
             $settings->setSupplementDecarbonation($data['supplementDecarbonation'] !== null && $data['supplementDecarbonation'] !== '' ? (float) $data['supplementDecarbonation'] : null);
+        }
+        if (array_key_exists('smicCompensationPercent', $data)) {
+            $settings->setSmicCompensationPercent($data['smicCompensationPercent'] !== null && $data['smicCompensationPercent'] !== '' ? (float) $data['smicCompensationPercent'] : null);
+        }
+        if (array_key_exists('shippingVatRatePercent', $data)) {
+            $settings->setShippingVatRatePercent($data['shippingVatRatePercent'] !== null && $data['shippingVatRatePercent'] !== '' ? (float) $data['shippingVatRatePercent'] : null);
         }
 
         $settings->setUpdatedAt(new \DateTimeImmutable());
@@ -125,7 +137,11 @@ class ShippingConfigController extends AbstractController
             'caeExcludedCarrierModeIds' => $s->getCaeExcludedCarrierModeIds(),
             'supplementInternationalSecurity' => $s->getSupplementInternationalSecurity(),
             'supplementUs' => $s->getSupplementUs(),
+            'supplementChina' => $s->getSupplementChina(),
+            'supplementUk' => $s->getSupplementUk(),
             'supplementDecarbonation' => $s->getSupplementDecarbonation(),
+            'smicCompensationPercent' => $s->getSmicCompensationPercent(),
+            'shippingVatRatePercent' => $s->getShippingVatRatePercent(),
         ];
     }
 }
