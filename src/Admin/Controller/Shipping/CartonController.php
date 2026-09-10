@@ -70,6 +70,25 @@ class CartonController extends AbstractController
         return $this->json(['success' => true, 'carton' => $this->serialize($carton)]);
     }
 
+    #[Route('/cartons/{id}/active', name: 'set_active', methods: ['PATCH'])]
+    public function setActive(string $id, Request $request): JsonResponse
+    {
+        $carton = $this->cartonRepository->find($id);
+        if (!$carton) {
+            return $this->json(['error' => 'Carton introuvable'], 404);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        if (!array_key_exists('isActive', $data)) {
+            return $this->json(['error' => 'Champ isActive requis.'], 400);
+        }
+
+        $carton->setIsActive((bool) $data['isActive']);
+        $this->em->flush();
+
+        return $this->json(['success' => true, 'carton' => $this->serialize($carton)]);
+    }
+
     #[Route('/cartons/{id}', name: 'delete', methods: ['DELETE'])]
     public function delete(string $id): JsonResponse
     {
@@ -123,6 +142,10 @@ class CartonController extends AbstractController
             ->setWidthCm((int) $data['widthCm'])
             ->setHeightCm((int) $data['heightCm'])
             ->setEmptyWeightGrams((int) $data['emptyWeightGrams']);
+
+        if (array_key_exists('isActive', $data)) {
+            $carton->setIsActive((bool) $data['isActive']);
+        }
     }
 
     private function serialize(Carton $carton): array
@@ -134,6 +157,7 @@ class CartonController extends AbstractController
             'widthCm' => $carton->getWidthCm(),
             'heightCm' => $carton->getHeightCm(),
             'emptyWeightGrams' => $carton->getEmptyWeightGrams(),
+            'isActive' => $carton->isActive(),
             'createdAt' => $carton->getCreatedAt()->format(\DateTimeInterface::ATOM),
         ];
     }

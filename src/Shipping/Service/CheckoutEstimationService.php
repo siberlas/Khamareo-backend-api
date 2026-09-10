@@ -57,9 +57,9 @@ class CheckoutEstimationService
             return CheckoutEstimationResult::failure('Panier vide.');
         }
 
-        $cartons = $this->cartonRepository->findAllOrdered();
+        $cartons = $this->cartonRepository->findActiveOrdered();
         if (empty($cartons)) {
-            return CheckoutEstimationResult::failure('Aucun format de carton configuré (page Emballage).');
+            return CheckoutEstimationResult::failure('Aucun format de carton actif configuré (page Emballage).');
         }
 
         // Un carton par format, du plus petit au plus grand volume — on

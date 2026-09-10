@@ -33,6 +33,14 @@ class Carton
     #[ORM\Column(type: 'integer')]
     private int $emptyWeightGrams;
 
+    /**
+     * Carton désactivé (rupture de stock d'emballage) : conservé en base et sur
+     * les colis existants, mais exclu du colisage automatique de l'estimation
+     * et du sélecteur de préparation.
+     */
+    #[ORM\Column(type: 'boolean', options: ['default' => true])]
+    private bool $isActive = true;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -58,6 +66,9 @@ class Carton
 
     public function getEmptyWeightGrams(): int { return $this->emptyWeightGrams; }
     public function setEmptyWeightGrams(int $emptyWeightGrams): self { $this->emptyWeightGrams = $emptyWeightGrams; return $this; }
+
+    public function isActive(): bool { return $this->isActive; }
+    public function setIsActive(bool $isActive): self { $this->isActive = $isActive; return $this; }
 
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
 
