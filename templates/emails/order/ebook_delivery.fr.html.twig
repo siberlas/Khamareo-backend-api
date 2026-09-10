@@ -1,0 +1,35 @@
+{% extends 'emails/layout/base.html.twig' %}
+
+{% block subject %}Votre livre numérique est prêt{% endblock %}
+
+{% block content %}
+    <p>{{ greeting }},</p>
+
+    <p>Merci pour votre commande <strong style="color: #D8A35D;">#{{ order.orderNumber }}</strong>.
+    Votre livre numérique est disponible en téléchargement :</p>
+
+    <div class="card">
+        <h3 style="margin-top: 0; color: #4A2E20;">{{ productName }}</h3>
+        <p style="text-align: center; margin: 20px 0;">
+            <a href="{{ downloadUrl }}"
+               style="display: inline-block; background: #4A2E20; color: #fff; text-decoration: none;
+                      padding: 12px 28px; border-radius: 6px; font-weight: bold;">
+                Télécharger mon livre (PDF)
+            </a>
+        </p>
+        <p style="font-size: 13px; opacity: 0.8; margin: 0;">
+            Ce lien est valable pour <strong>un seul téléchargement</strong>{% if expiresAt %}
+            et expire le <strong>{{ expiresAt|date('d/m/Y') }}</strong>{% endif %}.
+            Enregistrez le fichier sur votre appareil dès la première ouverture.
+        </p>
+    </div>
+
+    <p style="font-size: 13px; opacity: 0.85;">
+        Chaque exemplaire est personnalisé à votre nom. Il est destiné à un usage strictement
+        personnel : merci de ne pas le partager ni le revendre.
+    </p>
+
+    <p style="font-size: 13px;">
+        Un problème avec votre téléchargement ? Répondez à cet email, nous vous renverrons un lien.
+    </p>
+{% endblock %}

@@ -350,6 +350,46 @@ class Cart
         return $total;
     }
 
+    /** Le panier contient au moins un article physique (à expédier). */
+    #[Groups(['cart:read'])]
+    public function hasPhysicalItems(): bool
+    {
+        foreach ($this->getItems() as $item) {
+            if ($item->getProduct()?->requiresShipping() ?? true) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Le panier contient au moins un livre numérique. */
+    #[Groups(['cart:read'])]
+    public function hasDigitalItems(): bool
+    {
+        foreach ($this->getItems() as $item) {
+            if ($item->getProduct()?->isDigital()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Panier 100 % numérique : ni adresse de livraison ni transporteur requis. */
+    #[Groups(['cart:read'])]
+    public function hasOnlyDigitalItems(): bool
+    {
+        return !$this->getItems()->isEmpty() && !$this->hasPhysicalItems();
+    }
+
+    /** @return CartItem[] Les seuls articles à prendre en compte pour le calcul du port. */
+    public function getShippableItems(): array
+    {
+        return array_values(array_filter(
+            $this->getItems()->toArray(),
+            fn (CartItem $item) => $item->getProduct()?->requiresShipping() ?? true
+        ));
+    }
+
     /**
      * Retourne le sous-total APRÈS réduction promo (mais SANS shipping)
      */

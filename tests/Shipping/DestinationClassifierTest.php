@@ -112,7 +112,7 @@ class DestinationClassifierTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // Europe hors UE (Suisse, UK…)
+    // Europe hors UE (Suisse…)
     // -----------------------------------------------------------------------
 
     public function testSwitzerlandByCountryCode(): void
@@ -121,10 +121,15 @@ class DestinationClassifierTest extends TestCase
         $this->assertSame(DestinationZone::EUROPE_HORS_UE, $zone);
     }
 
+    /**
+     * GB est volontairement classé UNION_EUROPEENNE : le contrat Colissimo
+     * couvre le Royaume-Uni post-Brexit sous le même produit que l'UE
+     * (cf. DestinationClassifier::EU_COUNTRIES).
+     */
     public function testUKByCountryCode(): void
     {
         $zone = $this->classifier->classify('EC1A 1BB', 'GB');
-        $this->assertSame(DestinationZone::EUROPE_HORS_UE, $zone);
+        $this->assertSame(DestinationZone::UNION_EUROPEENNE, $zone);
     }
 
     // -----------------------------------------------------------------------
@@ -191,7 +196,7 @@ class DestinationClassifierTest extends TestCase
 
     public function testProductCodeEuropeHorsUE(): void
     {
-        $this->assertSame('DOM', DestinationZone::EUROPE_HORS_UE->getProductCode());
+        $this->assertSame('COLD', DestinationZone::EUROPE_HORS_UE->getProductCode());
     }
 
     public function testProductCodeInternational(): void

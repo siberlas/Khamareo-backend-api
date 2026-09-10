@@ -79,14 +79,32 @@ class ShippingOptionsController extends AbstractController
             throw new BadRequestException('Panier introuvable');
         }
 
-        // 4. Calculer le poids total en grammes
+        // 3bis. Panier 100 % numérique : aucune livraison, aucun transporteur.
+        if ($cart->hasOnlyDigitalItems()) {
+            $this->shippingLogger->info('Panier 100% numérique : pas d\'options de livraison');
+            return $this->json([
+                'country' => $countryCode,
+                'weightGrams' => 0,
+                'weightKg' => 0.0,
+                'requiresShipping' => false,
+                'options' => [],
+            ]);
+        }
+
+        // 4. Calculer le poids total en grammes (articles physiques uniquement)
         $weightKg = $this->weightCalculator->getTotalWeightFromCart($cart);
         $weightGrams = (int) round($weightKg * 1000);
         $this->shippingLogger->info('Poids calculé', ['weightGrams' => $weightGrams, 'weightKg' => $weightKg]);
-        
-        // 5. Résoudre les options disponibles
+
+        // 5. Résoudre les options disponibles — seuls les articles à expédier
+        // entrent dans le colisage (les livres numériques n'ont ni poids ni dimensions).
+        $cartItems = array_map(fn ($item) => [
+            'product' => $item->getProduct(),
+            'quantity' => $item->getQuantity(),
+        ], $cart->getShippableItems());
+
         $this->shippingLogger->info('Récupération des options disponibles', ['country' => $countryCode, 'weightGrams' => $weightGrams]);
-        $options = $this->optionsResolver->getAvailableOptions($countryCode, $weightGrams);
+        $options = $this->optionsResolver->getAvailableOptions($countryCode, $weightGrams, $cartItems, $postalCode);
         $this->shippingLogger->info('Options disponibles', ['count' => count($options)]);
 
         // 6. Retourner les options
@@ -94,6 +112,7 @@ class ShippingOptionsController extends AbstractController
             'country' => $countryCode,
             'weightGrams' => $weightGrams,
             'weightKg' => $weightKg,
+            'requiresShipping' => true,
             'options' => $options,
         ];
         

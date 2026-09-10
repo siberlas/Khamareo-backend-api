@@ -9,8 +9,11 @@ use App\Shared\Enum\OrderStatus;
 use App\Shipping\Entity\Parcel;
 use App\Shipping\Entity\ParcelItem;
 use App\Shipping\Repository\ParcelRepository;
+use App\Shipping\Repository\CartonRepository;
 use App\Shipping\Exception\MondialRelayApiException;
 use App\Shipping\Service\ParcelManager;
+use App\Shipping\Service\DestinationClassifier;
+use App\Shipping\Enum\DestinationZone;
 use App\Shipping\Service\LabelGenerator\LabelGeneratorFactory;
 use App\Media\Service\CloudinaryService;
 use App\Order\Service\Pdf\OrderPdfService;
@@ -39,6 +42,10 @@ class ParcelController extends AbstractController
         private LoggerInterface $logger,
         private MailerService $mailerService,
         private CloudinaryService $cloudinaryService,
+        private CartonRepository $cartonRepository,
+        private DestinationClassifier $destinationClassifier,
+        private \App\Shipping\Repository\ShippingRateRepository $shippingRateRepository,
+        private \App\Shipping\Service\ShippingZoneMapper $zoneMapper,
     ) {}
 
     #[Route('/parcels/{parcelId}/delivery-note', name: 'generate_parcel_delivery_note', methods: ['POST'])]
@@ -425,6 +432,14 @@ class ParcelController extends AbstractController
             ], 400);
         }
 
+        $carrierCode = strtolower($parcel->getOrder()->getCarrier()?->getCode() ?? '');
+        if ($carrierCode !== 'colissimo') {
+            return $this->json([
+                'success' => false,
+                'error' => 'La régénération d\'étiquette n\'est disponible que pour Colissimo (les autres transporteurs facturent dès la génération)'
+            ], 400);
+        }
+
         try {
             $parcel->setStatus('confirmed');
             $parcel->setTrackingNumber(null);
@@ -449,6 +464,253 @@ class ParcelController extends AbstractController
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Enregistre le poids réel pesé (emballage inclus) avant génération
+     * d'étiquette. Prioritaire sur l'estimation automatique.
+     * PATCH /api/admin/parcels/{parcelId}/weight
+     */
+    #[Route('/parcels/{parcelId}/weight', name: 'set_parcel_manual_weight', methods: ['PATCH'])]
+    public function setManualWeight(string $parcelId, Request $request): JsonResponse
+    {
+        $parcel = $this->getParcel($parcelId);
+        if (!$parcel) {
+            return $this->json(['error' => 'Colis introuvable'], 404);
+        }
+
+        if (!in_array($parcel->getStatus(), ['confirmed', 'labeled'], true)) {
+            return $this->json([
+                'success' => false,
+                'error' => 'Le poids ne peut être ajusté que sur un colis confirmé ou déjà étiqueté'
+            ], 400);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $weightGrams = $data['weightGrams'] ?? null;
+
+        if (!is_numeric($weightGrams) || (int) $weightGrams <= 0) {
+            return $this->json(['error' => 'Poids invalide (grammes attendus)'], 400);
+        }
+
+        $parcel->setManualWeightGrams((int) $weightGrams);
+        $this->em->flush();
+
+        $this->logger->info('Manual parcel weight set', [
+            'parcel_id' => $parcel->getId()->toRfc4122(),
+            'manual_weight_grams' => $parcel->getManualWeightGrams(),
+        ]);
+
+        return $this->json([
+            'success' => true,
+            'manualWeightGrams' => $parcel->getManualWeightGrams(),
+        ]);
+    }
+
+    /**
+     * Affecte un format de carton à un colis et retourne un aperçu du poids
+     * volumétrique / poids retenu pour la facturation / prix estimé.
+     * PATCH /api/admin/parcels/{parcelId}/carton
+     *
+     * Aperçu à l'étape de préparation, avant génération d'étiquette — la
+     * valeur réellement envoyée à Colissimo est recalculée indépendamment au
+     * moment de la génération (ColissimoApiService::resolveParcelWeightKg()).
+     */
+    #[Route('/parcels/{parcelId}/carton', name: 'set_parcel_carton', methods: ['PATCH'])]
+    public function setCarton(string $parcelId, Request $request): JsonResponse
+    {
+        $parcel = $this->getParcel($parcelId);
+        if (!$parcel) {
+            return $this->json(['error' => 'Colis introuvable'], 404);
+        }
+
+        if (!in_array($parcel->getStatus(), ['confirmed', 'labeled'], true)) {
+            return $this->json([
+                'success' => false,
+                'error' => 'Le carton ne peut être choisi que sur un colis confirmé ou déjà étiqueté'
+            ], 400);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $cartonId = $data['cartonId'] ?? null;
+
+        if ($cartonId === null) {
+            $parcel->setCarton(null);
+        } else {
+            $carton = $this->cartonRepository->find($cartonId);
+            if (!$carton) {
+                return $this->json(['error' => 'Carton introuvable'], 404);
+            }
+            $parcel->setCarton($carton);
+        }
+
+        $this->em->flush();
+
+        $preview = $this->computeParcelWeightPreview($parcel);
+
+        return $this->json([
+            'success' => true,
+            'cartonId' => $parcel->getCarton()?->getId()->toRfc4122(),
+            'volumetricWeightGrams' => $preview['volumetricWeightGrams'],
+            'billableWeightGrams' => $preview['billableWeightGrams'],
+            'estimatedPrice' => $this->computeEstimatedPrice($parcel, $preview['billableWeightGrams']),
+        ]);
+    }
+
+    /**
+     * Aperçu poids volumétrique / poids retenu, pour l'affichage admin
+     * uniquement (pas la valeur d'autorité envoyée à Colissimo — voir
+     * ColissimoApiService::resolveParcelWeightKg()).
+     */
+    /**
+     * Aperçu admin du poids retenu — reflète la même formule que la valeur
+     * d'autorité envoyée à Colissimo (ColissimoApiService::resolveParcelWeightKg()) :
+     * poids réel (pesé, sinon produits + emballage carton + 5g + 30g CN23
+     * si international) comparé au poids volumétrique — uniquement sur les
+     * offres Outre-mer/International (hors Eco), jamais France métro/UE,
+     * comme dans ColissimoApiService::resolveVolumetricWeightApplicability().
+     * Contrairement à la génération d'étiquette, ne bloque jamais si aucun
+     * carton n'est choisi — ceci n'est qu'un aperçu, pas l'appel transporteur.
+     */
+    private function computeParcelWeightPreview(Parcel $parcel): array
+    {
+        $carton = $parcel->getCarton();
+        $address = $parcel->getOrder()->getShippingAddress();
+        $zone = $address ? $this->destinationClassifier->classify($address->getPostalCode(), $address->getCountry()) : null;
+
+        $appliesVolumetricWeight = $carton !== null
+            && $zone !== null
+            && ($zone === DestinationZone::OUTRE_MER || $zone === DestinationZone::INTERNATIONAL)
+            && $parcel->getOrder()->getCarrierMode()?->getColissimoProductCodeKey() !== 'outre_mer_eco';
+
+        $volumetricWeightGrams = $appliesVolumetricWeight ? $carton->getVolumetricWeightGrams() : null;
+
+        $productsWeightGrams = 0;
+        foreach ($parcel->getItems() as $parcelItem) {
+            $product = $parcelItem->getOrderItem()?->getProduct();
+            if (!$product) {
+                continue;
+            }
+            $unitWeightGrams = $product->getWeightGrams();
+            if ($unitWeightGrams === null || $unitWeightGrams <= 0) {
+                $unitWeightGrams = 500;
+            }
+            $productsWeightGrams += $unitWeightGrams * $parcelItem->getQuantity();
+        }
+
+        if ($parcel->getManualWeightGrams() !== null) {
+            $realWeightGrams = $parcel->getManualWeightGrams();
+        } elseif ($carton !== null) {
+            $requiresCn23Margin = $this->parcelRequiresCn23Margin($parcel);
+            $realWeightGrams = $productsWeightGrams
+                + $carton->getEmptyWeightGrams()
+                + 5
+                + ($requiresCn23Margin ? 30 : 0);
+        } else {
+            // Ni pesée ni carton : seule estimation possible, sans marge
+            // d'emballage (la génération d'étiquette bloquera dans ce cas).
+            $realWeightGrams = $productsWeightGrams;
+        }
+
+        $billableWeightGrams = $volumetricWeightGrams !== null
+            ? max($realWeightGrams, $volumetricWeightGrams)
+            : $realWeightGrams;
+
+        return [
+            'volumetricWeightGrams' => $volumetricWeightGrams,
+            'billableWeightGrams' => $billableWeightGrams,
+        ];
+    }
+
+    /**
+     * Prix estimé du colis (port net + CAE + suppléments), pour l'aperçu
+     * admin uniquement — même formule que CheckoutEstimationService, mais
+     * appliquée à un colis déjà constitué (carton et répartition figés),
+     * pas à une simulation de colisage. Dupliquée plutôt que partagée : les
+     * deux services opèrent sur des données différentes (Parcel persisté vs
+     * panier simulé) — toute évolution de la règle doit être répercutée des
+     * deux côtés.
+     */
+    private function computeEstimatedPrice(Parcel $parcel, int $billableWeightGrams): ?float
+    {
+        $carrierMode = $parcel->getOrder()->getCarrierMode();
+        $address = $parcel->getOrder()->getShippingAddress();
+        if ($carrierMode === null || $address === null) {
+            return null;
+        }
+
+        $countryCode = $address->getCountry();
+        $rateZone = $this->zoneMapper->mapCountryToZone($countryCode);
+        $rate = $this->shippingRateRepository->findBestRate($carrierMode, $rateZone, $billableWeightGrams, $countryCode);
+        $portNet = $rate ? (float) $rate->getPrice() : (float) ($carrierMode->getBasePrice() ?? 0.0);
+
+        $settings = $this->em->getRepository(\App\Shared\Entity\StoreSettings::class)->findOneBy([]);
+        if ($settings === null) {
+            return round($portNet, 2);
+        }
+
+        // CAE / SMIC / décarbonation / sûreté / suppléments pays / TVA : offres Colissimo uniquement.
+        $isColissimo = $carrierMode->getColissimoProductCodeKey() !== null;
+
+        $cae = 0.0;
+        $smicCompensation = 0.0;
+        $supplements = 0.0;
+        $vat = 0.0;
+        $zone = $this->destinationClassifier->classify($address->getPostalCode(), $countryCode);
+
+        if ($isColissimo) {
+            if (!in_array($carrierMode->getId(), $settings->getCaeExcludedCarrierModeIds(), true)) {
+                $caePercent = match ($carrierMode->getEnergyCoefficientType()) {
+                    'routier' => $settings->getCaePercentRoutier(),
+                    'aerien' => $settings->getCaePercentAerien(),
+                    default => null,
+                };
+                if ($caePercent !== null) {
+                    $cae = round($portNet * $caePercent / 100, 2);
+                }
+            }
+
+            if ($settings->getSmicCompensationPercent() !== null) {
+                $smicCompensation = round($portNet * $settings->getSmicCompensationPercent() / 100, 2);
+            }
+
+            if (in_array($zone, [DestinationZone::UNION_EUROPEENNE, DestinationZone::EUROPE_HORS_UE, DestinationZone::INTERNATIONAL], true)) {
+                $supplements += $settings->getSupplementInternationalSecurity() ?? 0.0;
+            }
+            $supplements += match (strtoupper($countryCode)) {
+                'US' => $settings->getSupplementUs() ?? 0.0,
+                'CN' => $settings->getSupplementChina() ?? 0.0,
+                'GB' => $settings->getSupplementUk() ?? 0.0,
+                default => 0.0,
+            };
+            $supplements += $settings->getSupplementDecarbonation() ?? 0.0;
+
+            if ($settings->getShippingVatRatePercent() !== null
+                && $this->zoneMapper->isFrenchVatApplicable($countryCode)
+            ) {
+                $vat = round(($portNet + $cae + $smicCompensation + $supplements) * $settings->getShippingVatRatePercent() / 100, 2);
+            }
+        }
+
+        return round($portNet + $cae + $smicCompensation + $supplements + $vat, 2);
+    }
+
+    /**
+     * Même critère que ColissimoApiService : le colis nécessite-t-il une
+     * déclaration en douane (zone hors France métro, ou Andorre) ?
+     */
+    private function parcelRequiresCn23Margin(Parcel $parcel): bool
+    {
+        $address = $parcel->getOrder()->getShippingAddress();
+        if (!$address) {
+            return false;
+        }
+        $zone = $this->destinationClassifier->classify($address->getPostalCode(), $address->getCountry());
+        if ($zone !== DestinationZone::FRANCE_METRO) {
+            return true;
+        }
+        // France métro selon la zone, mais Andorre reste hors FR au sens Colissimo.
+        return strtoupper((string) $address->getCountry()) === 'AD';
     }
 
      /**
@@ -479,6 +741,11 @@ class ParcelController extends AbstractController
         $result = [];
 
         foreach ($order->getItems() as $orderItem) {
+            // Les livres numériques ne sont pas expédiés : hors colisage.
+            if (!$orderItem->requiresShipping()) {
+                continue;
+            }
+
             $oid = $orderItem->getId()->toRfc4122();
 
             $totalQty = (int) $orderItem->getQuantity();
@@ -528,11 +795,17 @@ class ParcelController extends AbstractController
                 'name' => $carrier?->getName(),
                 'code' => $carrier?->getCode(),
             ],
-            'parcels' => array_map(static function (Parcel $parcel) {
+            'parcels' => array_map(function (Parcel $parcel) {
+                $weightPreview = $this->computeParcelWeightPreview($parcel);
                 return [
                     'id' => $parcel->getId()->toRfc4122(),
                     'parcelNumber' => $parcel->getParcelNumber(),
                     'weightGrams' => $parcel->getWeightGrams(),
+                    'manualWeightGrams' => $parcel->getManualWeightGrams(),
+                    'cartonId' => $parcel->getCarton()?->getId()->toRfc4122(),
+                    'volumetricWeightGrams' => $weightPreview['volumetricWeightGrams'],
+                    'billableWeightGrams' => $weightPreview['billableWeightGrams'],
+                    'estimatedPrice' => $this->computeEstimatedPrice($parcel, $weightPreview['billableWeightGrams']),
                     'trackingNumber' => $parcel->getTrackingNumber(),
                     'labelPdfPath' => $parcel->getLabelPdfPath(),
                     'deliverySlipPdfPath' => $parcel->getDeliverySlipPdfPath(),
@@ -1051,6 +1324,9 @@ class ParcelController extends AbstractController
                     }
                 }
                 foreach ($order->getItems() as $orderItem) {
+                    if (!$orderItem->requiresShipping()) {
+                        continue; // livres numériques : jamais colisés
+                    }
                     $oid = $orderItem->getId()->toRfc4122();
                     $allocated = (int) ($allocatedByOrderItemId[$oid] ?? 0);
                     if ($allocated < (int) $orderItem->getQuantity()) {

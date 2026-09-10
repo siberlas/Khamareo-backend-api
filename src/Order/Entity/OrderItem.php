@@ -8,6 +8,7 @@ use ApiPlatform\Metadata\ApiResource;
 use Symfony\Component\Uid\Uuid;
 use Symfony\Component\Serializer\Annotation\Groups;
 use App\Catalog\Entity\Product;
+use App\Catalog\Enum\ProductType;
 
 #[ORM\Entity(repositoryClass: OrderItemRepository::class)]
 #[ApiResource(
@@ -37,6 +38,15 @@ class OrderItem
     #[ORM\JoinColumn(nullable: false)]
     #[Groups(['order:read','order:write','orderitem:read','orderitem:write'])]
     private ?Product $product = null;
+
+    /**
+     * Nature du produit au moment de la commande (le produit peut changer de
+     * type après). Sert à router le traitement : expédition vs livraison
+     * numérique. Nullable pour les commandes antérieures à la migration.
+     */
+    #[ORM\Column(type: 'string', length: 20, enumType: ProductType::class, nullable: true)]
+    #[Groups(['order:read','orderitem:read'])]
+    private ?ProductType $productType = null;
 
     public function __construct()
     {
@@ -88,4 +98,28 @@ class OrderItem
         return $this;
     }
 
+    public function getProductType(): ?ProductType
+    {
+        // Repli sur le type courant du produit pour les commandes antérieures
+        // à l'ajout de la colonne (snapshot absent).
+        return $this->productType ?? $this->product?->getProductType();
+    }
+
+    public function setProductType(?ProductType $productType): static
+    {
+        $this->productType = $productType;
+
+        return $this;
+    }
+
+    #[Groups(['order:read','orderitem:read'])]
+    public function isDigital(): bool
+    {
+        return $this->getProductType() === ProductType::DIGITAL;
+    }
+
+    public function requiresShipping(): bool
+    {
+        return $this->getProductType()?->requiresShipping() ?? true;
+    }
 }

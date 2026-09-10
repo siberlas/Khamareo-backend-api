@@ -433,6 +433,25 @@ class Order
 
     /** @return Collection<int, OrderItem> */
     public function getItems(): Collection { return $this->items; }
+
+    /** La commande contient au moins un article physique à expédier. */
+    #[Groups(['order:read'])]
+    public function hasPhysicalItems(): bool
+    {
+        foreach ($this->items as $item) {
+            if ($item->requiresShipping()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Commande 100 % numérique : aucun colis, livraison par email. */
+    #[Groups(['order:read'])]
+    public function isDigitalOnly(): bool
+    {
+        return !$this->items->isEmpty() && !$this->hasPhysicalItems();
+    }
     public function addItem(OrderItem $item): static {
         if (!$this->items->contains($item)) { $this->items->add($item); $item->setCustomerOrder($this); }
         return $this;

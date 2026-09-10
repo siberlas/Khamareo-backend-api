@@ -14,6 +14,7 @@ use ApiPlatform\Metadata\GetCollection;
 use ApiPlatform\Metadata\Post;
 use ApiPlatform\Metadata\Patch;
 use App\Order\Entity\Order;
+use App\Shipping\Entity\Carton;
 
 #[ORM\Entity(repositoryClass: ParcelRepository::class)]
 #[ApiResource(
@@ -48,6 +49,26 @@ class Parcel
     #[ORM\Column(type: 'integer', nullable: true)]
     #[Groups(['parcel:read', 'parcel:write', 'order:read'])]
     private ?int $weightGrams = null;
+
+    /**
+     * Poids réel pesé en GRAMMES, saisi manuellement avant génération d'étiquette
+     * (emballage réel inclus). Prioritaire sur $weightGrams (estimation
+     * automatique) pour le poids déclaré sur l'étiquette Colissimo — évite le
+     * refus au dépôt quand le poids réel dépasse l'estimation.
+     */
+    #[ORM\Column(type: 'integer', nullable: true)]
+    #[Groups(['parcel:read', 'parcel:write', 'order:read'])]
+    private ?int $manualWeightGrams = null;
+
+    /**
+     * Format de carton choisi pour ce colis (page Emballage / sélecteur sur
+     * la carte colis) — sert au calcul du poids volumétrique et du poids
+     * déclaré à l'étiquette. Renseigné manuellement par l'admin.
+     */
+    #[ORM\ManyToOne(targetEntity: Carton::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[Groups(['parcel:read', 'parcel:write', 'order:read'])]
+    private ?Carton $carton = null;
 
     #[ORM\Column(type: 'string', length: 100, nullable: true)]
     #[Groups(['parcel:read', 'order:read'])]
@@ -167,6 +188,16 @@ class Parcel
             return null;
         }
         return round($this->weightGrams / 1000, 3);
+    }
+
+    public function getCarton(): ?Carton { return $this->carton; }
+    public function setCarton(?Carton $carton): self { $this->carton = $carton; return $this; }
+
+    public function getManualWeightGrams(): ?int { return $this->manualWeightGrams; }
+    public function setManualWeightGrams(?int $manualWeightGrams): self
+    {
+        $this->manualWeightGrams = $manualWeightGrams;
+        return $this;
     }
 
     public function getTrackingNumber(): ?string { return $this->trackingNumber; }

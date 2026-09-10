@@ -37,6 +37,10 @@ class MailerService
             'fr' => 'Commande confirmée #{orderNumber} - Khamareo',
             'en' => 'Order Confirmed #{orderNumber} - Khamareo'
         ],
+        'ebook_delivery' => [
+            'fr' => 'Votre livre numérique est prêt - Khamareo',
+            'en' => 'Your ebook is ready - Khamareo'
+        ],
         'contact_notification' => [
             'fr' => 'Nouveau message de contact - {subject}',
             'en' => 'New Contact Message - {subject}'
@@ -559,6 +563,61 @@ class MailerService
                 'error' => $e->getMessage(),
             ]);
             // Ne pas throw pour ne pas bloquer le webhook
+        }
+    }
+
+    /**
+     * Envoie le lien de téléchargement d'un livre numérique.
+     * @return bool true si l'email est parti sans erreur.
+     */
+    public function sendEbookDelivery(\App\Order\Entity\DigitalDownload $download): bool
+    {
+        try {
+            $order = $download->getCustomerOrder();
+            $locale = $this->getEmailLocale(null, $order);
+
+            $firstName = $order->getOwner()?->getFirstName() ?? $order->getGuestFirstName();
+            $greetings = [
+                'fr' => $firstName ? "Bonjour {$firstName}" : 'Bonjour',
+                'en' => $firstName ? "Hello {$firstName}" : 'Hello',
+            ];
+
+            $html = $this->twig->render(
+                $this->getTemplate('emails/order/ebook_delivery', $locale),
+                [
+                    'order' => $order,
+                    'greeting' => $greetings[$locale] ?? $greetings['fr'],
+                    'productName' => $download->getProduct()?->getName() ?? 'Votre livre',
+                    'downloadUrl' => rtrim($this->frontBaseUrl, '/') . '/telechargement/' . $download->getToken(),
+                    'expiresAt' => $download->getExpiresAt(),
+                    'locale' => $locale,
+                ]
+            );
+
+            $email = (new Email())
+                ->from($this->fromEmail)
+                ->to($download->getEmail())
+                ->subject($this->getSubject('ebook_delivery', $locale))
+                ->html($html);
+
+            $this->mailer->send($email);
+
+            $download->markEmailSent();
+            $this->em->flush();
+
+            $this->logger->info('Ebook delivery email sent', [
+                'order_number' => $order->getOrderNumber(),
+                'email' => $download->getEmail(),
+            ]);
+
+            return true;
+        } catch (\Throwable $e) {
+            $this->logger->error('Failed to send ebook delivery email', [
+                'download_id' => (string) $download->getId(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return false;
         }
     }
 

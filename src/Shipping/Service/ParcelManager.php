@@ -59,6 +59,11 @@ class ParcelManager
         $parcelNumber = count($keptParcels) + 1; // Continuer la numérotation
 
         foreach ($order->getItems() as $orderItem) {
+            // Livres numériques : livrés par email, jamais dans un colis.
+            if (!$orderItem->requiresShipping()) {
+                continue;
+            }
+
             $product = $orderItem->getProduct();
             $totalQuantity = (int) $orderItem->getQuantity();
 
@@ -149,6 +154,10 @@ class ParcelManager
 
         if ($quantity <= 0) {
             throw new \RuntimeException('La quantité doit être > 0', 400);
+        }
+
+        if (!$orderItem->requiresShipping()) {
+            throw new \RuntimeException('Un livre numérique n\'est pas expédié : il ne peut pas être ajouté à un colis.', 400);
         }
 
         // ✅ Invalide l'étiquette de CE colis si elle existe
@@ -400,6 +409,9 @@ class ParcelManager
         $totalWeightGrams = 0;
 
         foreach ($order->getItems() as $item) {
+            if (!$item->requiresShipping()) {
+                continue;
+            }
             $product = $item->getProduct();
             $qty = (int) $item->getQuantity();
             $unitWeightGrams = $this->getProductWeightGrams($product);
@@ -517,8 +529,11 @@ class ParcelManager
             }
         }
 
-        // cohérence quantités
+        // cohérence quantités (les livres numériques ne sont jamais colisés)
         foreach ($order->getItems() as $orderItem) {
+            if (!$orderItem->requiresShipping()) {
+                continue;
+            }
             $allocated = $this->getItemAllocatedQuantity($orderItem, $order);
             $expected = (int) $orderItem->getQuantity();
 

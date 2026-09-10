@@ -36,16 +36,29 @@ final class CartItemProcessor implements ProcessorInterface
             }
         }
 
+        // Livre numérique : un seul exemplaire par panier (téléchargement unique).
+        $isDigital = $product?->isDigital() ?? false;
+
         // ✅ Recherche item existant
         $existingItem = $this->em->getRepository(CartItem::class)
             ->findOneBy(['cart' => $cart, 'product' => $product]);
 
         if ($existingItem) {
+            if ($isDigital) {
+                // Déjà dans le panier : rien à ajouter.
+                $cart->touch();
+                $this->em->flush();
+                return $existingItem;
+            }
             $existingItem->setQuantity($existingItem->getQuantity() + $data->getQuantity());
             $cart->touch();
             $this->em->flush();
             $this->recalculatePromos($cart);
             return $existingItem;
+        }
+
+        if ($isDigital) {
+            $data->setQuantity(1);
         }
 
         $this->em->persist($data);

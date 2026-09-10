@@ -77,6 +77,73 @@ class StoreSettings
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $communityVignettes = null;
 
+    // ── Frais de port (CAE + suppléments) ───────────────────────────────────
+
+    /**
+     * Coefficient d'Ajustement Énergie La Poste, en pourcentage — deux taux
+     * distincts selon le mode de transport réel (cf. CarrierMode::energyCoefficientType),
+     * la grille Colissimo n'a jamais un taux unique.
+     */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $caePercentRoutier = null;
+
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $caePercentAerien = null;
+
+    /** IDs de CarrierMode exclus du CAE (ex: Colissimo Eco Outre-mer). */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $caeExcludedCarrierModeIds = null;
+
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementInternationalSecurity = null;
+
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementUs = null;
+
+    /** Supplément Colissimo Domicile avec signature vers la Chine (CN). */
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementChina = null;
+
+    /**
+     * Supplément Colissimo Domicile avec signature vers le Royaume-Uni (GB) —
+     * Grande-Bretagne + Irlande du Nord.
+     */
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementUk = null;
+
+    #[ORM\Column(type: 'decimal', precision: 6, scale: 2, nullable: true)]
+    private ?string $supplementDecarbonation = null;
+
+    /**
+     * Compensation évolution du SMIC La Poste, en pourcentage — appliquée sur
+     * le port net (HT après remise, hors options/suppléments/taxes), comme le
+     * CAE. Pourcentage variable chaque mois, sans exclusion d'offre (contrairement
+     * au CAE qui exclut Colissimo Eco Outre-mer).
+     */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $smicCompensationPercent = null;
+
+    /**
+     * Taux de TVA (%) répercuté sur les frais de port estimés au checkout.
+     * La Poste facture la TVA (20 % France + UE, 0 % export/Outre-mer) et,
+     * en franchise 293 B, la boutique ne la récupère pas : ce taux permet
+     * de la refacturer au client. Appliqué sur port + CAE + SMIC + suppléments,
+     * uniquement quand ShippingZoneMapper::isFrenchVatApplicable() est vrai.
+     * null = pas de TVA sur le port (comportement historique).
+     */
+    #[ORM\Column(type: 'decimal', precision: 5, scale: 2, nullable: true)]
+    private ?string $shippingVatRatePercent = null;
+
+    // ── Livres numériques ─────────────────────────────────────────────────
+
+    /**
+     * Durée de validité (jours) d'un lien de téléchargement d'ebook — filet de
+     * sécurité en plus de la limite « 1 téléchargement ». null = pas d'expiration
+     * dans le temps.
+     */
+    #[ORM\Column(type: 'integer', nullable: true, options: ['default' => 90])]
+    private ?int $ebookDownloadValidityDays = 90;
+
     // ── Timestamp ─────────────────────────────────────────────────────────────
 
     #[ORM\Column(type: 'datetime_immutable')]
@@ -163,6 +230,41 @@ class StoreSettings
 
     public function getCommunityVignettes(): ?array { return $this->communityVignettes; }
     public function setCommunityVignettes(?array $v): self { $this->communityVignettes = $v; return $this; }
+
+    // ── Getters/setters Frais de port ─────────────────────────────────────
+
+    public function getCaePercentRoutier(): ?float { return $this->caePercentRoutier !== null ? (float) $this->caePercentRoutier : null; }
+    public function setCaePercentRoutier(?float $v): self { $this->caePercentRoutier = $v !== null ? (string) $v : null; return $this; }
+
+    public function getCaePercentAerien(): ?float { return $this->caePercentAerien !== null ? (float) $this->caePercentAerien : null; }
+    public function setCaePercentAerien(?float $v): self { $this->caePercentAerien = $v !== null ? (string) $v : null; return $this; }
+
+    public function getCaeExcludedCarrierModeIds(): array { return $this->caeExcludedCarrierModeIds ?? []; }
+    public function setCaeExcludedCarrierModeIds(?array $v): self { $this->caeExcludedCarrierModeIds = $v; return $this; }
+
+    public function getSupplementInternationalSecurity(): ?float { return $this->supplementInternationalSecurity !== null ? (float) $this->supplementInternationalSecurity : null; }
+    public function setSupplementInternationalSecurity(?float $v): self { $this->supplementInternationalSecurity = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSupplementUs(): ?float { return $this->supplementUs !== null ? (float) $this->supplementUs : null; }
+    public function setSupplementUs(?float $v): self { $this->supplementUs = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSupplementChina(): ?float { return $this->supplementChina !== null ? (float) $this->supplementChina : null; }
+    public function setSupplementChina(?float $v): self { $this->supplementChina = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSupplementUk(): ?float { return $this->supplementUk !== null ? (float) $this->supplementUk : null; }
+    public function setSupplementUk(?float $v): self { $this->supplementUk = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSupplementDecarbonation(): ?float { return $this->supplementDecarbonation !== null ? (float) $this->supplementDecarbonation : null; }
+    public function setSupplementDecarbonation(?float $v): self { $this->supplementDecarbonation = $v !== null ? (string) $v : null; return $this; }
+
+    public function getSmicCompensationPercent(): ?float { return $this->smicCompensationPercent !== null ? (float) $this->smicCompensationPercent : null; }
+    public function setSmicCompensationPercent(?float $v): self { $this->smicCompensationPercent = $v !== null ? (string) $v : null; return $this; }
+
+    public function getShippingVatRatePercent(): ?float { return $this->shippingVatRatePercent !== null ? (float) $this->shippingVatRatePercent : null; }
+    public function setShippingVatRatePercent(?float $v): self { $this->shippingVatRatePercent = $v !== null ? (string) $v : null; return $this; }
+
+    public function getEbookDownloadValidityDays(): ?int { return $this->ebookDownloadValidityDays; }
+    public function setEbookDownloadValidityDays(?int $v): self { $this->ebookDownloadValidityDays = $v; return $this; }
 
     // ── Timestamp ─────────────────────────────────────────────────────────
 

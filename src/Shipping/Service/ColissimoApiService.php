@@ -11,16 +11,13 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 
 class ColissimoApiService
 {
-    // ✅ Ton HS code constant (plantes)
-    private const HS_CODE_PLANTS = '121190';
-
     public function __construct(
         private HttpClientInterface $httpClient,
         private LoggerInterface $logger,
+        private DestinationClassifier $destinationClassifier,
         private string $apiUrl,
         private string $apiKey,
         private array $senderInfo,
-        private DestinationClassifier $destinationClassifier,
         private array $productCodes = [],
     ) {}
 
@@ -156,8 +153,20 @@ class ColissimoApiService
         $address = $order->getShippingAddress();
         $customerData = $this->getCustomerData($order, $address);
 
-        $totalWeightGrams = max(1, (int) ($parcel->getWeightGrams() ?? 500));
-        $parcelWeightKg   = $this->finalParcelWeightKg($totalWeightGrams / 1000);
+        // Recalcul en direct depuis le contenu réel du colis (identique au principe
+        // du chemin OM/international dans buildOMParcelPayload()) plutôt que de faire
+        // confiance à Parcel::weightGrams, qui peut être périmé si le contenu a changé
+        // sans déclencher ParcelManager::recalculateParcelWeight().
+        $sumArticlesKg = 0.0;
+        foreach ($parcel->getItems() as $parcelItem) {
+            $orderItem = $parcelItem->getOrderItem();
+            $product = $orderItem?->getProduct();
+            if (!$product) {
+                continue;
+            }
+            $unitWeightGrams = $this->safeProductWeightGrams($product);
+            $sumArticlesKg += ($unitWeightGrams / 1000) * $parcelItem->getQuantity();
+        }
 
         // Référence unique par colis
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
@@ -182,6 +191,14 @@ class ColissimoApiService
         if ($customerData['companyName'] !== null) {
             $addresseeAddress['companyName'] = $this->normalizeAddressField($customerData['companyName']);
         }
+
+        // Andorre (hors FR malgré le produit DOM) déclenche un CN23 (cf. plus bas) :
+        // même marge d'emballage "international" (+30g) que le chemin OM.
+        $requiresCn23Margin = $addresseeAddress['countryCode'] !== 'FR';
+        // France métro (et Andorre via ce même produit DOM) : jamais de poids
+        // volumétrique facturé, quelle que soit la destination — cf. grille
+        // Colissimo 2026 (routier/national exclu de cette règle).
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, $requiresCn23Margin, false);
 
         $letter = [
             'service' => [
@@ -245,14 +262,15 @@ class ColissimoApiService
             }
 
             $unitWeightGrams = $this->safeProductWeightGrams($product);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => $parcelItem->getQuantity(),
                 'weight' => $this->gramsToKgCN23($unitWeightGrams),
                 'value' => (float) $orderItem->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
         }
@@ -383,21 +401,27 @@ class ColissimoApiService
             $qty = $parcelItem->getQuantity();
             $unitWeightGrams = $this->safeProductWeightGrams($product);
             $unitWeightKg = $this->gramsToKgCN23($unitWeightGrams);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => $qty,
                 'weight' => $unitWeightKg,
                 'value' => (float) $orderItem->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
 
             $sumArticlesKg += ($unitWeightKg * $qty);
         }
 
-        $parcelWeightKg = $this->finalParcelWeightKg($sumArticlesKg);
+        // Chemin OM/international : CN23 toujours inclus (cf. customsDeclarations
+        // plus bas, non conditionnel) — marge d'emballage "international" (+30g).
+        // Poids volumétrique : uniquement Outre-mer/International (hors Eco),
+        // jamais sur Union Européenne/Europe hors UE — cf. grille Colissimo 2026.
+        $appliesVolumetricWeight = $this->resolveVolumetricWeightApplicability($parcel, $zone);
+        $parcelWeightKg = $this->resolveParcelWeightKg($parcel, $sumArticlesKg, true, $appliesVolumetricWeight);
         $parcelRef = $order->getOrderNumber() . '-P' . $parcel->getParcelNumber();
 
         $countryCode = $this->resolveAddresseeCountryCode($order);
@@ -643,14 +667,15 @@ class ColissimoApiService
             }
 
             $unitWeightGrams = $this->safeProductWeightGrams($product);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => (int) $item->getQuantity(),
                 'weight' => $this->gramsToKgCN23($unitWeightGrams),
                 'value' => (float) $item->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
         }
@@ -760,14 +785,15 @@ class ColissimoApiService
 
             // ✅ poids CN23 unitaire (kg) arrondi à 3 décimales (stable)
             $unitWeightKg = $this->gramsToKgCN23($unitWeightGrams);
+            $cn23Fields = $this->resolveCn23ArticleFields($product);
 
             $articles[] = [
                 'description' => $this->getProductDescription($product),
                 'quantity' => $qty,
                 'weight' => $unitWeightKg,                // ✅ kg
                 'value' => (float) $item->getUnitPrice(),
-                'hsCode' => self::HS_CODE_PLANTS,
-                'originCountry' => 'FR',
+                'hsCode' => $cn23Fields['hsCode'],
+                'originCountry' => $cn23Fields['originCountry'],
                 'currency' => 'EUR',
             ];
 
@@ -858,21 +884,90 @@ class ColissimoApiService
         ];
     }
 
-    private function finalParcelWeightKg(float $sumArticlesKg): float
+    /**
+     * Poids déclaré pour l'étiquette.
+     *
+     * - Poids réel pesé (Parcel::manualWeightGrams) prioritaire s'il est
+     *   renseigné : c'est déjà une donnée terrain fiable, aucun carton requis
+     *   pour générer dans ce cas.
+     * - Sinon, poids estimé = somme articles + poids à vide du carton choisi
+     *   + 5g (scotch) + 30g (CN23) si le colis nécessite une déclaration en
+     *   douane. Un carton doit alors être sélectionné — sans quoi on ne peut
+     *   pas estimer l'emballage, donc on bloque plutôt que de deviner.
+     * - Le poids volumétrique du carton n'est comparé (max) au poids réel
+     *   que si $appliesVolumetricWeight est vrai — cf. resolveVolumetricWeightApplicability().
+     *   Grille tarifaire Colissimo 2026 : le poids volumétrique ne conditionne
+     *   la facturation que sur Outre-mer et International **aérien**, jamais
+     *   sur Colissimo Eco Outre-mer, jamais sur France métro/UE/Suisse/UK
+     *   (là il n'existe qu'un supplément fixe de 0,20€ à part, non géré ici).
+     */
+    private function resolveParcelWeightKg(Parcel $parcel, float $sumArticlesKg, bool $requiresCn23Margin, bool $appliesVolumetricWeight): float
     {
-        // ✅ Marge de sécurité augmentée à 0.10 kg (100g) pour éviter les problèmes d'arrondi
-        // Colissimo peut arrondir différemment de notre côté, donc on garde une marge confortable
-        $kg = $sumArticlesKg + 0.10;
+        $carton = $parcel->getCarton();
 
-        // arrondi 2 décimales pour le colis
+        if ($parcel->getManualWeightGrams() !== null) {
+            $realKg = $parcel->getManualWeightGrams() / 1000;
+        } else {
+            if ($carton === null) {
+                throw new \RuntimeException(
+                    "Aucun format de carton sélectionné pour ce colis : choisissez un carton (page Emballage) "
+                    . "ou saisissez le poids réel pesé avant de générer l'étiquette."
+                );
+            }
+
+            $marginGrams = $carton->getEmptyWeightGrams() + 5 + ($requiresCn23Margin ? 30 : 0);
+            $realKg = $sumArticlesKg + ($marginGrams / 1000);
+        }
+
+        if ($appliesVolumetricWeight && $carton !== null) {
+            $volumetricKg = $carton->getVolumetricWeightGrams() / 1000;
+            $kg = max($realKg, $volumetricKg);
+        } else {
+            $kg = $realKg;
+        }
         $kg = round($kg, 2);
 
-        // minimum "safe" (évite poids trop faible refusé)
         if ($kg < 0.10) {
             $kg = 0.10;
         }
+        if ($kg > 30.00) {
+            $kg = 30.00;
+        }
 
-        // max 30 kg Colissimo
+        return $kg;
+    }
+
+    /**
+     * Le poids volumétrique ne conditionne la facturation que sur les offres
+     * Outre-mer et International (aérien) — jamais sur Colissimo Eco
+     * Outre-mer, ni sur France métro/UE/Suisse/UK (grille Colissimo 2026,
+     * liste de pays exclus = exactement notre zone union_europeenne).
+     */
+    private function resolveVolumetricWeightApplicability(Parcel $parcel, DestinationZone $zone): bool
+    {
+        if ($zone !== DestinationZone::OUTRE_MER && $zone !== DestinationZone::INTERNATIONAL) {
+            return false;
+        }
+
+        $productCodeKey = $parcel->getOrder()->getCarrierMode()?->getColissimoProductCodeKey();
+        return $productCodeKey !== 'outre_mer_eco';
+    }
+
+    /**
+     * Ancien calcul forfaitaire (+100g), conservé uniquement pour les chemins
+     * de génération par commande entière (generateLabel/generateOMLabel) —
+     * non utilisés par le flux actuel (multi-colis via generateLabelForParcel,
+     * seul point d'entrée appelé par l'admin), donc non concernés par la
+     * nouvelle formule carton/CN23 ci-dessus.
+     */
+    private function finalParcelWeightKg(float $sumArticlesKg): float
+    {
+        $kg = $sumArticlesKg + 0.10;
+        $kg = round($kg, 2);
+
+        if ($kg < 0.10) {
+            $kg = 0.10;
+        }
         if ($kg > 30.00) {
             $kg = 30.00;
         }
@@ -1219,15 +1314,31 @@ class ColissimoApiService
     // Product description
     // ------------------------------------------------------------------
 
+    /**
+     * Code SH et pays d'origine réels du produit pour la déclaration CN23.
+     * Bloque explicitement (pas de valeur par défaut silencieuse) si l'un des
+     * deux manque — une déclaration douanière fausse risque un colis bloqué
+     * chez le destinataire.
+     */
+    private function resolveCn23ArticleFields($product): array
+    {
+        $codeSh = $product->getCodeSh();
+        $paysOrigine = $product->getPaysOrigine();
+
+        if (!$codeSh || !$paysOrigine) {
+            throw new \RuntimeException(sprintf(
+                "Le produit « %s » n'a pas de code SH et/ou de pays d'origine renseigné "
+                . "(obligatoire pour une déclaration douanière internationale) : complétez sa fiche produit "
+                . "avant de générer l'étiquette.",
+                $product->getName()
+            ));
+        }
+
+        return ['hsCode' => $codeSh, 'originCountry' => $paysOrigine];
+    }
+
     private function getProductDescription($product): string
     {
-        $name = strtolower((string) $product->getName());
-
-        if (str_contains($name, 'huile')) return 'Huile végétale naturelle';
-        if (str_contains($name, 'beurre')) return 'Beurre végétal';
-        if (str_contains($name, 'poudre')) return 'Poudre végétale';
-        if (str_contains($name, 'savon')) return 'Savon naturel';
-
-        return 'Produit naturel';
+        return (string) $product->getName();
     }
 }
